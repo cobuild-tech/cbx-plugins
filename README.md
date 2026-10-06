@@ -16,3 +16,21 @@ Claude plugins by CobuildX.
 /plugin install angular-to-react@cbx-plugins
 /plugin install backbone-to-react@cbx-plugins
 ```
+
+## Install in VS Code (GitHub Copilot)
+
+Add to your VS Code user settings, reload the window, then search `@agentPlugins` in the Extensions view:
+
+```json
+"chat.plugins.enabled": true,
+"chat.plugins.marketplaces": ["cobuild-tech/cbx-plugins"]
+```
+
+## Install in GitHub Copilot CLI
+
+```
+copilot plugin marketplace add cobuild-tech/cbx-plugins
+copilot plugin install ember-to-react@cbx-plugins
+copilot plugin install angular-to-react@cbx-plugins
+copilot plugin install backbone-to-react@cbx-plugins
+```
