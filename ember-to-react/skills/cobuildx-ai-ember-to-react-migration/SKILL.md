@@ -144,6 +144,22 @@ or `run.later` often encodes ordering assumptions. Port the intent
   feature flag, a route toggle, or simply not deleting the old code yet).
 - Remove Ember addons and dependencies only once nothing references them.
 
+## Check current React library APIs
+
+React and the libraries this migration lands on (React Router, TanStack Query, react-intl) change
+between major versions — for example data loaders and `lazy` routes in
+React Router 6.4+/7, or the TanStack Query v5 API. Before writing code
+against them, check the versions in the target project's `package.json` and
+confirm the current API:
+
+- If the `context7` MCP server is available, call `resolve-library-id` for
+  the library, then `query-docs` with the exact feature (e.g. "React Router
+  loader redirect", "TanStack Query useMutation optimistic update").
+- Send only library names and feature questions. Never send the app's
+  source code, configuration, secrets, or business data to it.
+- If it isn't available, read the installed packages' own docs and type
+  definitions instead.
+
 ## Output expectations when this skill runs
 
 - A migration plan or PR should state explicitly: rewrite vs. incremental,
