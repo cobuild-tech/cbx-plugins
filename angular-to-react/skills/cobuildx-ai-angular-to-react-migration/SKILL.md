@@ -234,13 +234,15 @@ Pick the coarsest split that works; finer granularity costs more glue.
 - **React inside Angular (2+):** a thin wrapper component with a host
   element. Create the root once in `ngAfterViewInit`
   (`this.root = createRoot(this.host.nativeElement)`), call
-  `this.root.render(<Component {...props} />)` there and in `ngOnChanges`,
-  and `this.root.unmount()` in `ngOnDestroy`. Callbacks from React that
+  `this.root.render(<Component {...props} />)` there and in `ngOnChanges`
+  (guard with `this.root?.` — the first `ngOnChanges` runs before
+  `ngAfterViewInit`), and `this.root.unmount()` in `ngOnDestroy`. Callbacks from React that
   change Angular state must run inside `NgZone.run(...)` (unless the app is
   zoneless/signals-driven), or the Angular view won't update.
 - **React inside AngularJS:** a `.component()` wrapper (or `react2angular`)
-  that creates the root once in `$postLink`, re-renders in `$onChanges`, and
-  unmounts in `$onDestroy`. Callbacks from React that change AngularJS state
+  that creates the root once in `$postLink`, re-renders in `$onChanges`
+  (guarded — the first `$onChanges` runs before `$postLink`), and unmounts
+  in `$onDestroy`. Callbacks from React that change AngularJS state
   must trigger a digest (`$scope.$applyAsync(...)`), or the view won't
   update.
 - **Angular inside React** (less common, for a shell-first migration):
