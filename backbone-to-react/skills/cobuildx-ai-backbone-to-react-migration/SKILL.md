@@ -2,7 +2,7 @@
 name: cobuildx-ai-backbone-to-react-migration
 description: "Use when the user asks to migrate, port, rewrite, or modernize a Backbone.js app (including Marionette, jQuery, and Underscore/Handlebars templates) to React — full rewrites or incremental/strangler-fig migrations of any size."
 metadata:
-  version: "1.0.1"
+  version: "1.0.0"
 ---
 
 # Backbone → React Migration

@@ -2,7 +2,7 @@
 name: cobuildx-ai-angular-to-react-migration
 description: "Use when the user asks to migrate, port, rewrite, or modernize an Angular (2+) or AngularJS (1.x) app to React — full rewrites or incremental/strangler-fig migrations of any size, including hybrid ngUpgrade apps."
 metadata:
-  version: "1.1.0"
+  version: "1.0.0"
 ---
 
 # Angular / AngularJS → React Migration
