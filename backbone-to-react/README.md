@@ -41,6 +41,20 @@ From the Claude directory, or in Claude Code:
 /plugin install backbone-to-react@cbx-plugins
 ```
 
+In VS Code with GitHub Copilot, add the marketplace to your user settings, reload the window, then search `@agentPlugins` in the Extensions view and install **backbone-to-react**:
+
+```json
+"chat.plugins.enabled": true,
+"chat.plugins.marketplaces": ["cobuild-tech/cbx-plugins"]
+```
+
+In GitHub Copilot CLI:
+
+```
+copilot plugin marketplace add cobuild-tech/cbx-plugins
+copilot plugin install backbone-to-react@cbx-plugins
+```
+
 ## Bundled MCP server
 
 This plugin connects to [Context7](https://context7.com)'s hosted documentation server (`https://mcp.context7.com/mcp`) so Claude can check current React, React Router, and TanStack Query APIs before writing migration code. It needs no install or API key. To turn it off, disable `context7` with `/mcp` in Claude Code.
