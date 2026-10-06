@@ -12,6 +12,9 @@ regression. Do not redesign, refactor beyond what the framework change
 requires, or "improve" things along the way unless asked — a migration
 proves equivalence, it doesn't sneak in a rewrite of the product.
 
+To start a new migration, the `/angular-to-react:plan` command inventories the app and
+writes a full migration plan without changing any code.
+
 ## 1. Decide the strategy first
 
 Ask: does this app have real users depending on it right now?
@@ -60,6 +63,10 @@ events. Grep to surface implicit wiring:
   `.service(`, `.provider(`, `.config(`, `.run(`, `$stateProvider`.
 
 You cannot correctly map what you haven't fully understood.
+
+For anything bigger than a handful of files, delegate this sweep to the
+`angular-inventory` agent: it reads the codebase read-only and returns a structured
+inventory, keeping file contents out of the main context.
 
 ## 3. Map concepts before syntax
 
@@ -213,6 +220,9 @@ encodes ordering the app depends on. Port the intent (`useEffect`, refs,
    - Manual browser pass, side-by-side with the original → visual/behavioral
      parity. Screenshot-diff if the tooling supports it.
    - TypeScript build is clean, production build succeeds.
+   - Before removing the old version of a piece, run the `angular-parity-reviewer`
+     agent on the original and the port, and resolve every high-severity
+     difference it reports.
 6. **Keep one variable fixed while you migrate the other.** Port styles
    (SCSS/CSS custom properties, class names) as-is in the same pass as the
    logic. Emulated view encapsulation → CSS Modules (or a shared sheet with

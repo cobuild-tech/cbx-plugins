@@ -6,6 +6,16 @@ A Claude skill by CobuildX for migrating Angular (2+) and AngularJS (1.x) apps t
 
 The `cobuildx-ai-angular-to-react-migration` skill guides Claude through moving an Angular or AngularJS codebase to React. It supports both full rewrites and incremental (strangler-fig) migrations, where React and Angular run side by side until the old code is retired.
 
+## What's included
+
+| Component | Name | What it does |
+|---|---|---|
+| Skill | `cobuildx-ai-angular-to-react-migration` | The migration method: strategy, concept mappings, process, verification, and rollback. Loads automatically when you ask to migrate. |
+| Command | `/angular-to-react:plan [path]` | Inventories the app and writes a complete migration plan. Changes no code. |
+| Agent | `angular-inventory` | Read-only sweep of the Angular / AngularJS codebase that returns a structured inventory. |
+| Agent | `angular-parity-reviewer` | Read-only comparison of a migrated piece against its original, listing every behavior difference. |
+| MCP server | `context7` | Looks up current React, React Router, and TanStack Query docs. |
+
 ## How to use
 
 Once the plugin is installed, ask Claude to migrate your app. For example:
@@ -15,7 +25,11 @@ Once the plugin is installed, ask Claude to migrate your app. For example:
 - "Convert this Angular service and component to React"
 - "Migrate our hybrid AngularJS/Angular app to React"
 
-Claude loads the skill automatically when your request matches.
+Claude loads the skill automatically when your request matches. To start with a plan, run:
+
+```
+/angular-to-react:plan
+```
 
 ## Install
 

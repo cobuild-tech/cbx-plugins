@@ -6,6 +6,16 @@ A Claude skill by CobuildX for migrating Ember.js apps (Classic or Octane) to Re
 
 The `cobuildx-ai-ember-to-react-migration` skill guides Claude through moving a Ember.js codebase to React. It supports both full rewrites and incremental (strangler-fig) migrations, where React and Ember.js run side by side until the old code is retired.
 
+## What's included
+
+| Component | Name | What it does |
+|---|---|---|
+| Skill | `cobuildx-ai-ember-to-react-migration` | The migration method: strategy, concept mappings, process, verification, and rollback. Loads automatically when you ask to migrate. |
+| Command | `/ember-to-react:plan [path]` | Inventories the app and writes a complete migration plan. Changes no code. |
+| Agent | `ember-inventory` | Read-only sweep of the Ember.js codebase that returns a structured inventory. |
+| Agent | `ember-parity-reviewer` | Read-only comparison of a migrated piece against its original, listing every behavior difference. |
+| MCP server | `context7` | Looks up current React, React Router, and TanStack Query docs. |
+
 ## How to use
 
 Once the plugin is installed, ask Claude to migrate your app. For example:
@@ -14,7 +24,11 @@ Once the plugin is installed, ask Claude to migrate your app. For example:
 - "Port our Ember Octane components to React incrementally"
 - "Convert this Ember route and its template to a React page"
 
-Claude loads the skill automatically when your request matches.
+Claude loads the skill automatically when your request matches. To start with a plan, run:
+
+```
+/ember-to-react:plan
+```
 
 ## Install
 

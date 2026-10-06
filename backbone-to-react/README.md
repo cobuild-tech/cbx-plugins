@@ -6,6 +6,16 @@ A Claude skill by CobuildX for migrating Backbone.js apps, including Marionette,
 
 The `cobuildx-ai-backbone-to-react-migration` skill guides Claude through moving a Backbone.js codebase to React. It supports both full rewrites and incremental (strangler-fig) migrations, where React and Backbone.js run side by side until the old code is retired.
 
+## What's included
+
+| Component | Name | What it does |
+|---|---|---|
+| Skill | `cobuildx-ai-backbone-to-react-migration` | The migration method: strategy, concept mappings, process, verification, and rollback. Loads automatically when you ask to migrate. |
+| Command | `/backbone-to-react:plan [path]` | Inventories the app and writes a complete migration plan. Changes no code. |
+| Agent | `backbone-inventory` | Read-only sweep of the Backbone.js codebase that returns a structured inventory. |
+| Agent | `backbone-parity-reviewer` | Read-only comparison of a migrated piece against its original, listing every behavior difference. |
+| MCP server | `context7` | Looks up current React, React Router, and TanStack Query docs. |
+
 ## How to use
 
 Once the plugin is installed, ask Claude to migrate your app. For example:
@@ -14,7 +24,11 @@ Once the plugin is installed, ask Claude to migrate your app. For example:
 - "Rewrite these Marionette views as React components"
 - "Replace our Handlebars templates with React incrementally"
 
-Claude loads the skill automatically when your request matches.
+Claude loads the skill automatically when your request matches. To start with a plan, run:
+
+```
+/backbone-to-react:plan
+```
 
 ## Install
 
