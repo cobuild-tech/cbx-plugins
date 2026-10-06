@@ -5,7 +5,7 @@ Claude plugins by CobuildX.
 | Plugin | Description |
 |---|---|
 | [ember-to-react](ember-to-react) | Migrate Ember.js apps to React — full rewrites or incremental strangler-fig migrations of any size. |
-| [angular-to-react](angular-to-react) | Migrate Angular/AngularJS apps to React — full rewrites or incremental strangler-fig migrations of any size. |
+| [angular-to-react](angular-to-react) | Migrate Angular (2+) and AngularJS (1.x) apps to React — full rewrites or incremental strangler-fig migrations of any size, including hybrid ngUpgrade apps. |
 | [backbone-to-react](backbone-to-react) | Migrate Backbone.js apps to React — full rewrites or incremental strangler-fig migrations of any size. |
 
 ## Install in Claude Code

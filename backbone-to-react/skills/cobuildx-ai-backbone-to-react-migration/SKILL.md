@@ -2,7 +2,7 @@
 name: cobuildx-ai-backbone-to-react-migration
 description: "Use when the user asks to migrate, port, rewrite, or modernize a Backbone.js app (including Marionette, jQuery, and Underscore/Handlebars templates) to React — full rewrites or incremental/strangler-fig migrations of any size."
 metadata:
-  version: "1.0.0"
+  version: "1.0.1"
 ---
 
 # Backbone → React Migration
@@ -90,11 +90,18 @@ Port the intent (`useEffect`, refs) and test the timing.
    `navigate(url, {trigger: true})` → `useNavigate()`; `<a href="#x">` →
    `<Link to>`. Preserve hash vs. pushState (`HashRouter` vs.
    `BrowserRouter`) and every existing URL. **If incremental:** set up the
-   coexistence layer here, before any feature: a Backbone View that
-   `createRoot(this.el).render(<Component />)` in `render()` and `unmount()`
-   in `remove()`. To share data, wrap models/collections in a hook
-   (`useSyncExternalStore` on `change`/`add`/`remove`) — a temporary bridge,
-   deleted once the data layer is migrated.
+   coexistence layer here, before any feature: a Backbone View that creates
+   its React root **once** (`this.root ??= createRoot(this.el)`), calls
+   `this.root.render(<Component {...props} />)` in `render()` — which
+   Backbone code may call repeatedly — and calls `this.root.unmount()` before
+   `Backbone.View.prototype.remove.call(this)` in `remove()`. Never call
+   `createRoot` on every render. To share data, wrap models/collections in a
+   hook built on `useSyncExternalStore`, subscribing to
+   `change`/`add`/`remove`/`reset`/`sort`. The snapshot must be cached:
+   recompute it (`model.toJSON()`, `collection.toJSON()`) only inside the
+   event handler and return the same reference otherwise — returning a fresh
+   `toJSON()` from `getSnapshot` causes an infinite re-render loop. This is a
+   temporary bridge, deleted once the data layer is migrated.
 3. **Migrate bottom-up**, translating each layer as you reach it. Save the
    app shell, router, and central shared models/event bus for last.
    - *Models, collections, utils:* `defaults` + `parse()` → typed interface +
