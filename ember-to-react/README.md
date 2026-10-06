@@ -35,6 +35,12 @@ The skill itself contains instructions only and stores nothing. The bundled Cont
 
 CobuildX privacy policy: https://cobuildx.ai/privacy
 
+## Support
+
+Report problems or request features in [GitHub Issues](https://github.com/cobuild-tech/cbx-plugins/issues), or email hello@cobuildx.ai.
+
+Terms of service: https://cobuildx.ai/terms
+
 ## License
 
 MIT — see [LICENSE](LICENSE).

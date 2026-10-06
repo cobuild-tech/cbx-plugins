@@ -10,6 +10,8 @@
   "repository": "https://github.com/cobuild-tech/cbx-plugins",
   "license": "MIT",
   "privacyPolicyUrl": "https://cobuildx.ai/privacy",
+  "termsOfServiceUrl": "https://cobuildx.ai/terms",
+  "supportUrl": "https://github.com/cobuild-tech/cbx-plugins/issues",
   "keywords": [
     "react",
     "migration",
