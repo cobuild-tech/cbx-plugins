@@ -1,0 +1,20 @@
+{
+  "name": "ember-to-react",
+  "version": "1.0.0",
+  "description": "Migrate Ember.js apps to React — full rewrites or incremental strangler-fig migrations of any size.",
+  "author": {
+    "name": "CobuildX",
+    "email": "emmanuel.r@cobuildx.ai"
+  },
+  "homepage": "https://github.com/cobuild-tech/cbx-plugins/tree/main/ember-to-react",
+  "repository": "https://github.com/cobuild-tech/cbx-plugins",
+  "license": "MIT",
+  "keywords": [
+    "react",
+    "migration",
+    "ember",
+    "ember-octane",
+    "refactoring",
+    "modernization"
+  ]
+}

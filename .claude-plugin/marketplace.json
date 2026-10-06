@@ -1,0 +1,27 @@
+{
+  "name": "cbx-plugins",
+  "owner": {
+    "name": "CobuildX",
+    "email": "emmanuel.r@cobuildx.ai"
+  },
+  "metadata": {
+    "description": "Claude plugins by CobuildX."
+  },
+  "plugins": [
+    {
+      "name": "ember-to-react",
+      "source": "./ember-to-react",
+      "description": "Migrate Ember.js apps to React — full rewrites or incremental strangler-fig migrations of any size."
+    },
+    {
+      "name": "angular-to-react",
+      "source": "./angular-to-react",
+      "description": "Migrate Angular/AngularJS apps to React — full rewrites or incremental strangler-fig migrations of any size."
+    },
+    {
+      "name": "backbone-to-react",
+      "source": "./backbone-to-react",
+      "description": "Migrate Backbone.js apps to React — full rewrites or incremental strangler-fig migrations of any size."
+    }
+  ]
+}
