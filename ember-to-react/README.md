@@ -30,6 +30,8 @@ Claude loads the skill automatically when your request matches. To start with a 
 /ember-to-react:plan
 ```
 
+In Cursor, use the same full name, `/ember-to-react:plan`. Plain `/plan` opens Cursor's built-in Plan mode instead of this command.
+
 ## Install
 
 From the Claude directory, or in Claude Code:
