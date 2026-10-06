@@ -1,0 +1,25 @@
+{
+  "name": "angular-to-react",
+  "displayName": "Angular to React",
+  "version": "1.0.0",
+  "description": "Migrate Angular (2+) and AngularJS (1.x) apps to React — full rewrites or incremental strangler-fig migrations of any size, including hybrid ngUpgrade apps.",
+  "author": {
+    "name": "CobuildX",
+    "email": "emmanuel.r@cobuildx.ai"
+  },
+  "homepage": "https://github.com/cobuild-tech/cbx-plugins/tree/main/angular-to-react",
+  "repository": "https://github.com/cobuild-tech/cbx-plugins",
+  "license": "MIT",
+  "keywords": [
+    "react",
+    "migration",
+    "angular",
+    "angularjs",
+    "ngupgrade",
+    "rxjs",
+    "ngrx",
+    "refactoring",
+    "modernization"
+  ],
+  "logo": ".cursor-plugin/icon.png"
+}
