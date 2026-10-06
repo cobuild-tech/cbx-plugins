@@ -32,7 +32,9 @@ This plugin connects to [Context7](https://context7.com)'s hosted documentation 
 
 ## Data handling
 
-The skill itself contains instructions only and stores nothing. The bundled Context7 server receives library names and documentation questions (for example "React Router loader redirect"); the skill instructs Claude never to send your source code, configuration, secrets, or business data to it. Context7's handling of those queries is covered by [its privacy policy](https://context7.com/privacy).
+The skill itself contains instructions only and stores nothing. The bundled Context7 server receives library names and documentation questions (for example "React Router loader redirect"); the skill instructs Claude never to send your source code, configuration, secrets, or business data to it. Context7's handling of those queries is covered by Context7's own privacy policy (https://context7.com/privacy).
+
+CobuildX privacy policy: https://cobuildx.ai/privacy
 
 ## License
 

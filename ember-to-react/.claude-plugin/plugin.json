@@ -9,6 +9,7 @@
   "homepage": "https://github.com/cobuild-tech/cbx-plugins/tree/main/ember-to-react",
   "repository": "https://github.com/cobuild-tech/cbx-plugins",
   "license": "MIT",
+  "privacyPolicyUrl": "https://cobuildx.ai/privacy",
   "keywords": [
     "react",
     "migration",
