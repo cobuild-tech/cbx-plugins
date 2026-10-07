@@ -1,183 +1,103 @@
 ---
 name: cobuildx-ai-ember-to-react-migration
-description: "Use when the user asks to migrate, port, rewrite, or modernize an Ember.js app (Classic or Octane) to React — full rewrites or incremental/strangler-fig migrations of any size."
+description: "Use when the user asks to migrate, port, rewrite, or modernize an Ember.js app (Classic or Octane) to React — full rewrites or incremental/strangler-fig migrations of any size — or to continue, resume, or check the status of an Ember-to-React migration already in progress (e.g. \"continue the migration\", \"what's left to migrate\", \"why isn't Orders migrated yet\")."
 metadata:
-  version: "1.0.0"
+  version: "2.0.0"
 ---
 
 # Ember → React Migration
 
-Port an Ember app to React with no behavioral or visual regression. Do not
-redesign, refactor beyond what the framework change requires, or "improve"
-things along the way unless asked — a migration proves equivalence, it
-doesn't sneak in a rewrite of the product.
+Port an Ember app to React with no change in behavior or appearance. A
+migration proves equivalence. Don't redesign, refactor beyond what the
+framework change needs, or fix things along the way unless the user asks.
 
-To start a new migration, the `/ember-to-react:plan` command inventories the app and
-writes a full migration plan without changing any code.
+This skill is a workflow. The detail is in `references/`. Open a reference
+only when a condition below says to, and open only that file.
 
-## 1. Decide the strategy first
+## Step 0: Resume or start
 
-Ask: does this app have real users depending on it right now?
+- If `.migration/state.json` exists, read it and
+  `references/methodology/state-format.md`, then resume at its `phase`.
+  - If `phase` is `execute`, continue with `next_unit`.
+  - If the user asks about status ("why isn't X migrated yet"), answer
+    from `state.json` and `plan.md` and change nothing.
+- If it doesn't exist, read `references/methodology/state-format.md` and
+  start at Step 1.
 
-- **Small, low-risk, no production dependents** → full rewrite. Build the
-  new app separately, verify it matches, cut over once.
-- **Anything a business depends on** → incremental (Strangler Fig). Migrate
-  piece by piece, old and new running side by side, until the old app has
-  nothing left to strangle. Never freeze feature work for months to do a
-  big-bang rewrite of a live app.
+## Step 1: Assess
 
-Also identify the Ember flavor before planning: **Classic** (`Ember.Component`,
-computed properties, observers, mixins, two-way bindings) vs. **Octane**
-(Glimmer components, `@tracked`, one-way data flow). Octane maps to React
-almost one-to-one; Classic needs more untangling (observers and mixins
-especially). For a large Classic app, consider whether upgrading hot spots
-to Octane idioms first makes the React port safer.
+1. Delegate the sweep to the `ember-inventory` agent. For an app of only a
+   handful of files, you can read them directly.
+2. Read `references/ember/flavor.md` and record the version and flavor.
+3. Write `.migration/assessment.md` and create `state.json` with
+   `phase: "strategy"`.
 
-Don't skip this decision or default to "just rewrite it" — the size/risk
-call changes everything downstream (tooling, shell, rollback plan).
+## Step 2: Choose a strategy
 
-## 2. Read the whole existing app before writing anything
+1. Read `references/methodology/strategy-selection.md`.
+2. Pick one strategy, then read **only** that strategy's file:
+   `references/methodology/strangler-fig.md`,
+   `references/methodology/branch-by-abstraction.md`,
+   `references/methodology/vertical-slice.md`, or
+   `references/methodology/cutover.md`.
+3. If you can't tell whether real users depend on the app, ask the user
+   before choosing.
+4. Log the choice and the reason in `.migration/decisions.md` and set
+   `phase: "plan"`.
 
-Every route, controller, component (`.js` + `.hbs`), service, model,
-adapter/serializer, helper, modifier, mixin, initializer, and style file.
-Ember's conventions hide a lot — resolver-based lookups, `model()` hooks,
-`queryParams` on controllers, initializers that register things globally,
-addons that inject behavior. Grep for `inject`, `service(`, `observer(`,
-`Mixin.create`, `reopen`, and `lookup(` to surface implicit wiring. You
-cannot correctly map what you haven't fully understood.
+## Step 3: Plan (the only approval point)
 
-For anything bigger than a handful of files, delegate this sweep to the
-`ember-inventory` agent: it reads the codebase read-only and returns a structured
-inventory, keeping file contents out of the main context.
+1. Read `references/mappings.md` and `references/react/architecture.md`.
+   Read `references/react/library-apis.md` before choosing library
+   versions.
+2. Write `.migration/plan.md` using the template in `state-format.md`.
+   Units go leaves first and the most central pieces last. Each unit must
+   be small enough to validate on its own.
+3. Fill `units` in `state.json`, then **stop and ask the user to approve
+   the plan.** Once they approve, set `plan_approved: true` and
+   `phase: "execute"`.
 
-## 3. Map concepts before syntax
+## Step 4: Execute one unit, then stop
 
-| Ember concept | React equivalent | Why |
-|---|---|---|
-| Component class + `.hbs` template | JSX in the component function | Markup and logic merge into one file |
-| `{{#if}}` / `{{#each}}` / `{{yield}}` | `&&`/ternary, `.map()` with `key`, `children` / render props | Plain JS control flow; named blocks → named props |
-| `@arg` / `this.args` | Props | Same one-way flow |
-| Actions (`@action`, `{{on "click"}}`, closure actions) | Event handler functions / callback props | Data down, actions up is already React's model |
-| `@tracked` properties | `useState` | Explicit setters instead of autotracking |
-| Computed properties / tracked getters | Derived values computed in render; `useMemo` only if expensive | Don't store what you can derive |
-| Observers | Usually: derive it, or move into the event handler that caused the change. `useEffect` as last resort | Observers are almost always a smell; don't port them 1:1 as effects |
-| Two-way binding (`{{input value=x}}`, `mut`) | Controlled input (`value` + `onChange`) | Every state change is visible in code |
-| Services (`@service`) | Plain modules, custom hooks, or Context for app-wide singletons (session, current user) | Don't rebuild Ember's container/DI in React |
-| Mixins | Custom hooks or plain utility functions | Composition over inheritance |
-| Helpers | Plain functions called in JSX | No registration layer needed |
-| Modifiers (`did-insert`, custom) | `ref` + `useEffect`, or a callback ref | Direct DOM access lives at the element |
-| Lifecycle (`didInsertElement`, `willDestroy`) | `useEffect` with cleanup | Pair setup and teardown in one place |
-| Router + route `model()` hooks | React Router (loaders) or a data-fetching lib (TanStack Query) | URL → screen unchanged; data loading moves to loaders/hooks |
-| Controllers + `queryParams` | Component state + `useSearchParams` | Controllers have no React counterpart; state lives in the route component |
-| Ember Data (models, store, adapters, serializers) | API client module + TanStack Query (or similar); port serializer logic as plain normalize functions | Keep the same request/response shapes; don't build an ORM unless needed |
-| Ember Concurrency tasks | `async` handlers + AbortController, or TanStack Query mutations | Cancellation and "drop/restartable" semantics must be preserved explicitly |
-| Initializers / instance-initializers | Module-level setup or app-root providers | Make global setup explicit at the entry point |
-| `ember-intl` / addon features | React equivalent library (e.g. `react-intl`), mapped feature by feature | Audit every addon — each is a hidden dependency |
+1. Take `next_unit`, check that its `depends_on` units are `done`, and set
+   it to `in-progress`.
+2. Read the references the routing table below gives for what this unit
+   contains.
+3. Build it, integrate it with the coexistence layer or the new app, and
+   port its tests.
+4. Validate it with `references/methodology/validation.md`, including the
+   `ember-parity-reviewer` agent.
+5. Write `.migration/units/<id>.md`, update `state.json` (unit status and
+   `next_unit`), and **stop**. Tell the user what was done and what comes
+   next. They say "continue" to run the next unit.
 
-Rule of thumb: if you're building scaffolding in React to replicate an Ember
-mechanism (a container/resolver, an observer system, a run loop, a store
-with identity maps), stop — that mechanism usually solved a problem React
-doesn't have, or one a small library already solves.
+When every unit is `done`, read `references/methodology/cutover.md`.
 
-Watch for run-loop timing: code relying on `run.next`, `schedule('afterRender')`,
-or `run.later` often encodes ordering assumptions. Port the intent
-(`useEffect`, `setTimeout`, `requestAnimationFrame`) and test the timing.
+## Routing table: what to read, and when
 
-## 4. Process
+| When the unit… | Read |
+|---|---|
+| is the scaffold / first unit | `references/react/architecture.md`, `references/ember/addons-initializers.md` |
+| adds or moves a route | `references/ember/routing.md`, `references/react/routing.md` |
+| has Glimmer / Octane components | `references/ember/components-octane.md` |
+| has Classic components (`Component.extend`) | `references/ember/components-classic.md` |
+| touches services, mixins, observers, or helpers | `references/ember/services-mixins.md`, `references/react/state-data.md` |
+| uses Ember Data (`this.store`, models, adapters, serializers) | `references/ember/ember-data.md`, `references/react/state-data.md` |
+| has `task(` / Ember Concurrency | `references/ember/ember-concurrency.md` |
+| has `run.next` / `later` / `schedule(` / debounce | `references/ember/runloop-timing.md` |
+| uses an `ember-*` addon or initializer | `references/ember/addons-initializers.md` |
+| ports tests (almost every unit) | `references/ember/testing-qunit-mirage.md`, `references/react/testing.md` |
+| mounts React inside Ember, or shares state across both | `references/ember/coexistence.md`, `references/react/coexistence.md` |
+| writes code against a React library | `references/react/library-apis.md` |
+| hits an Ember concept you haven't mapped | `references/mappings.md` |
 
-1. **Scaffold and verify tooling first.** Get the new project (Vite + React +
-   TypeScript, or the team's framework) building, testing, and (if
-   incremental) deploying — even with one empty page — before feature code.
-   Port `config/environment.js` → `import.meta.env.VITE_*` now (never copy
-   secrets; flag them for rotation), turn initializers into explicit setup at
-   the entry point, and write the API client that replaces adapters/serializers
-   (same endpoints, payloads, and normalize logic as plain functions).
-2. **Map the routes.** `Router.map` → React Router: `this.route('post',
-   { path: '/posts/:id' })` → `<Route path="/posts/:id">`; nested routes +
-   `{{outlet}}` → layout route rendering `<Outlet/>`; `model()` → `loader` or
-   a query hook; `beforeModel` redirects → `redirect()` in a loader or a
-   wrapper rendering `<Navigate/>`; `{{link-to}}`/`<LinkTo @route>` → `<Link to>`;
-   `transitionTo`/`router.transitionTo` → `useNavigate()`; controller
-   `queryParams` → `useSearchParams`; loading/error substates → route
-   `errorElement` and pending UI. **If incremental:** set up the coexistence
-   layer here, before any feature: route-level split behind a reverse proxy, a
-   micro-frontend shell, or React roots inside Ember components (`createRoot`
-   in `didInsertElement`/a modifier, `unmount` on teardown). Share session/auth
-   and keep the URL as the single source of truth across both.
-3. **Migrate bottom-up**, translating each layer as you reach it. Save the
-   most central piece (app shell, session service, the store) for last.
-   - *Helpers, utils, models:* `helper(([a, b]) => …)` → `fn(a, b)` called in
-     JSX; Ember Data models → typed interfaces + mapper functions; computed
-     properties → plain getters/derived values.
-   - *Presentational components:* `{{this.x}}`/`{{@x}}` → `{x}`/props;
-     `class="a {{if @on 'on'}}"` → computed `className`; `{{#if}}…{{else}}`
-     → ternary; `{{#each @items key="id" as |i|}}` → `.map()` + `key`;
-     `{{yield}}`/named blocks → `children`/element props; `...attributes` →
-     spread rest props; Classic `tagName`/`classNames` → explicit wrapper
-     element; `{{did-insert}}`/custom modifiers → `ref` + `useEffect`.
-   - *Stateful components:* `@tracked x` → `useState`; tracked getters →
-     derived in render (`useMemo` if costly); `{{on "click" this.f}}`/
-     `@action` → `onClick={f}`; `{{input value=x}}`/`mut` → `value` +
-     `onChange`; `didInsertElement`/`willDestroy` → `useEffect` + cleanup;
-     observers → derive, or move into the causing handler (effect last);
-     `run.next`/`schedule('afterRender')` → effect/`requestAnimationFrame`.
-   - *Services, data, tasks:* stateless service → module of functions;
-     app-wide singleton (session, current user) → Context + hook; mixins →
-     hooks/utils; `store.findAll/query` → query hooks with the same cache
-     expectations; `save()` → mutations; Ember Concurrency
-     `restartable`/`drop` → `AbortController`/in-flight guard, kept explicit;
-     addons (`ember-intl`…) → React library, feature by feature.
-4. **Port every existing test**, scenario for scenario (QUnit/ember-qunit
-   integration and acceptance tests → Vitest/Jest + React Testing Library;
-   acceptance → Playwright/Cypress if needed). Replace Mirage with MSW using
-   the same fixtures. Never reduce coverage during a migration.
-5. **Verify after every piece, not just at the end:**
-   - Automated tests pass → logic is equivalent.
-   - Manual browser pass, side-by-side with the original → visual/behavioral
-     parity. Screenshot-diff if the tooling supports it.
-   - TypeScript build is clean, production build succeeds.
-   - Before removing the old version of a piece, run the `ember-parity-reviewer`
-     agent on the original and the port, and resolve every high-severity
-     difference it reports.
-6. **Keep one variable fixed while you migrate the other.** Port styles
-   (CSS/SCSS, ember-css-modules, class names) as-is in the same pass as the
-   logic. Note that Ember components may render a wrapper element
-   (`tagName`, `classNames`, `classNameBindings`) — reproduce it if styles
-   depend on it. Redesign is a separate, later change.
+## Always
 
-## 5. Deprecate old code carefully, keep a rollback path
-
-- Remove the old Ember version of a piece only after the React version has
-  been verified (tests + visual pass) — for a live app, after it's proven
-  itself in production for a while, not the moment it compiles.
-- Until confident, keep a way to flip a piece back to Ember quickly (a
-  feature flag, a route toggle, or simply not deleting the old code yet).
-- Remove Ember addons and dependencies only once nothing references them.
-
-## Check current React library APIs
-
-React and the libraries this migration lands on (React Router, TanStack Query, react-intl) change
-between major versions — for example data loaders and `lazy` routes in
-React Router 6.4+/7, or the TanStack Query v5 API. Before writing code
-against them, check the versions in the target project's `package.json` and
-confirm the current API:
-
-- If the `context7` MCP server is available, call `resolve-library-id` for
-  the library, then `query-docs` with the exact feature (e.g. "React Router
-  loader redirect", "TanStack Query useMutation optimistic update").
-- Send only library names and feature questions. Never send the app's
-  source code, configuration, secrets, or business data to it.
-- If it isn't available, read the installed packages' own docs and type
-  definitions instead.
-
-## Output expectations when this skill runs
-
-- A migration plan or PR should state explicitly: rewrite vs. incremental,
-  Classic vs. Octane, and why.
-- List the concept mappings actually used (subset of the table above),
-  not a generic essay.
-- Include a verification section: what tests were ported, what was checked
-  visually, what still needs manual QA.
-- Flag anything ported "as a quirk" (e.g., an existing bug, observer-driven
-  timing oddity, or Ember Data caching behavior kept for parity) rather than
-  silently fixing it — scope creep during a migration hides real regressions.
+- Change one thing at a time. Port styles and class names as they are, in
+  the same pass as the logic.
+- Keep existing bugs and timing oddities for parity, and list them as
+  quirks in the unit file. Don't fix them silently.
+- Never send app code, config, or secrets to Context7. Send only library
+  names and feature questions.
+- Never remove old Ember code until the unit has passed validation and
+  has a rollback path.

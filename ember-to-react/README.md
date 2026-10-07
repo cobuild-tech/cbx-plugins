@@ -10,8 +10,8 @@ The `cobuildx-ai-ember-to-react-migration` skill guides Claude through moving a 
 
 | Component | Name | What it does |
 |---|---|---|
-| Skill | `cobuildx-ai-ember-to-react-migration` | The migration method: strategy, concept mappings, process, verification, and rollback. Loads automatically when you ask to migrate. |
-| Command | `/ember-to-react:plan [path]` | Inventories the app and writes a complete migration plan. Changes no code. |
+| Skill | `cobuildx-ai-ember-to-react-migration` | The migration workflow: assess, choose a strategy, plan, then migrate one unit per run. Detailed guidance is in reference files that load only when needed. Triggers on "migrate this app" and on "continue the migration". |
+| Command | `/ember-to-react:plan [path]` | Runs assess, strategy, and plan, writes `.migration/`, and stops for your approval. Changes no app code. |
 | Agent | `ember-inventory` | Read-only sweep of the Ember.js codebase that returns a structured inventory. |
 | Agent | `ember-parity-reviewer` | Read-only comparison of a migrated piece against its original, listing every behavior difference. |
 | MCP server | `context7` | Looks up current React, React Router, and TanStack Query docs. |
@@ -31,6 +31,26 @@ Claude loads the skill automatically when your request matches. To start with a 
 ```
 
 In Cursor, use the same full name, `/ember-to-react:plan`. Plain `/plan` opens Cursor's built-in Plan mode instead of this command.
+
+## How a migration runs
+
+The skill keeps its progress in a `.migration/` folder in your repo. Commit it, because it lets a migration continue across sessions:
+
+```
+.migration/
+├── state.json      progress: strategy, phase, units and their status, next unit
+├── assessment.md   inventory of the existing app
+├── decisions.md    strategy and stack decisions, with reasons
+├── plan.md         units in order, with dependencies (you approve this)
+└── units/<id>.md   what each unit changed, validation results, quirks kept
+```
+
+1. **Assess**: inventory the app.
+2. **Choose a strategy**: full rewrite, Strangler Fig, Branch by Abstraction, or vertical slice.
+3. **Plan**: break the work into units and stop for your approval.
+4. **Execute**: migrate and validate **one unit**, update the state, and stop. Say "continue the migration" to run the next one.
+
+Ask "what's left to migrate?" or "why isn't Orders migrated yet?" and Claude answers from `.migration/state.json`.
 
 ## Install
 
@@ -61,7 +81,7 @@ This plugin connects to [Context7](https://context7.com)'s hosted documentation 
 
 ## Data handling
 
-The skill itself contains instructions only and stores nothing. The bundled Context7 server receives library names and documentation questions (for example "React Router loader redirect"); the skill instructs Claude never to send your source code, configuration, secrets, or business data to it. Context7's handling of those queries is covered by Context7's own privacy policy (https://context7.com/privacy).
+The skill contains instructions only. Its only output besides your migrated code is the `.migration/` folder in your own repo, and nothing is sent anywhere else. The bundled Context7 server receives library names and documentation questions (for example "React Router loader redirect"); the skill instructs Claude never to send your source code, configuration, secrets, or business data to it. Context7's handling of those queries is covered by Context7's own privacy policy (https://context7.com/privacy).
 
 CobuildX privacy policy: https://cobuildx.ai/privacy
 

@@ -54,5 +54,9 @@ Return one structured report, with file paths for everything:
 6. **Suggested migration order** — leaves first (utilities, presentational
    components), most central pieces last.
 
+The caller saves this report as `.migration/assessment.md`, so keep it
+self-contained. Group the suggested order into units (a short id, a title, and
+the files) that a migration plan can use directly.
+
 Never include secret values in the report — name the config key and say it
 looks like a secret.
