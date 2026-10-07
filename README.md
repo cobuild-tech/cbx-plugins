@@ -34,3 +34,30 @@ copilot plugin install ember-to-react@cbx-plugins
 copilot plugin install angular-to-react@cbx-plugins
 copilot plugin install backbone-to-react@cbx-plugins
 ```
+
+## Repository layout
+
+```
+cbx-plugins/
+├── .claude-plugin/marketplace.json
+├── shared/                      single source of truth, never shipped directly
+│   ├── methodology/             strategies, validation, .migration/ state format
+│   └── react/                   React target guidance shared by every plugin
+├── scripts/
+│   ├── sync-shared.sh           copies shared/ into each plugin (--check to verify)
+│   └── check-references.sh      every reference file must be routed from SKILL.md
+└── <framework>-to-react/
+    ├── .claude-plugin/plugin.json
+    ├── .mcp.json                Context7
+    ├── agents/                  <framework>-inventory, <framework>-parity-reviewer
+    ├── commands/plan.md
+    └── skills/cobuildx-ai-<framework>-to-react-migration/
+        ├── SKILL.md             workflow and routing table
+        └── references/
+            ├── mappings.md
+            ├── <framework>/       framework-specific, one file per topic
+            ├── react/           generated from shared/react
+            └── methodology/     generated from shared/methodology
+```
+
+Edit `shared/`, never the generated copies, then run `scripts/sync-shared.sh` and commit the result. CI fails if the copies drift or a reference is never routed.

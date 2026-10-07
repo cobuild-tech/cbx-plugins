@@ -1,7 +1,7 @@
 {
   "name": "ember-to-react",
   "displayName": "Ember to React",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "Migrate Ember.js apps to React — full rewrites or incremental strangler-fig migrations of any size.",
   "author": {
     "name": "CobuildX",

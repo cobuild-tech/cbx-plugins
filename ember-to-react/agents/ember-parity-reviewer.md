@@ -43,5 +43,8 @@ be found, say so and stop.
 4. **Needs manual QA** — what can't be verified by reading code (visual
    layout, animations, third-party widget behavior).
 
+The caller copies this report into `.migration/units/<unit-id>.md`.
+A `high` difference blocks the unit from being marked `done`.
+
 Report only differences you can point to in the code. Don't pad the report
 with general advice.

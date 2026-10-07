@@ -1,6 +1,6 @@
 {
   "name": "angular-to-react",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "Migrate Angular (2+) and AngularJS (1.x) apps to React — full rewrites or incremental strangler-fig migrations of any size, including hybrid ngUpgrade apps.",
   "author": {
     "name": "CobuildX",
