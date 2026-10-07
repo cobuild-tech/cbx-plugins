@@ -39,6 +39,9 @@ session. Create it in the Assess step. Update it at the end of every step.
   `complete`.
 - Unit `status` is one of `pending`, `in-progress`, `needs-qa`, `done`,
   or `blocked`. If a unit is `blocked`, `blocked_reason` says why.
+- A unit can start only when every unit in its `depends_on` is `done`. If
+  one is `needs-qa`, ask the user first. If they agree, log that in
+  `decisions.md` and go ahead.
 - "Why isn't X migrated yet?" is answered from this file: X's status, its
   `depends_on`, and its `blocked_reason`.
 
