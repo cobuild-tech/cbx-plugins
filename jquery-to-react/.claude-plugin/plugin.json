@@ -1,0 +1,25 @@
+{
+  "name": "jquery-to-react",
+  "version": "1.0.0",
+  "description": "Migrate jQuery apps and pages to React — full rewrites or incremental strangler-fig migrations of any size, including jQuery plugins and jQuery UI.",
+  "author": {
+    "name": "CobuildX",
+    "email": "emmanuel.r@cobuildx.ai"
+  },
+  "homepage": "https://github.com/cobuild-tech/cbx-plugins/tree/main/jquery-to-react",
+  "repository": "https://github.com/cobuild-tech/cbx-plugins",
+  "license": "MIT",
+  "privacyPolicyUrl": "https://cobuildx.ai/privacy",
+  "termsOfServiceUrl": "https://cobuildx.ai/terms",
+  "supportUrl": "https://github.com/cobuild-tech/cbx-plugins/issues",
+  "keywords": [
+    "react",
+    "migration",
+    "jquery",
+    "jquery-ui",
+    "jquery-plugins",
+    "legacy-javascript",
+    "refactoring",
+    "modernization"
+  ]
+}

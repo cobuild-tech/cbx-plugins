@@ -11,7 +11,7 @@ check=false
 [[ "${1:-}" == "--check" ]] && check=true
 
 shared_dirs=(methodology react)
-plugins=(ember-to-react angular-to-react backbone-to-react)
+plugins=(ember-to-react angular-to-react backbone-to-react jquery-to-react vanillajs-to-react)
 header='<!-- GENERATED from shared/%s/%s by scripts/sync-shared.sh. DO NOT EDIT; edit shared/ and re-run. -->'
 
 render() { # render <dir> <file> -> stdout
