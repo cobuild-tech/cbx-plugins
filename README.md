@@ -7,6 +7,8 @@ Claude plugins by CobuildX.
 | [ember-to-react](ember-to-react) | Migrate Ember.js apps to React — full rewrites or incremental strangler-fig migrations of any size. |
 | [angular-to-react](angular-to-react) | Migrate Angular (2+) and AngularJS (1.x) apps to React — full rewrites or incremental strangler-fig migrations of any size, including hybrid ngUpgrade apps. |
 | [backbone-to-react](backbone-to-react) | Migrate Backbone.js apps to React — full rewrites or incremental strangler-fig migrations of any size. |
+| [jquery-to-react](jquery-to-react) | Migrate jQuery apps and pages to React — full rewrites or incremental strangler-fig migrations of any size, including jQuery plugins and jQuery UI. |
+| [vanillajs-to-react](vanillajs-to-react) | Migrate vanilla JavaScript apps and pages to React — full rewrites or incremental strangler-fig migrations of any size, from script-tag pages to ES-module apps. |
 
 ## Install in Claude Code
 
@@ -15,6 +17,8 @@ Claude plugins by CobuildX.
 /plugin install ember-to-react@cbx-plugins
 /plugin install angular-to-react@cbx-plugins
 /plugin install backbone-to-react@cbx-plugins
+/plugin install jquery-to-react@cbx-plugins
+/plugin install vanillajs-to-react@cbx-plugins
 ```
 
 ## Install in VS Code (GitHub Copilot)
@@ -33,6 +37,8 @@ copilot plugin marketplace add cobuild-tech/cbx-plugins
 copilot plugin install ember-to-react@cbx-plugins
 copilot plugin install angular-to-react@cbx-plugins
 copilot plugin install backbone-to-react@cbx-plugins
+copilot plugin install jquery-to-react@cbx-plugins
+copilot plugin install vanillajs-to-react@cbx-plugins
 ```
 
 ## Repository layout

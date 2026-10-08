@@ -22,6 +22,16 @@
       "name": "backbone-to-react",
       "source": "./backbone-to-react",
       "description": "Migrate Backbone.js apps to React — full rewrites or incremental strangler-fig migrations of any size."
+    },
+    {
+      "name": "jquery-to-react",
+      "source": "./jquery-to-react",
+      "description": "Migrate jQuery apps and pages to React — full rewrites or incremental strangler-fig migrations of any size, including jQuery plugins and jQuery UI."
+    },
+    {
+      "name": "vanillajs-to-react",
+      "source": "./vanillajs-to-react",
+      "description": "Migrate vanilla JavaScript apps and pages to React — full rewrites or incremental strangler-fig migrations of any size, from script-tag pages to ES-module apps."
     }
   ]
 }
