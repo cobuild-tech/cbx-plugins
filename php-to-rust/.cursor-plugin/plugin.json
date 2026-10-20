@@ -1,0 +1,24 @@
+{
+  "name": "php-to-rust",
+  "displayName": "PHP to Rust",
+  "version": "1.0.0",
+  "description": "Migrate PHP apps to Rust — full rewrites or incremental strangler-fig migrations of any size, from plain PHP scripts to Laravel and Symfony routes, cron jobs, and queue workers.",
+  "author": {
+    "name": "CobuildX",
+    "email": "emmanuel.r@cobuildx.ai"
+  },
+  "homepage": "https://github.com/cobuild-tech/cbx-plugins/tree/main/php-to-rust",
+  "repository": "https://github.com/cobuild-tech/cbx-plugins",
+  "license": "MIT",
+  "keywords": [
+    "rust",
+    "migration",
+    "php",
+    "laravel",
+    "symfony",
+    "axum",
+    "legacy-php",
+    "modernization"
+  ],
+  "logo": ".cursor-plugin/icon.png"
+}
