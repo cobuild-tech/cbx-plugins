@@ -1,0 +1,24 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "backbone-to-react",
+  "version": "2.0.0",
+  "description": "Migrate Backbone.js apps to React — full rewrites or incremental strangler-fig migrations of any size.",
+  "author": {
+    "name": "CobuildX",
+    "email": "emmanuel.r@cobuildx.ai",
+    "url": "https://cobuildx.ai"
+  },
+  "homepage": "https://github.com/cobuild-tech/cbx-plugins/tree/main/backbone-to-react",
+  "repository": "https://github.com/cobuild-tech/cbx-plugins",
+  "license": "MIT",
+  "keywords": [
+    "react",
+    "migration",
+    "backbone",
+    "marionette",
+    "jquery",
+    "handlebars",
+    "refactoring",
+    "modernization"
+  ]
+}
