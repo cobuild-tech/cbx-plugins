@@ -26,7 +26,7 @@ only when a condition below says to, and open only that file.
 
 ## Step 1: Assess
 
-1. Delegate the sweep to the `ember-inventory` agent. For an app of only a
+1. Delegate the sweep to the `ember-inventory` agent (if your tool has no such agent, follow `../../agents/ember-inventory.md` yourself). For an app of only a
    handful of files, you can read them directly.
 2. Read `references/ember/flavor.md` and record the version and flavor.
 3. Write `.migration/assessment.md` and create `state.json` with
@@ -66,7 +66,7 @@ only when a condition below says to, and open only that file.
 3. Build it, integrate it with the coexistence layer or the new app, and
    port its tests.
 4. Validate it with `references/methodology/validation.md`, including the
-   `ember-parity-reviewer` agent.
+   `ember-parity-reviewer` agent (if your tool has no such agent, follow `../../agents/ember-parity-reviewer.md` yourself).
 5. Write `.migration/units/<id>.md`, update `state.json` (unit status and
    `next_unit`), and **stop**. Tell the user what was done and what comes
    next. They say "continue" to run the next unit.

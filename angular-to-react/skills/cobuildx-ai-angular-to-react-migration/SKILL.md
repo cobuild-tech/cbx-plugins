@@ -27,7 +27,7 @@ only when a condition below says to, and open only that file.
 
 ## Step 1: Assess
 
-1. Delegate the sweep to the `angular-inventory` agent. For an app of only
+1. Delegate the sweep to the `angular-inventory` agent (if your tool has no such agent, follow `../../agents/angular-inventory.md` yourself). For an app of only
    a handful of files, you can read them directly.
 2. Read `references/angular/version.md` and record which Angular this is
    (AngularJS, Angular 2–15, 16+ with signals, or hybrid).
@@ -69,7 +69,7 @@ only when a condition below says to, and open only that file.
 3. Build it, integrate it with the coexistence layer or the new app, and
    port its tests.
 4. Validate it with `references/methodology/validation.md`, including the
-   `angular-parity-reviewer` agent.
+   `angular-parity-reviewer` agent (if your tool has no such agent, follow `../../agents/angular-parity-reviewer.md` yourself).
 5. Write `.migration/units/<id>.md`, update `state.json` (unit status and
    `next_unit`), and **stop**. Tell the user what was done and what comes
    next. They say "continue" to run the next unit.

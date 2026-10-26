@@ -41,11 +41,43 @@ copilot plugin install jquery-to-react@cbx-plugins
 copilot plugin install vanillajs-to-react@cbx-plugins
 ```
 
+## Install in Codex
+
+```
+codex plugin marketplace add cobuild-tech/cbx-plugins
+codex plugin add ember-to-react@cbx-plugins
+codex plugin add angular-to-react@cbx-plugins
+codex plugin add backbone-to-react@cbx-plugins
+codex plugin add jquery-to-react@cbx-plugins
+codex plugin add vanillajs-to-react@cbx-plugins
+```
+
+Codex loads the migration skill. It does not run the bundled agents or the `/plan` command; the skill tells Codex to follow the agent instructions itself. For current React docs, add Context7 once:
+
+```
+codex mcp add context7 --url https://mcp.context7.com/mcp
+```
+
+## Install in Cursor
+
+Copy each plugin into Cursor's local plugins folder, then restart Cursor:
+
+```
+git clone https://github.com/cobuild-tech/cbx-plugins /tmp/cbx-plugins
+mkdir -p ~/.cursor/plugins/local
+for p in ember angular backbone jquery vanillajs; do
+  rsync -a --delete --exclude .claude-plugin --exclude .codex-plugin --exclude .mcp.json \
+    /tmp/cbx-plugins/$p-to-react/ ~/.cursor/plugins/local/$p-to-react/
+done
+```
+
 ## Repository layout
 
 ```
 cbx-plugins/
-├── .claude-plugin/marketplace.json
+├── .claude-plugin/marketplace.json   Claude Code / Copilot
+├── .cursor-plugin/marketplace.json   Cursor
+├── .agents/plugins/marketplace.json  Codex
 ├── shared/                      single source of truth, never shipped directly
 │   ├── methodology/             strategies, validation, .migration/ state format
 │   └── react/                   React target guidance shared by every plugin

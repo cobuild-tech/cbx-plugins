@@ -1,0 +1,48 @@
+{
+  "name": "angular-to-react",
+  "version": "2.0.0",
+  "description": "Migrate Angular (2+) and AngularJS (1.x) apps to React — full rewrites or incremental strangler-fig migrations of any size, including hybrid ngUpgrade apps.",
+  "author": {
+    "name": "CobuildX",
+    "email": "emmanuel.r@cobuildx.ai",
+    "url": "https://cobuildx.ai"
+  },
+  "homepage": "https://github.com/cobuild-tech/cbx-plugins/tree/main/angular-to-react",
+  "repository": "https://github.com/cobuild-tech/cbx-plugins",
+  "license": "MIT",
+  "keywords": [
+    "react",
+    "migration",
+    "angular",
+    "angularjs",
+    "ngupgrade",
+    "rxjs",
+    "ngrx",
+    "refactoring",
+    "modernization"
+  ],
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "Angular to React",
+    "shortDescription": "Migrate Angular apps to React with a resumable, unit-by-unit plan",
+    "longDescription": "Migrate Angular (2+) and AngularJS (1.x) apps to React — full rewrites or incremental strangler-fig migrations of any size, including hybrid ngUpgrade apps. Keeps resumable migration state in .migration/, inventories the app before changing code, and checks each migrated piece for parity with the original.",
+    "developerName": "CobuildX AI",
+    "category": "Developer Tools",
+    "capabilities": [
+      "Interactive",
+      "Read",
+      "Write"
+    ],
+    "websiteURL": "https://cobuildx.ai",
+    "privacyPolicyURL": "https://cobuildx.ai/privacy",
+    "termsOfServiceURL": "https://cobuildx.ai/terms",
+    "defaultPrompt": [
+      "Plan a migration of this Angular app to React",
+      "Continue the Angular-to-React migration"
+    ],
+    "logo": "./.cursor-plugin/icon.png",
+    "composerIcon": "./.cursor-plugin/icon.png",
+    "screenshots": []
+  }
+}
