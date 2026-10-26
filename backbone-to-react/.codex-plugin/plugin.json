@@ -1,0 +1,47 @@
+{
+  "name": "backbone-to-react",
+  "version": "2.0.0",
+  "description": "Migrate Backbone.js apps to React — full rewrites or incremental strangler-fig migrations of any size.",
+  "author": {
+    "name": "CobuildX",
+    "email": "emmanuel.r@cobuildx.ai",
+    "url": "https://cobuildx.ai"
+  },
+  "homepage": "https://github.com/cobuild-tech/cbx-plugins/tree/main/backbone-to-react",
+  "repository": "https://github.com/cobuild-tech/cbx-plugins",
+  "license": "MIT",
+  "keywords": [
+    "react",
+    "migration",
+    "backbone",
+    "marionette",
+    "jquery",
+    "handlebars",
+    "refactoring",
+    "modernization"
+  ],
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "Backbone to React",
+    "shortDescription": "Migrate Backbone apps to React with a resumable, unit-by-unit plan",
+    "longDescription": "Migrate Backbone.js apps to React — full rewrites or incremental strangler-fig migrations of any size. Keeps resumable migration state in .migration/, inventories the app before changing code, and checks each migrated piece for parity with the original.",
+    "developerName": "CobuildX AI",
+    "category": "Developer Tools",
+    "capabilities": [
+      "Interactive",
+      "Read",
+      "Write"
+    ],
+    "websiteURL": "https://cobuildx.ai",
+    "privacyPolicyURL": "https://cobuildx.ai/privacy",
+    "termsOfServiceURL": "https://cobuildx.ai/terms",
+    "defaultPrompt": [
+      "Plan a migration of this Backbone app to React",
+      "Continue the Backbone-to-React migration"
+    ],
+    "logo": "./.cursor-plugin/icon.png",
+    "composerIcon": "./.cursor-plugin/icon.png",
+    "screenshots": []
+  }
+}

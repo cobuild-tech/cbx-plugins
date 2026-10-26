@@ -1,0 +1,68 @@
+{
+  "name": "cbx-plugins",
+  "interface": {
+    "displayName": "CobuildX AI — MigrateX"
+  },
+  "plugins": [
+    {
+      "name": "ember-to-react",
+      "source": {
+        "source": "local",
+        "path": "./ember-to-react"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Developer Tools"
+    },
+    {
+      "name": "angular-to-react",
+      "source": {
+        "source": "local",
+        "path": "./angular-to-react"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Developer Tools"
+    },
+    {
+      "name": "backbone-to-react",
+      "source": {
+        "source": "local",
+        "path": "./backbone-to-react"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Developer Tools"
+    },
+    {
+      "name": "jquery-to-react",
+      "source": {
+        "source": "local",
+        "path": "./jquery-to-react"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Developer Tools"
+    },
+    {
+      "name": "vanillajs-to-react",
+      "source": {
+        "source": "local",
+        "path": "./vanillajs-to-react"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Developer Tools"
+    }
+  ]
+}

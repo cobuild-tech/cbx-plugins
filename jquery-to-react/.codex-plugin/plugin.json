@@ -1,0 +1,47 @@
+{
+  "name": "jquery-to-react",
+  "version": "1.0.0",
+  "description": "Migrate jQuery apps and pages to React — full rewrites or incremental strangler-fig migrations of any size, including jQuery plugins and jQuery UI.",
+  "author": {
+    "name": "CobuildX",
+    "email": "emmanuel.r@cobuildx.ai",
+    "url": "https://cobuildx.ai"
+  },
+  "homepage": "https://github.com/cobuild-tech/cbx-plugins/tree/main/jquery-to-react",
+  "repository": "https://github.com/cobuild-tech/cbx-plugins",
+  "license": "MIT",
+  "keywords": [
+    "react",
+    "migration",
+    "jquery",
+    "jquery-ui",
+    "jquery-plugins",
+    "legacy-javascript",
+    "refactoring",
+    "modernization"
+  ],
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "jQuery to React",
+    "shortDescription": "Migrate jQuery apps to React with a resumable, unit-by-unit plan",
+    "longDescription": "Migrate jQuery apps and pages to React — full rewrites or incremental strangler-fig migrations of any size, including jQuery plugins and jQuery UI. Keeps resumable migration state in .migration/, inventories the app before changing code, and checks each migrated piece for parity with the original.",
+    "developerName": "CobuildX AI",
+    "category": "Developer Tools",
+    "capabilities": [
+      "Interactive",
+      "Read",
+      "Write"
+    ],
+    "websiteURL": "https://cobuildx.ai",
+    "privacyPolicyURL": "https://cobuildx.ai/privacy",
+    "termsOfServiceURL": "https://cobuildx.ai/terms",
+    "defaultPrompt": [
+      "Plan a migration of this jQuery app to React",
+      "Continue the jQuery-to-React migration"
+    ],
+    "logo": "./.cursor-plugin/icon.png",
+    "composerIcon": "./.cursor-plugin/icon.png",
+    "screenshots": []
+  }
+}

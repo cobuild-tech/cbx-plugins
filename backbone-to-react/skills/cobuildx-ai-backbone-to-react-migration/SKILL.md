@@ -26,7 +26,7 @@ only when a condition below says to, and open only that file.
 
 ## Step 1: Assess
 
-1. Delegate the sweep to the `backbone-inventory` agent. For an app of
+1. Delegate the sweep to the `backbone-inventory` agent (if your tool has no such agent, follow `../../agents/backbone-inventory.md` yourself). For an app of
    only a handful of files, you can read them directly.
 2. Read `references/backbone/flavor.md` and record Marionette or not, the
    template engine, the module system, and the routing mode.
@@ -70,7 +70,7 @@ only when a condition below says to, and open only that file.
 3. Build it, integrate it with the coexistence layer or the new app, and
    port its tests.
 4. Validate it with `references/methodology/validation.md`, including the
-   `backbone-parity-reviewer` agent.
+   `backbone-parity-reviewer` agent (if your tool has no such agent, follow `../../agents/backbone-parity-reviewer.md` yourself).
 5. Write `.migration/units/<id>.md`, update `state.json` (unit status and
    `next_unit`), and **stop**. Tell the user what was done and what comes
    next. They say "continue" to run the next unit.

@@ -26,7 +26,7 @@ only when a condition below says to, and open only that file.
 
 ## Step 1: Assess
 
-1. Delegate the sweep to the `jquery-inventory` agent. For an app of
+1. Delegate the sweep to the `jquery-inventory` agent (if your tool has no such agent, follow `../../agents/jquery-inventory.md` yourself). For an app of
    only a handful of files, you can read them directly.
 2. Read `references/jquery/flavor.md` and record the jQuery version, how
    it is loaded, the plugin list, and whether pages are server-rendered.
@@ -73,7 +73,7 @@ only when a condition below says to, and open only that file.
 3. Build it, integrate it with the coexistence layer or the new app, and
    port its tests.
 4. Validate it with `references/methodology/validation.md`, including the
-   `jquery-parity-reviewer` agent.
+   `jquery-parity-reviewer` agent (if your tool has no such agent, follow `../../agents/jquery-parity-reviewer.md` yourself).
 5. Write `.migration/units/<id>.md`, update `state.json` (unit status and
    `next_unit`), and **stop**. Tell the user what was done and what comes
    next. They say "continue" to run the next unit.
