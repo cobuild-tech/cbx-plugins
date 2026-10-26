@@ -1,6 +1,6 @@
 {
   "name": "jquery-to-react",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Migrate jQuery apps and pages to React — full rewrites or incremental strangler-fig migrations of any size, including jQuery plugins and jQuery UI.",
   "author": {
     "name": "CobuildX",
