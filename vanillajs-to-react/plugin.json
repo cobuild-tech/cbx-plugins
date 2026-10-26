@@ -1,0 +1,24 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "vanillajs-to-react",
+  "version": "1.0.0",
+  "description": "Migrate vanilla JavaScript apps and pages to React — full rewrites or incremental strangler-fig migrations of any size, from script-tag pages to ES-module apps.",
+  "author": {
+    "name": "CobuildX",
+    "email": "emmanuel.r@cobuildx.ai",
+    "url": "https://cobuildx.ai"
+  },
+  "homepage": "https://github.com/cobuild-tech/cbx-plugins/tree/main/vanillajs-to-react",
+  "repository": "https://github.com/cobuild-tech/cbx-plugins",
+  "license": "MIT",
+  "keywords": [
+    "react",
+    "migration",
+    "vanilla-js",
+    "javascript",
+    "dom",
+    "legacy-javascript",
+    "refactoring",
+    "modernization"
+  ]
+}
