@@ -1,7 +1,7 @@
 {
   "name": "angular-to-react",
-  "version": "2.0.0",
-  "description": "Migrate Angular (2+) and AngularJS (1.x) apps to React — full rewrites or incremental strangler-fig migrations of any size, including hybrid ngUpgrade apps.",
+  "version": "2.1.0",
+  "description": "Convert Angular / AngularJS code to React. Paste an Angular component in any Claude app and get the React version, or plan and run a full incremental migration of your repo in Claude Code.",
   "author": {
     "name": "CobuildX",
     "email": "emmanuel.r@cobuildx.ai",
@@ -25,8 +25,8 @@
   "mcpServers": "./.mcp.json",
   "interface": {
     "displayName": "Angular to React",
-    "shortDescription": "Migrate Angular apps to React",
-    "longDescription": "Migrate Angular (2+) and AngularJS (1.x) apps to React — full rewrites or incremental strangler-fig migrations of any size, including hybrid ngUpgrade apps. Keeps resumable migration state in .migration/, inventories the app before changing code, and checks each migrated piece for parity with the original.",
+    "shortDescription": "Convert Angular code to React",
+    "longDescription": "Convert Angular / AngularJS code to React. Paste an Angular component in any Claude app and get the React version, or plan and run a full incremental migration of your repo in Claude Code. Keeps resumable migration state in .migration/, inventories the app before changing code, and checks each migrated piece for parity with the original.",
     "developerName": "CobuildX AI",
     "category": "Developer Tools",
     "capabilities": [
@@ -38,6 +38,7 @@
     "privacyPolicyURL": "https://cobuildx.ai/privacy",
     "termsOfServiceURL": "https://cobuildx.ai/terms",
     "defaultPrompt": [
+      "Convert this Angular code to React",
       "Plan a migration of this Angular app to React",
       "Continue the Angular-to-React migration"
     ],

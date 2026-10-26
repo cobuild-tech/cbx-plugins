@@ -2,6 +2,25 @@
 
 A Claude skill by CobuildX for migrating jQuery apps and pages, including jQuery plugins and jQuery UI, to React.
 
+## Quick start
+
+Where it works:
+
+- **Claude Code, or Cowork with your project folder:** full migrations of a repo.
+- **Claude.ai and any chat:** paste a jQuery widget and ask for the React version.
+
+For a full migration:
+
+1. Install the plugin (see [Install](#install)).
+2. Open your jQuery repo in Claude Code.
+3. Run `/jquery-to-react:plan`. It writes a plan to `.migration/` and changes no app code until you approve.
+
+Try asking:
+
+- "Convert this jQuery code to React" (then paste it)
+- "What would this page look like in React?"
+- "Plan a migration of this jQuery app to React"
+
 ## What it does
 
 The `cobuildx-ai-jquery-to-react-migration` skill guides Claude through moving a jQuery codebase to React. It supports both full rewrites and incremental (strangler-fig) migrations, where React and jQuery run side by side until jQuery is removed.

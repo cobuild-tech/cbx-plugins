@@ -1,7 +1,7 @@
 {
   "name": "vanillajs-to-react",
-  "version": "1.0.1",
-  "description": "Migrate vanilla JavaScript apps and pages to React — full rewrites or incremental strangler-fig migrations of any size, from script-tag pages to ES-module apps.",
+  "version": "1.1.0",
+  "description": "Convert vanilla JavaScript code to React. Paste a vanilla JS widget in any Claude app and get the React version, or plan and run a full incremental migration of your repo in Claude Code.",
   "author": {
     "name": "CobuildX",
     "email": "emmanuel.r@cobuildx.ai",
@@ -24,8 +24,8 @@
   "mcpServers": "./.mcp.json",
   "interface": {
     "displayName": "Vanilla JS to React",
-    "shortDescription": "Migrate vanilla JS to React",
-    "longDescription": "Migrate vanilla JavaScript apps and pages to React — full rewrites or incremental strangler-fig migrations of any size, from script-tag pages to ES-module apps. Keeps resumable migration state in .migration/, inventories the app before changing code, and checks each migrated piece for parity with the original.",
+    "shortDescription": "Convert vanilla JS code to React",
+    "longDescription": "Convert vanilla JavaScript code to React. Paste a vanilla JS widget in any Claude app and get the React version, or plan and run a full incremental migration of your repo in Claude Code. Keeps resumable migration state in .migration/, inventories the app before changing code, and checks each migrated piece for parity with the original.",
     "developerName": "CobuildX AI",
     "category": "Developer Tools",
     "capabilities": [
@@ -37,8 +37,9 @@
     "privacyPolicyURL": "https://cobuildx.ai/privacy",
     "termsOfServiceURL": "https://cobuildx.ai/terms",
     "defaultPrompt": [
-      "Plan a migration of this Vanilla JS app to React",
-      "Continue the Vanilla JS-to-React migration"
+      "Convert this vanilla JS code to React",
+      "Plan a migration of this vanilla JS app to React",
+      "Continue the vanilla JS-to-React migration"
     ],
     "logo": "./.cursor-plugin/icon.png",
     "composerIcon": "./.cursor-plugin/icon.png",

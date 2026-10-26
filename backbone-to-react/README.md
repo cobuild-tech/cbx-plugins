@@ -2,6 +2,25 @@
 
 A Claude skill by CobuildX for migrating Backbone.js apps, including Marionette, jQuery, and Underscore/Handlebars templates to React.
 
+## Quick start
+
+Where it works:
+
+- **Claude Code, or Cowork with your project folder:** full migrations of a repo.
+- **Claude.ai and any chat:** paste a Backbone view and ask for the React version.
+
+For a full migration:
+
+1. Install the plugin (see [Install](#install)).
+2. Open your Backbone repo in Claude Code.
+3. Run `/backbone-to-react:plan`. It writes a plan to `.migration/` and changes no app code until you approve.
+
+Try asking:
+
+- "Convert this Backbone code to React" (then paste it)
+- "What would this view look like in React?"
+- "Plan a migration of this Backbone app to React"
+
 ## What it does
 
 The `cobuildx-ai-backbone-to-react-migration` skill guides Claude through moving a Backbone.js codebase to React. It supports both full rewrites and incremental (strangler-fig) migrations, where React and Backbone.js run side by side until the old code is retired.
