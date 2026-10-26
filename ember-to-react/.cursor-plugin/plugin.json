@@ -1,8 +1,8 @@
 {
   "name": "ember-to-react",
   "displayName": "Ember to React",
-  "version": "2.0.0",
-  "description": "Migrate Ember.js apps to React — full rewrites or incremental strangler-fig migrations of any size.",
+  "version": "2.1.0",
+  "description": "Convert Ember.js code to React. Paste an Ember component in any Claude app and get the React version, or plan and run a full incremental migration of your repo in Claude Code.",
   "author": {
     "name": "CobuildX",
     "email": "emmanuel.r@cobuildx.ai"

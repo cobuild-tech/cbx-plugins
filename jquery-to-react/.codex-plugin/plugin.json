@@ -1,7 +1,7 @@
 {
   "name": "jquery-to-react",
-  "version": "1.0.1",
-  "description": "Migrate jQuery apps and pages to React — full rewrites or incremental strangler-fig migrations of any size, including jQuery plugins and jQuery UI.",
+  "version": "1.1.0",
+  "description": "Convert jQuery code to React. Paste a jQuery widget in any Claude app and get the React version, or plan and run a full incremental migration of your repo in Claude Code.",
   "author": {
     "name": "CobuildX",
     "email": "emmanuel.r@cobuildx.ai",
@@ -24,8 +24,8 @@
   "mcpServers": "./.mcp.json",
   "interface": {
     "displayName": "jQuery to React",
-    "shortDescription": "Migrate jQuery apps to React",
-    "longDescription": "Migrate jQuery apps and pages to React — full rewrites or incremental strangler-fig migrations of any size, including jQuery plugins and jQuery UI. Keeps resumable migration state in .migration/, inventories the app before changing code, and checks each migrated piece for parity with the original.",
+    "shortDescription": "Convert jQuery code to React",
+    "longDescription": "Convert jQuery code to React. Paste a jQuery widget in any Claude app and get the React version, or plan and run a full incremental migration of your repo in Claude Code. Keeps resumable migration state in .migration/, inventories the app before changing code, and checks each migrated piece for parity with the original.",
     "developerName": "CobuildX AI",
     "category": "Developer Tools",
     "capabilities": [
@@ -37,6 +37,7 @@
     "privacyPolicyURL": "https://cobuildx.ai/privacy",
     "termsOfServiceURL": "https://cobuildx.ai/terms",
     "defaultPrompt": [
+      "Convert this jQuery code to React",
       "Plan a migration of this jQuery app to React",
       "Continue the jQuery-to-React migration"
     ],

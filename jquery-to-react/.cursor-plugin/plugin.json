@@ -1,8 +1,8 @@
 {
   "name": "jquery-to-react",
   "displayName": "jQuery to React",
-  "version": "1.0.1",
-  "description": "Migrate jQuery apps and pages to React — full rewrites or incremental strangler-fig migrations of any size, including jQuery plugins and jQuery UI.",
+  "version": "1.1.0",
+  "description": "Convert jQuery code to React. Paste a jQuery widget in any Claude app and get the React version, or plan and run a full incremental migration of your repo in Claude Code.",
   "author": {
     "name": "CobuildX",
     "email": "emmanuel.r@cobuildx.ai"

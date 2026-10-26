@@ -2,6 +2,25 @@
 
 A Claude skill by CobuildX for migrating vanilla (plain) JavaScript apps and pages to React, from script-tag pages to ES-module apps.
 
+## Quick start
+
+Where it works:
+
+- **Claude Code, or Cowork with your project folder:** full migrations of a repo.
+- **Claude.ai and any chat:** paste a vanilla JS widget and ask for the React version.
+
+For a full migration:
+
+1. Install the plugin (see [Install](#install)).
+2. Open your vanilla JS repo in Claude Code.
+3. Run `/vanillajs-to-react:plan`. It writes a plan to `.migration/` and changes no app code until you approve.
+
+Try asking:
+
+- "Convert this vanilla JS code to React" (then paste it)
+- "What would this page look like in React?"
+- "Plan a migration of this vanilla JS app to React"
+
 ## What it does
 
 The `cobuildx-ai-vanillajs-to-react-migration` skill guides Claude through moving a vanilla JavaScript codebase to React. It supports both full rewrites and incremental (strangler-fig) migrations, where React and the old scripts run side by side until the old code is retired.

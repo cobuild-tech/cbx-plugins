@@ -1,8 +1,8 @@
 {
   "name": "backbone-to-react",
   "displayName": "Backbone to React",
-  "version": "2.0.0",
-  "description": "Migrate Backbone.js apps to React — full rewrites or incremental strangler-fig migrations of any size.",
+  "version": "2.1.0",
+  "description": "Convert Backbone.js code to React. Paste a Backbone view in any Claude app and get the React version, or plan and run a full incremental migration of your repo in Claude Code.",
   "author": {
     "name": "CobuildX",
     "email": "emmanuel.r@cobuildx.ai"

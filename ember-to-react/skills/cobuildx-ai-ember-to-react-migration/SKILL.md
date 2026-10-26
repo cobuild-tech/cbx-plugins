@@ -1,8 +1,8 @@
 ---
 name: cobuildx-ai-ember-to-react-migration
-description: "Use when the user asks to migrate, port, rewrite, or modernize an Ember.js app (Classic or Octane) to React — full rewrites or incremental/strangler-fig migrations of any size — or to continue, resume, or check the status of an Ember-to-React migration already in progress (e.g. \"continue the migration\", \"what's left to migrate\", \"why isn't Orders migrated yet\")."
+description: "Use when the user asks to convert or translate Ember.js code to React — a single component, template, route, controller, service, model, or helper, pasted Ember code with a request for React, or \"what would this look like in React\" — or to migrate, port, rewrite, or modernize an Ember.js app (Classic or Octane) to React — full rewrites or incremental/strangler-fig migrations of any size — or to continue, resume, or check the status of an Ember-to-React migration already in progress (e.g. \"continue the migration\", \"what's left to migrate\", \"why isn't Orders migrated yet\"). Also use for planning, scoping, or estimating a move off Ember, and for requests to upgrade, modernize, or replace Ember with React."
 metadata:
-  version: "2.0.0"
+  version: "2.1.0"
 ---
 
 # Ember → React Migration
@@ -13,6 +13,23 @@ framework change needs, or fix things along the way unless the user asks.
 
 This skill is a workflow. The detail is in `references/`. Open a reference
 only when a condition below says to, and open only that file.
+
+## Pick a mode
+
+- **Snippet mode.** Use this when there's no repo to work in (Claude.ai or
+  Cowork chat without a project folder), or the user pasted code or asked
+  about one component or a few files. Convert the code directly: read
+  `references/mappings.md` and only the one file in `references/ember/` that
+  matches the code. Return the React code, then a short list of behavior
+  differences and anything the snippet depends on that you couldn't see.
+  Don't create `.migration/` or run the inventory agent. End with one line:
+  "For a whole-app migration, open the repo in Claude Code and run
+  `/ember-to-react:plan`."
+- **Project mode.** Use this for a whole app, an area of it, or an
+  existing `.migration/`. Follow Steps 0–4. Before starting Step 1 on a
+  repo with no `.migration/`, tell the user in one sentence what happens
+  next: an inventory and a plan for their approval, with no app code
+  changed.
 
 ## Step 0: Resume or start
 

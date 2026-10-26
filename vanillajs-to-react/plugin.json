@@ -1,8 +1,8 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "vanillajs-to-react",
-  "version": "1.0.1",
-  "description": "Migrate vanilla JavaScript apps and pages to React — full rewrites or incremental strangler-fig migrations of any size, from script-tag pages to ES-module apps.",
+  "version": "1.1.0",
+  "description": "Convert vanilla JavaScript code to React. Paste a vanilla JS widget in any Claude app and get the React version, or plan and run a full incremental migration of your repo in Claude Code.",
   "author": {
     "name": "CobuildX",
     "email": "emmanuel.r@cobuildx.ai",
