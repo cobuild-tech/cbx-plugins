@@ -1,4 +1,5 @@
 ---
+name: plan
 description: Inventory this jQuery app and write a migration plan to React in .migration/ — strategy, units, route map, test plan, and risks. Changes no app code.
 argument-hint: "[optional: path or area to plan, e.g. src/ or the checkout page]"
 allowed-tools: Read, Grep, Glob, Agent, Write
