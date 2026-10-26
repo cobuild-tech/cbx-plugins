@@ -25,7 +25,7 @@
   "mcpServers": "./.mcp.json",
   "interface": {
     "displayName": "Angular to React",
-    "shortDescription": "Migrate Angular apps to React with a resumable, unit-by-unit plan",
+    "shortDescription": "Migrate Angular apps to React",
     "longDescription": "Migrate Angular (2+) and AngularJS (1.x) apps to React — full rewrites or incremental strangler-fig migrations of any size, including hybrid ngUpgrade apps. Keeps resumable migration state in .migration/, inventories the app before changing code, and checks each migrated piece for parity with the original.",
     "developerName": "CobuildX AI",
     "category": "Developer Tools",
@@ -43,6 +43,7 @@
     ],
     "logo": "./.cursor-plugin/icon.png",
     "composerIcon": "./.cursor-plugin/icon.png",
-    "screenshots": []
+    "screenshots": [],
+    "supportURL": "https://github.com/cobuild-tech/cbx-plugins/issues"
   }
 }

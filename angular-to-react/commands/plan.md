@@ -1,4 +1,5 @@
 ---
+name: plan
 description: Inventory this Angular / AngularJS app and write a migration plan to React in .migration/ — strategy, units, route map, test plan, and risks. Changes no app code.
 argument-hint: "[optional: path or area to plan, e.g. app/ or the billing section]"
 allowed-tools: Read, Grep, Glob, Agent, Write
