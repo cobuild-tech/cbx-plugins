@@ -1,7 +1,7 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "vanillajs-to-react",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Migrate vanilla JavaScript apps and pages to React — full rewrites or incremental strangler-fig migrations of any size, from script-tag pages to ES-module apps.",
   "author": {
     "name": "CobuildX",
