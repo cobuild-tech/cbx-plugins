@@ -12,7 +12,7 @@ Claude plugins by CobuildX.
 
 ## Open source, independent of CobuildX services
 
-These plugins are free, MIT-licensed open source, and each complete on its own. They are not a trial, demo, or lead-in for any paid offering: they have no upsell, sign-up, license key, usage limit, or "contact us" step, and nothing in them collects contact details or calls CobuildX servers. CobuildX also offers migration consulting, but that is a separate business with no connection to these plugins, and you never need it to use any of them.
+These plugins are free, MIT-licensed open source, and each complete on its own. They are not a trial, demo, or lead-in for any paid offering: they have no upsell, sign-up, license key, usage limit, or "contact us" step, and nothing in them collects contact details or calls CobuildX servers. CobuildX also offers migration consulting as a separate business, and these plugins do not reference or depend on it.
 
 ## Install in Claude Code
 
