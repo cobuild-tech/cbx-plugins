@@ -10,6 +10,10 @@ Claude plugins by CobuildX.
 | [jquery-to-react](jquery-to-react) | Migrate jQuery apps and pages to React — full rewrites or incremental strangler-fig migrations of any size, including jQuery plugins and jQuery UI. |
 | [vanillajs-to-react](vanillajs-to-react) | Migrate vanilla JavaScript apps and pages to React — full rewrites or incremental strangler-fig migrations of any size, from script-tag pages to ES-module apps. |
 
+## Open source, independent of CobuildX services
+
+These plugins are free, MIT-licensed open source, and each complete on its own. They are not a trial, demo, or lead-in for any paid offering: they have no upsell, sign-up, license key, usage limit, or "contact us" step, and nothing in them collects contact details or calls CobuildX servers. CobuildX also offers migration consulting, but that is a separate business with no connection to these plugins, and you never need it to use any of them.
+
 ## Install in Claude Code
 
 ```

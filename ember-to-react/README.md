@@ -104,6 +104,10 @@ The skill contains instructions only. Its only output besides your migrated code
 
 CobuildX privacy policy: https://cobuildx.ai/privacy
 
+## Open source, independent of CobuildX services
+
+This plugin is free, MIT-licensed open source, and complete on its own. It is not a trial, demo, or lead-in for any paid offering: it has no upsell, sign-up, license key, usage limit, or "contact us" step, and nothing in it collects contact details or calls CobuildX servers. CobuildX also offers migration consulting, but that is a separate business with no connection to this plugin, and you never need it to use any part of the plugin.
+
 ## Support
 
 Report problems or request features in [GitHub Issues](https://github.com/cobuild-tech/cbx-plugins/issues), or email hello@cobuildx.ai.
