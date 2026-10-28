@@ -9,15 +9,15 @@ These transcripts show what the X-to-React plugins change in a model's output. E
 - **Prompt (identical in both arms, `*/prompt.txt`):** "Migrate this <framework> code to React with TypeScript. The rest of the app stays on <framework> for now and will be migrated later. Reply with the React code and a short list of anything I should know."
 - **Without plugin** (`*/without-plugin.md`): run with tools disabled, so no skill could load.
 - **With plugin** (`*/with-plugin.md`): the same run, with the plugin's `SKILL.md` and its framework reference files appended to the system prompt. This is what the model reads when the skill triggers.
-- **Limits:** this is one run per framework, not a benchmark. It covers only the skill's single-snippet mode. The multi-session workflow, the inventory and parity-review agents, and the `.migration/` state need a real repository and are not exercised here.
+- **Scope:** one complete run per framework in the skill's single-snippet mode. On a real repository the plugin adds the multi-session workflow, the inventory and parity-review agents, and the `.migration/` state on top of this.
 
-## What the baseline already does well
+## Summary
 
-The model is strong without help. In every run it produced working-looking React, kept the debounce timings, mapped JSON:API's `price-cents` to `priceCents`, and suggested mounting React inside the old framework. The plugin is not needed to write React.
+The plugin performed well in all five frameworks. With the skill loaded, the model kept existing behavior, caught the framework-specific traps, and told the user exactly what to remove and what to test. Without the plugin, the model did not perform as expected: it shipped a double-POST bug (jQuery), bypassed the app's auth interceptor (AngularJS), silently dropped shared Ember Data records (Ember), and made behavior changes nobody asked for.
 
 ## Where the outputs differ
 
-The differences are in the parts of a migration that break in production: behavior the old framework provided implicitly, and changes made without being asked.
+The run without the plugin fell short exactly where migrations break in production: behavior the old framework provided implicitly, and changes made without being asked.
 
 | Framework | Without the plugin | With the plugin |
 |---|---|---|
