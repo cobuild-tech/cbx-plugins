@@ -1,0 +1,28 @@
+Migrate this Ember.js code to React with TypeScript. The rest of the app stays on Ember.js for now and will be migrated later. Reply with the React code and a short list of anything I should know.
+
+// app/adapters/application.js
+import JSONAPIAdapter from '@ember-data/adapter/json-api';
+export default class extends JSONAPIAdapter { namespace = 'api/v2'; }
+
+// app/components/product-search.js  (Classic component)
+import Component from '@ember/component';
+import { computed, observer } from '@ember/object';
+import { debounce } from '@ember/runloop';
+import { inject as service } from '@ember/service';
+export default Component.extend({
+  classNames: ['product-search'],
+  store: service(),
+  query: '',
+  resultsCount: computed('results.[]', function () { return this.get('results.length') || 0; }),
+  queryChanged: observer('query', function () { debounce(this, this.search, 300); }),
+  search() {
+    this.get('store').query('product', { q: this.get('query') })
+      .then((r) => this.set('results', r));
+  },
+  didInsertElement() { this.$('input').focus(); },
+});
+
+{{! app/templates/components/product-search.hbs }}
+{{input value=query placeholder="Search"}}
+<span class="count">{{resultsCount}}</span>
+{{#each results as |p|}}<div class="row">{{p.title}} - {{p.priceCents}}</div>{{/each}}

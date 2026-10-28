@@ -1,0 +1,16 @@
+// jQuery 1.12, loaded from CDN; server-rendered page (Rails)
+$.ajaxSetup({ headers: { 'X-CSRF-Token': $('meta[name=csrf-token]').attr('content') } });
+$(document).on('click', '.cart .remove', function (e) {
+  e.preventDefault();
+  var $row = $(this).closest('tr');
+  $.post('/cart/remove', { id: $row.data('id') }).done(function () {
+    $row.fadeOut(200, function () { $row.remove(); updateTotal(); });
+  });
+});
+function updateTotal() {
+  var t = 0; $('.cart tr').each(function () { t += +$(this).data('price') * +$(this).find('.qty').val(); });
+  $('#total').text(t.toFixed(2));
+  $('#checkout').prop('disabled', t === 0);
+}
+$('.cart .qty').on('change', updateTotal);
+$('#ship-date').datepicker({ minDate: 1, beforeShowDay: $.datepicker.noWeekends });
