@@ -1,0 +1,23 @@
+<!-- head -->
+<script>document.documentElement.dataset.theme = localStorage.theme || 'light';</script>
+<!-- body -->
+<button id="toggle">Theme</button><ul id="notes"></ul><form id="add"><input name="t"></form>
+<script>
+var notes = JSON.parse(localStorage.notes || '[]');
+function render() {
+  var ul = document.getElementById('notes'); ul.innerHTML = '';
+  notes.forEach(function (n, i) { var li = document.createElement('li');
+    li.textContent = n; li.dataset.i = i; ul.appendChild(li); });
+}
+document.getElementById('notes').addEventListener('click', function (e) {
+  if (e.target.dataset.i) { notes.splice(+e.target.dataset.i, 1); save(); }
+});
+document.getElementById('add').addEventListener('submit', function (e) {
+  e.preventDefault(); notes.push(this.t.value); this.reset(); save(); });
+function save() { localStorage.notes = JSON.stringify(notes); render(); }
+window.addEventListener('storage', function (e) { if (e.key === 'notes') { notes = JSON.parse(e.newValue); render(); } });
+document.getElementById('toggle').onclick = function () {
+  var t = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+  document.documentElement.dataset.theme = t; localStorage.theme = t; };
+render();
+</script>

@@ -1,0 +1,18 @@
+// AngularJS 1.x
+angular.module('app').component('orderList', {
+  bindings: { customerId: '<', onSelect: '&' },
+  template: `<input ng-model="$ctrl.filter" ng-model-options="{debounce: 250}">
+    <li ng-repeat="o in $ctrl.orders | filter:$ctrl.filter track by o.id"
+        ng-click="$ctrl.onSelect({order: o})">{{o.total | currency}}</li>`,
+  controller: function ($http, $timeout, $scope) {
+    var ctrl = this;
+    ctrl.$onChanges = function (c) {
+      if (c.customerId) $http.get('/api/customers/' + ctrl.customerId + '/orders')
+        .then(function (r) { ctrl.orders = r.data; });
+    };
+    var poll = $timeout(function refresh() { ctrl.$onChanges({customerId: true}); poll = $timeout(refresh, 30000); }, 30000);
+    $scope.$on('order:updated', function (e, o) { ctrl.$onChanges({customerId: true}); });
+    ctrl.$onDestroy = function () { $timeout.cancel(poll); };
+  }
+});
+// elsewhere: $httpProvider.interceptors.push('authInterceptor'); // adds X-Auth-Token

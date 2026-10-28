@@ -1,0 +1,14 @@
+// Backbone + Marionette
+var Todo = Backbone.Model.extend({ idAttribute: '_id', urlRoot: '/api/todos',
+  parse: function (r) { return r.todo; } });
+var Todos = Backbone.Collection.extend({ model: Todo, url: '/api/todos',
+  comparator: 'order', parse: function (r) { return r.items; } });
+var TodoView = Marionette.View.extend({
+  tagName: 'li', className: function () { return this.model.get('done') ? 'done' : ''; },
+  template: _.template('<input type="checkbox" <%= done ? "checked" : "" %>> <%- title %>'),
+  events: { 'change input': 'toggle' },
+  modelEvents: { 'change': 'render' },
+  toggle: function () { this.model.save({ done: !this.model.get('done') }, { patch: true }); }
+});
+var TodosView = Marionette.CollectionView.extend({ tagName: 'ul', childView: TodoView,
+  initialize: function () { this.listenTo(App.vent, 'todos:refresh', function () { this.collection.fetch(); }); } });
