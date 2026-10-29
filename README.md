@@ -1,6 +1,6 @@
 # cbx-plugins
 
-Claude plugins by CobuildX.
+Migration plugins by CobuildX: five framework-to-React plugins and one cloud migration plugin (GCP to AWS).
 
 | Plugin | Description |
 |---|---|
@@ -9,6 +9,7 @@ Claude plugins by CobuildX.
 | [backbone-to-react](backbone-to-react) | Migrate Backbone.js apps to React — full rewrites or incremental strangler-fig migrations of any size. |
 | [jquery-to-react](jquery-to-react) | Migrate jQuery apps and pages to React — full rewrites or incremental strangler-fig migrations of any size, including jQuery plugins and jQuery UI. |
 | [vanillajs-to-react](vanillajs-to-react) | Migrate vanilla JavaScript apps and pages to React — full rewrites or incremental strangler-fig migrations of any size, from script-tag pages to ES-module apps. |
+| [gcp-to-aws](gcp-to-aws) | Migrate Google Cloud (GCP) workloads to AWS — compute, GKE, serverless, big data, and storage — from single snippets to full phased migrations. |
 
 ## Open source, independent of CobuildX services
 
@@ -23,6 +24,7 @@ These plugins are free, MIT-licensed open source, and each complete on its own. 
 /plugin install backbone-to-react@cbx-plugins
 /plugin install jquery-to-react@cbx-plugins
 /plugin install vanillajs-to-react@cbx-plugins
+/plugin install gcp-to-aws@cbx-plugins
 ```
 
 ## Install in VS Code (GitHub Copilot)
@@ -43,6 +45,7 @@ copilot plugin install angular-to-react@cbx-plugins
 copilot plugin install backbone-to-react@cbx-plugins
 copilot plugin install jquery-to-react@cbx-plugins
 copilot plugin install vanillajs-to-react@cbx-plugins
+copilot plugin install gcp-to-aws@cbx-plugins
 ```
 
 ## Install in Codex
@@ -54,12 +57,19 @@ codex plugin add angular-to-react@cbx-plugins
 codex plugin add backbone-to-react@cbx-plugins
 codex plugin add jquery-to-react@cbx-plugins
 codex plugin add vanillajs-to-react@cbx-plugins
+codex plugin add gcp-to-aws@cbx-plugins
 ```
 
 Codex loads the migration skill. It does not run the bundled agents or the `/plan` command; the skill tells Codex to follow the agent instructions itself. For current React docs, add Context7 once:
 
 ```
 codex mcp add context7 --url https://mcp.context7.com/mcp
+```
+
+For `gcp-to-aws`, add the AWS Knowledge server instead (or as well):
+
+```
+codex mcp add aws-knowledge --url https://knowledge-mcp.global.api.aws
 ```
 
 ## Install in Cursor
@@ -73,6 +83,8 @@ for p in ember angular backbone jquery vanillajs; do
   rsync -a --delete --exclude .claude-plugin --exclude .codex-plugin --exclude .mcp.json \
     /tmp/cbx-plugins/$p-to-react/ ~/.cursor/plugins/local/$p-to-react/
 done
+rsync -a --delete --exclude .claude-plugin --exclude .codex-plugin --exclude .mcp.json \
+  /tmp/cbx-plugins/gcp-to-aws/ ~/.cursor/plugins/local/gcp-to-aws/
 ```
 
 ## Repository layout
@@ -100,6 +112,14 @@ cbx-plugins/
             ├── <framework>/       framework-specific, one file per topic
             ├── react/           generated from shared/react
             └── methodology/     generated from shared/methodology
+
+gcp-to-aws/                      same plugin shape; its references are its own
+├── agents/                      gcp-inventory, aws-parity-reviewer
+├── .mcp.json                    AWS Knowledge MCP
+└── skills/cobuildx-ai-gcp-to-aws-migration/references/
+    ├── mappings.md, compute.md, serverless.md, big-data.md, big-data-sql.md, storage.md
+    ├── iam-identity.md, networking.md, cost-limits.md
+    └── methodology/             phases, state format, validation, cutover (not synced from shared/)
 ```
 
 Edit `shared/`, never the generated copies, then run `scripts/sync-shared.sh` and commit the result. CI fails if the copies drift or a reference is never routed.
