@@ -1,0 +1,93 @@
+diff --git a/package.json b/package.json
+index af94f64..0589917 100644
+--- a/package.json
++++ b/package.json
+@@ -1 +1 @@
+-{ "name": "todos", "private": true, "dependencies": { "backbone": "1.4.1", "underscore": "1.13.6", "jquery": "3.7.1", "react": "^18.3.1", "react-dom": "^18.3.1" } }
++{ "name": "todos", "private": true, "dependencies": { "backbone": "1.4.1", "underscore": "1.13.6", "jquery": "3.7.1", "react": "^18.3.1", "react-dom": "^18.3.1" }, "devDependencies": { "typescript": "^5.6.0", "@types/react": "^18.3.0", "@types/react-dom": "^18.3.0" } }
+diff --git a/src/main.js b/src/main.js
+index 8b2d9dd..0ced8a6 100644
+--- a/src/main.js
++++ b/src/main.js
+@@ -1 +1 @@
+-$(function () { new app.TodoListView(); new app.SidebarView(); app.todos.fetch({ reset: true }); });
++$(function () { app.mountTodoList(document.getElementById('todo-list')); new app.SidebarView(); app.todos.fetch({ reset: true }); });
+diff --git a/src/react/TodoListView.tsx b/src/react/TodoListView.tsx
+new file mode 100644
+index 0000000..1cdbee1
+--- /dev/null
++++ b/src/react/TodoListView.tsx
+@@ -0,0 +1,55 @@
++import React, { useEffect, useReducer } from 'react';
++import { createRoot } from 'react-dom/client';
++
++// Minimal typings for the Backbone globals this component touches.
++interface TodoModel {
++  id: string | number;
++  get(attr: 'title'): string;
++  get(attr: 'done'): boolean;
++  save(attrs: { done: boolean }, options?: { patch?: boolean }): unknown;
++  destroy(): unknown;
++}
++interface TodoCollection {
++  map<T>(fn: (t: TodoModel) => T): T[];
++  on(events: string, cb: () => void): unknown;
++  off(events: string, cb: () => void): unknown;
++}
++declare global {
++  interface Window {
++    app: { todos: TodoCollection; mountTodoList?: (el: Element) => void };
++  }
++}
++
++// Same events the Backbone view re-rendered on.
++const EVENTS = 'add remove reset sort change:done';
++
++export function TodoListView({ todos }: { todos: TodoCollection }) {
++  const [, forceRender] = useReducer((n: number) => n + 1, 0);
++
++  useEffect(() => {
++    todos.on(EVENTS, forceRender);
++    return () => { todos.off(EVENTS, forceRender); };
++  }, [todos]);
++
++  return (
++    <>
++      {todos.map((t) => (
++        <li key={t.id} data-id={t.id}>
++          <input
++            className="toggle"
++            type="checkbox"
++            checked={!!t.get('done')}
++            onChange={(e) => t.save({ done: e.target.checked }, { patch: true })}
++          />
++          {t.get('title')}
++          <a className="destroy" onClick={() => t.destroy()}>×</a>
++        </li>
++      ))}
++    </>
++  );
++}
++
++// Bridge for the Backbone bootstrap in main.js.
++window.app.mountTodoList = (el: Element) => {
++  createRoot(el).render(<TodoListView todos={window.app.todos} />);
++};
+diff --git a/tsconfig.json b/tsconfig.json
+new file mode 100644
+index 0000000..c54eeb0
+--- /dev/null
++++ b/tsconfig.json
+@@ -0,0 +1,12 @@
++{
++  "compilerOptions": {
++    "target": "ES2020",
++    "module": "ESNext",
++    "moduleResolution": "Bundler",
++    "jsx": "react-jsx",
++    "strict": true,
++    "noEmit": true,
++    "skipLibCheck": true
++  },
++  "include": ["src/react"]
++}

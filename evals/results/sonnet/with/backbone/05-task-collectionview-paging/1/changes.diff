@@ -1,0 +1,303 @@
+diff --git a/package.json b/package.json
+index 8c9343b..99e6ee9 100644
+--- a/package.json
++++ b/package.json
+@@ -1 +1 @@
+-{ "name": "app", "private": true, "dependencies": { "backbone": "1.4.1", "backbone.marionette": "4.1.3", "jquery": "3.7.1", "bootstrap": "4.6.2", "react": "^18.3.1", "react-dom": "^18.3.1" } }
++{ "name": "app", "private": true, "scripts": { "typecheck": "tsc -p tsconfig.json" }, "dependencies": { "backbone": "1.4.1", "backbone.marionette": "4.1.3", "jquery": "3.7.1", "bootstrap": "4.6.2", "react": "^18.3.1", "react-dom": "^18.3.1" }, "devDependencies": { "typescript": "^5.6.0", "@types/react": "^18.3.0", "@types/react-dom": "^18.3.0", "@types/backbone": "^1.4.0", "@types/jquery": "^3.5.0", "@types/bootstrap": "^4.6.0" } }
+diff --git a/src/react/TaskRow.tsx b/src/react/TaskRow.tsx
+new file mode 100644
+index 0000000..259e3bf
+--- /dev/null
++++ b/src/react/TaskRow.tsx
+@@ -0,0 +1,68 @@
++import { useLayoutEffect, useMemo, useRef, useSyncExternalStore } from 'react';
++import type Backbone from 'backbone';
++
++interface RowSnapshot {
++  owner: unknown;
++  title: unknown;
++  priority: unknown;
++  /** Bumped on every "render" so the inner DOM is recreated, as the Marionette template re-render did. */
++  renderId: number;
++}
++
++// Mirrors `modelEvents: { 'change:priority': 'render' }`: the row's content is
++// re-read from the model ONLY on change:priority (title/owner changes alone do
++// not update the row, as before). The snapshot is recomputed in the handler and
++// otherwise returned by reference.
++function createRowStore(model: Backbone.Model) {
++  const read = (renderId: number): RowSnapshot => ({
++    owner: model.get('owner'),
++    title: model.get('title'),
++    priority: model.get('priority'),
++    renderId,
++  });
++  let snapshot = read(0);
++  return {
++    subscribe(listener: () => void) {
++      const handler = () => {
++        snapshot = read(snapshot.renderId + 1);
++        listener();
++      };
++      model.on('change:priority', handler);
++      return () => {
++        model.off('change:priority', handler);
++      };
++    },
++    getSnapshot: () => snapshot,
++  };
++}
++
++// Replaces app.TooltipBehavior: init on every render, dispose before destroy.
++function useTooltip(rowRef: React.RefObject<HTMLLIElement>, renderId: number) {
++  useLayoutEffect(() => {
++    const $targets = $(rowRef.current as HTMLLIElement).find('[title]');
++    $targets.tooltip({ placement: 'top' });
++    return () => {
++      $targets.tooltip('dispose');
++    };
++  }, [rowRef, renderId]);
++}
++
++export function TaskRow({ model }: { model: Backbone.Model }) {
++  const store = useMemo(() => createRowStore(model), [model]);
++  const { owner, title, priority, renderId } = useSyncExternalStore(
++    store.subscribe,
++    store.getSnapshot,
++  );
++  const rowRef = useRef<HTMLLIElement>(null);
++  useTooltip(rowRef, renderId);
++
++  return (
++    <li ref={rowRef}>
++      {/* key forces fresh span/em on each render, matching the old template re-render */}
++      <span key={renderId} title={owner == null ? '' : String(owner)}>
++        {title as React.ReactNode}
++      </span>{' '}
++      <em key={`${renderId}-p`}>{priority as React.ReactNode}</em>
++    </li>
++  );
++}
+diff --git a/src/react/TasksView.tsx b/src/react/TasksView.tsx
+new file mode 100644
+index 0000000..ca222fe
+--- /dev/null
++++ b/src/react/TasksView.tsx
+@@ -0,0 +1,80 @@
++import { useEffect, useMemo, useSyncExternalStore } from 'react';
++import type Backbone from 'backbone';
++import { TaskRow } from './TaskRow';
++import { throttle } from './throttle';
++
++type Model = Backbone.Model;
++
++// viewFilter + viewComparator. Like the Marionette CollectionView, the visible
++// list/order is recomputed on collection add/remove/reset/sort -- NOT when a
++// model's `archived` or `priority` changes (only the row re-renders then).
++function computeVisible(collection: Backbone.Collection<Model>): Model[] {
++  return collection
++    .filter((m) => !m.get('archived'))
++    .map((m, i) => ({ m, i, k: -m.get('priority') }))
++    .sort((a, b) => (a.k < b.k ? -1 : a.k > b.k ? 1 : a.i - b.i)) // stable, like _.sortBy
++    .map((x) => x.m);
++}
++
++function sameList(a: Model[], b: Model[]) {
++  return a.length === b.length && a.every((m, i) => m === b[i]);
++}
++
++function createVisibleStore(collection: Backbone.Collection<Model>) {
++  let snapshot = computeVisible(collection);
++  return {
++    subscribe(listener: () => void) {
++      const refresh = () => {
++        const next = computeVisible(collection);
++        if (!sameList(next, snapshot)) {
++          snapshot = next;
++          listener();
++        }
++      };
++      collection.on('add remove reset sort', refresh);
++      refresh(); // catch changes between render and subscribe
++      return () => {
++        collection.off('add remove reset sort', refresh);
++      };
++    },
++    getSnapshot: () => snapshot,
++  };
++}
++
++export function TasksView({ collection }: { collection: Backbone.Collection<Model> }) {
++  const store = useMemo(() => createVisibleStore(collection), [collection]);
++  const models = useSyncExternalStore(store.subscribe, store.getSnapshot);
++
++  // Infinite scroll (was onAttach / onDestroy with $(window) 'scroll.tasks').
++  useEffect(() => {
++    let page = 1;
++    const onScroll = throttle(() => {
++      if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 200) {
++        collection.fetch({ remove: false, data: { page: ++page } });
++      }
++    }, 250);
++    window.addEventListener('scroll', onScroll);
++    return () => {
++      window.removeEventListener('scroll', onScroll);
++      onScroll.cancel();
++    };
++  }, [collection]);
++
++  // The host <ul> is the Marionette view's el; children render directly into it.
++  if (models.length === 0) {
++    // emptyView was a default-tagName (div) Marionette View wrapping an <li>.
++    // Kept as-is for DOM/CSS parity even though div-in-ul is not valid HTML.
++    return (
++      <div>
++        <li className="empty">No open tasks</li>
++      </div>
++    );
++  }
++  return (
++    <>
++      {models.map((m) => (
++        <TaskRow key={m.cid} model={m} />
++      ))}
++    </>
++  );
++}
+diff --git a/src/react/TasksViewBridge.tsx b/src/react/TasksViewBridge.tsx
+new file mode 100644
+index 0000000..394958b
+--- /dev/null
++++ b/src/react/TasksViewBridge.tsx
+@@ -0,0 +1,27 @@
++import { createRoot, type Root } from 'react-dom/client';
++import { flushSync } from 'react-dom';
++import { TasksView } from './TasksView';
++
++// Marionette shell stays: this View is what the shell instantiates/shows in a
++// region. It owns a single React root on its <ul> el.
++//
++// Usage is unchanged: new app.TasksView({ collection: app.tasks })
++export const ReactTasksView = Marionette.View.extend({
++  tagName: 'ul',
++  template: false,
++
++  onRender(this: any) {
++    this.root ??= createRoot(this.el) as Root;
++    // flushSync so children exist in the DOM when render() returns, as before.
++    flushSync(() => {
++      this.root.render(<TasksView collection={this.collection} />);
++    });
++  },
++
++  // Region swap / destroy: unmount React (runs effect cleanups: scroll
++  // listener, tooltip dispose, model/collection listeners) before el removal.
++  onBeforeDestroy(this: any) {
++    this.root?.unmount();
++    this.root = null;
++  },
++});
+diff --git a/src/react/globals.d.ts b/src/react/globals.d.ts
+new file mode 100644
+index 0000000..df700da
+--- /dev/null
++++ b/src/react/globals.d.ts
+@@ -0,0 +1,19 @@
++import type Backbone from 'backbone';
++
++// Globals provided by the Marionette app shell (script tags / legacy modules).
++declare global {
++  // eslint-disable-next-line no-var
++  var app: {
++    tasks: Backbone.Collection<Backbone.Model>;
++    TasksView: any;
++    LegacyTasksView?: any;
++    [key: string]: any;
++  };
++  // eslint-disable-next-line no-var
++  var Marionette: any;
++  interface JQuery {
++    tooltip(options?: unknown): JQuery;
++  }
++}
++
++export {};
+diff --git a/src/react/index.ts b/src/react/index.ts
+new file mode 100644
+index 0000000..7f0a438
+--- /dev/null
++++ b/src/react/index.ts
+@@ -0,0 +1,7 @@
++import { ReactTasksView } from './TasksViewBridge';
++
++// Swap-in point. Rollback: delete this import/file; src/views/tasks.js still
++// defines the original app.TasksView (kept as app.LegacyTasksView here).
++// Must load AFTER src/views/tasks.js and before the shell instantiates the view.
++app.LegacyTasksView = app.TasksView;
++app.TasksView = ReactTasksView;
+diff --git a/src/react/throttle.ts b/src/react/throttle.ts
+new file mode 100644
+index 0000000..e4ac668
+--- /dev/null
++++ b/src/react/throttle.ts
+@@ -0,0 +1,39 @@
++// Same semantics as Underscore's _.throttle(fn, wait) with default options
++// (leading + trailing), so scroll timing matches the Backbone view.
++export interface Throttled {
++  (): void;
++  cancel(): void;
++}
++
++export function throttle(fn: () => void, wait: number): Throttled {
++  let timeout: ReturnType<typeof setTimeout> | null = null;
++  let previous = 0;
++
++  const later = () => {
++    previous = Date.now();
++    timeout = null;
++    fn();
++  };
++
++  const throttled = (() => {
++    const now = Date.now();
++    const remaining = wait - (now - previous);
++    if (remaining <= 0 || remaining > wait) {
++      if (timeout) {
++        clearTimeout(timeout);
++        timeout = null;
++      }
++      previous = now;
++      fn();
++    } else if (!timeout) {
++      timeout = setTimeout(later, remaining);
++    }
++  }) as Throttled;
++
++  throttled.cancel = () => {
++    if (timeout) clearTimeout(timeout);
++    timeout = null;
++    previous = 0;
++  };
++  return throttled;
++}
+diff --git a/tsconfig.json b/tsconfig.json
+new file mode 100644
+index 0000000..b61a026
+--- /dev/null
++++ b/tsconfig.json
+@@ -0,0 +1,14 @@
++{
++  "compilerOptions": {
++    "target": "ES2020",
++    "lib": ["ES2020", "DOM"],
++    "module": "ESNext",
++    "moduleResolution": "Bundler",
++    "jsx": "react-jsx",
++    "strict": true,
++    "noEmit": true,
++    "skipLibCheck": true,
++    "esModuleInterop": true
++  },
++  "include": ["src/react"]
++}

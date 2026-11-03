@@ -1,0 +1,8 @@
+{
+ "model": "claude-sonnet-5-5",
+ "cli": "2.1.317",
+ "skillInvoked": true,
+ "cost": 0.22392910000000002,
+ "turns": 20,
+ "error": false
+}

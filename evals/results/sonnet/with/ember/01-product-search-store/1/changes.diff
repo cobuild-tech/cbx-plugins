@@ -1,0 +1,153 @@
+diff --git a/app/components/product-search.hbs b/app/components/product-search.hbs
+index 7bbb4d8..59803bf 100644
+--- a/app/components/product-search.hbs
++++ b/app/components/product-search.hbs
+@@ -1,4 +1 @@
+-<div class="product-search">
+-  <input {{on "input" (perform this.search value="target.value")}} />
+-  {{#each this.results as |p|}}<ProductRow @product={{p}} />{{/each}}
+-</div>
++<div class="product-search" {{mount-product-search this.store this.waiter}}></div>
+diff --git a/app/components/product-search.js b/app/components/product-search.js
+index 7ec495d..24055d3 100644
+--- a/app/components/product-search.js
++++ b/app/components/product-search.js
+@@ -1,12 +1,9 @@
+ import Component from '@glimmer/component';
+-import { tracked } from '@glimmer/tracking';
+ import { inject as service } from '@ember/service';
+-import { restartableTask, timeout } from 'ember-concurrency';
++import { buildWaiter } from '@ember/test-waiters';
++
++// Thin Ember shell: the UI now lives in app/react/ProductSearch.tsx.
+ export default class ProductSearch extends Component {
+   @service store;
+-  @tracked results = [];
+-  @restartableTask *search(q) {
+-    yield timeout(250);
+-    this.results = yield this.store.query('product', { filter: { q } });
+-  }
++  waiter = buildWaiter('product-search');
+ }
+diff --git a/app/modifiers/mount-product-search.js b/app/modifiers/mount-product-search.js
+new file mode 100644
+index 0000000..0a84da4
+--- /dev/null
++++ b/app/modifiers/mount-product-search.js
+@@ -0,0 +1,12 @@
++import { modifier } from 'ember-modifier';
++import { createElement } from 'react';
++import { createRoot } from 'react-dom/client';
++import { ProductSearch } from '../react/ProductSearch';
++
++// Mounts React into the element the modifier is attached to (no extra wrapper,
++// so `.sidebar > .product-search` still matches). Unmounts on teardown.
++export default modifier((element, [store, waiter]) => {
++  const root = createRoot(element);
++  root.render(createElement(ProductSearch, { store, waiter }));
++  return () => root.unmount();
++});
+diff --git a/app/react/ProductRow.tsx b/app/react/ProductRow.tsx
+new file mode 100644
+index 0000000..0469572
+--- /dev/null
++++ b/app/react/ProductRow.tsx
+@@ -0,0 +1,16 @@
++export interface Product {
++  id: string;
++  name: string;
++  priceCents: number;
++  compare: boolean;
++}
++
++// PLACEHOLDER: the original <ProductRow> Ember component is not in this repo,
++// so its markup/behavior could not be ported. Replace with a faithful port.
++export function ProductRow({ product }: { product: Product }) {
++  return (
++    <div className="product-row">
++      {product.name} — ${(product.priceCents / 100).toFixed(2)}
++    </div>
++  );
++}
+diff --git a/app/react/ProductSearch.tsx b/app/react/ProductSearch.tsx
+new file mode 100644
+index 0000000..02c083b
+--- /dev/null
++++ b/app/react/ProductSearch.tsx
+@@ -0,0 +1,68 @@
++import { useEffect, useRef, useState, type FormEvent } from 'react';
++import { ProductRow, type Product } from './ProductRow';
++
++// Minimal view of the Ember Data store. Queries MUST go through it so the
++// records land in the store and Ember's CompareTray (peekAll) still sees them.
++export interface EmberStore {
++  query(modelName: 'product', params: { filter: { q: string } }): Promise<Iterable<Product>>;
++}
++
++// Bridge to @ember/test-waiters so settled() waits for the debounce + query.
++export interface Waiter {
++  begin(): unknown;
++  end(token: unknown): void;
++}
++
++export interface ProductSearchProps {
++  store: EmberStore;
++  waiter?: Waiter;
++}
++
++const DEBOUNCE_MS = 250;
++
++export function ProductSearch({ store, waiter }: ProductSearchProps) {
++  const [results, setResults] = useState<Product[]>([]);
++  const cancelPrevious = useRef<(() => void) | null>(null);
++
++  // Task cancels when its component is destroyed.
++  useEffect(() => () => cancelPrevious.current?.(), []);
++
++  // Equivalent of `restartableTask`: starting a search cancels the previous one.
++  function search(q: string) {
++    cancelPrevious.current?.();
++
++    let cancelled = false;
++    const token = waiter?.begin();
++    let finished = false;
++    const finish = () => {
++      if (!finished) {
++        finished = true;
++        waiter?.end(token);
++      }
++    };
++
++    const timer = setTimeout(async () => {
++      try {
++        const records = await store.query('product', { filter: { q } });
++        if (!cancelled) setResults(Array.from(records));
++      } finally {
++        finish();
++      }
++    }, DEBOUNCE_MS);
++
++    cancelPrevious.current = () => {
++      cancelled = true;
++      clearTimeout(timer);
++      finish();
++    };
++  }
++
++  return (
++    <>
++      <input onInput={(e: FormEvent<HTMLInputElement>) => search(e.currentTarget.value)} />
++      {results.map((p) => (
++        <ProductRow key={p.id} product={p} />
++      ))}
++    </>
++  );
++}
+diff --git a/package.json b/package.json
+index 8422cfe..fb2b3f3 100644
+--- a/package.json
++++ b/package.json
+@@ -1 +1,2 @@
+-{ "name": "store-front", "private": true, "dependencies": { "ember-source": "~5.4.0", "ember-data": "~5.3.0", "ember-concurrency": "^4.0.0", "react": "^18.3.1", "react-dom": "^18.3.1" } }
++{ "name": "store-front", "private": true, "dependencies": { "ember-source": "~5.4.0", "ember-data": "~5.3.0", "ember-concurrency": "^4.0.0", "react": "^18.3.1", "react-dom": "^18.3.1", "ember-modifier": "^4.1.0", "@ember/test-waiters": "^3.1.0" },
++  "devDependencies": { "typescript": "^5.4.0", "@types/react": "^18.3.0", "@types/react-dom": "^18.3.0" } }

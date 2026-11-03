@@ -1,0 +1,147 @@
+diff --git a/app/controllers/projects/edit.js b/app/controllers/projects/edit.js
+index 84c4b15..aeb6109 100644
+--- a/app/controllers/projects/edit.js
++++ b/app/controllers/projects/edit.js
+@@ -1,8 +1,12 @@
+ import Controller from '@ember/controller';
+ import { action } from '@ember/object';
+ export default class EditController extends Controller {
+-  @action async save(e) {
+-    e.preventDefault();
++  get nameErrors() {
++    return (this.model.errors.name ?? []).map((e) => e.message);
++  }
++  @action setName(value) { this.model.name = value; }
++  @action setDescription(value) { this.model.description = value; }
++  @action async save() {
+     try { await this.model.save(); this.transitionToRoute('projects.show', this.model); }
+     catch { /* 422 errors land in model.errors via the JSON:API adapter */ }
+   }
+diff --git a/app/modifiers/project-edit-form.js b/app/modifiers/project-edit-form.js
+new file mode 100644
+index 0000000..301a985
+--- /dev/null
++++ b/app/modifiers/project-edit-form.js
+@@ -0,0 +1,24 @@
++import { setModifierManager, capabilities } from '@ember/modifier';
++import { mountProjectEditForm } from '../react/mount';
++
++// Mounts the React ProjectEditForm into the element and re-renders whenever
++// the (autotracked) named args change.
++export default setModifierManager(
++  () => ({
++    capabilities: capabilities('3.22', { disableAutoTracking: false }),
++    createModifier() {
++      return { handle: null };
++    },
++    installModifier(state, element, { named }) {
++      state.handle = mountProjectEditForm(element);
++      state.handle.render({ ...named });
++    },
++    updateModifier(state, { named }) {
++      state.handle.render({ ...named });
++    },
++    destroyModifier(state) {
++      state.handle?.unmount();
++    },
++  }),
++  class ProjectEditFormModifier {}
++);
+diff --git a/app/react/ProjectEditForm.tsx b/app/react/ProjectEditForm.tsx
+new file mode 100644
+index 0000000..273d351
+--- /dev/null
++++ b/app/react/ProjectEditForm.tsx
+@@ -0,0 +1,46 @@
++import React from 'react';
++
++export interface ProjectEditFormProps {
++  name: string;
++  description: string;
++  nameErrors: string[];
++  isSaving: boolean;
++  onNameChange(value: string): void;
++  onDescriptionChange(value: string): void;
++  onSave(): void;
++  onCancel(): void;
++}
++
++export default function ProjectEditForm({
++  name,
++  description,
++  nameErrors,
++  isSaving,
++  onNameChange,
++  onDescriptionChange,
++  onSave,
++  onCancel,
++}: ProjectEditFormProps) {
++  return (
++    <form
++      onSubmit={(e) => {
++        e.preventDefault();
++        onSave();
++      }}
++    >
++      <input type="text" value={name} onChange={(e) => onNameChange(e.target.value)} />
++      {nameErrors.map((message, i) => (
++        <p key={i} className="err">
++          {message}
++        </p>
++      ))}
++      <textarea value={description} onChange={(e) => onDescriptionChange(e.target.value)} />
++      <button type="submit" disabled={isSaving}>
++        Save
++      </button>
++      <button type="button" onClick={onCancel}>
++        Cancel
++      </button>
++    </form>
++  );
++}
+diff --git a/app/react/mount.tsx b/app/react/mount.tsx
+new file mode 100644
+index 0000000..c6d1c80
+--- /dev/null
++++ b/app/react/mount.tsx
+@@ -0,0 +1,16 @@
++import React from 'react';
++import { createRoot, type Root } from 'react-dom/client';
++import ProjectEditForm, { type ProjectEditFormProps } from './ProjectEditForm';
++
++export interface ProjectEditFormHandle {
++  render(props: ProjectEditFormProps): void;
++  unmount(): void;
++}
++
++export function mountProjectEditForm(el: HTMLElement): ProjectEditFormHandle {
++  const root: Root = createRoot(el);
++  return {
++    render: (props) => root.render(<ProjectEditForm {...props} />),
++    unmount: () => root.unmount(),
++  };
++}
+diff --git a/app/templates/projects/edit.hbs b/app/templates/projects/edit.hbs
+index 2b73249..722ed2b 100644
+--- a/app/templates/projects/edit.hbs
++++ b/app/templates/projects/edit.hbs
+@@ -1,7 +1,12 @@
+-<form {{on "submit" this.save}}>
+-  <Input @value={{this.model.name}} />
+-  {{#each this.model.errors.name as |e|}}<p class="err">{{e.message}}</p>{{/each}}
+-  <Textarea @value={{this.model.description}} />
+-  <button type="submit" disabled={{this.model.isSaving}}>Save</button>
+-  <button type="button" {{on "click" this.cancel}}>Cancel</button>
+-</form>
++<div
++  {{project-edit-form
++    name=this.model.name
++    description=this.model.description
++    nameErrors=this.nameErrors
++    isSaving=this.model.isSaving
++    onNameChange=this.setName
++    onDescriptionChange=this.setDescription
++    onSave=this.save
++    onCancel=this.cancel
++  }}
++></div>

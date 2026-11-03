@@ -1,0 +1,203 @@
+diff --git a/app/views/cart.html b/app/views/cart.html
+index 1b1ffae..4edd9f3 100644
+--- a/app/views/cart.html
++++ b/app/views/cart.html
+@@ -1,11 +1,6 @@
+ <meta name="csrf-token" content="{{csrf}}">
+-<table class="cart">
+-  <tr data-id="11" data-price="4.50"><td>Pen</td><td><input class="qty" value="2"></td><td><a href="#" class="remove">Remove</a></td></tr>
+-  <tr data-id="12" data-price="12.00"><td>Notebook</td><td><input class="qty" value="1"></td><td><a href="#" class="remove">Remove</a></td></tr>
+-</table>
+-<p>Total: <span id="total"></span></p>
+-<button id="checkout">Checkout</button>
++<div id="cart-root" data-items='[{"id":11,"name":"Pen","price":4.5,"qty":2},{"id":12,"name":"Notebook","price":12,"qty":1}]'></div>
+ <script src="https://code.jquery.com/jquery-1.12.4.min.js"></script>
+ <script src="/js/setup.js"></script>
+-<script src="/js/cart.js"></script>
+ <script src="/js/analytics.js"></script>
++<script src="/js/dist/cart.js" defer></script>
+diff --git a/package.json b/package.json
+index 2b17fd7..6538f17 100644
+--- a/package.json
++++ b/package.json
+@@ -1 +1,12 @@
+-{ "name": "shop", "private": true, "dependencies": { "react": "^18.3.1", "react-dom": "^18.3.1" }, "devDependencies": { "typescript": "^5.4.0", "vite": "^5.2.0" } }
++{
++  "name": "shop",
++  "private": true,
++  "scripts": { "build": "vite build", "typecheck": "tsc" },
++  "dependencies": { "react": "^18.3.1", "react-dom": "^18.3.1" },
++  "devDependencies": {
++    "@types/react": "^18.3.0",
++    "@types/react-dom": "^18.3.0",
++    "typescript": "^5.4.0",
++    "vite": "^5.2.0"
++  }
++}
+diff --git a/public/js/cart.js b/public/js/cart.js
+index db054a3..1e71a9c 100644
+--- a/public/js/cart.js
++++ b/public/js/cart.js
+@@ -1,5 +1,4 @@
+-$(document).on('click', '.cart .remove', function (e) {
+-  e.preventDefault();
++$(document).on('click', '.cart .remove', function (e) {  e.preventDefault();
+   var $row = $(this).closest('tr');
+   $.post('/cart/remove', { id: $row.data('id') }).done(function () {
+     $row.fadeOut(200, function () { $row.remove(); updateTotal(); });
+diff --git a/src/Cart.tsx b/src/Cart.tsx
+new file mode 100644
+index 0000000..f6c90e4
+--- /dev/null
++++ b/src/Cart.tsx
+@@ -0,0 +1,96 @@
++import { useEffect, useRef, useState } from 'react';
++
++export interface CartItem {
++  id: number;
++  name: string;
++  price: number;
++  qty: number;
++}
++
++// The rest of the site is still on jQuery. Analytics listens for a jQuery
++// 'cart:updated' event on document, which native events won't reach, so we
++// trigger it through jQuery.
++declare global {
++  interface Window {
++    jQuery?: (el: Document) => { trigger(event: string, args: unknown[]): void };
++  }
++}
++
++// Mirrors the X-CSRF-Token header that public/js/setup.js adds via $.ajaxSetup.
++function csrfToken(): string {
++  return document.querySelector<HTMLMetaElement>('meta[name=csrf-token]')?.content ?? '';
++}
++
++export function Cart({ initialItems }: { initialItems: CartItem[] }) {
++  const [items, setItems] = useState(initialItems);
++  // Quantities are kept as raw input strings, like the old <input> values.
++  const [qtys, setQtys] = useState<Record<number, string>>(
++    () => Object.fromEntries(initialItems.map((i) => [i.id, String(i.qty)])),
++  );
++
++  const total = items.reduce((sum, i) => sum + i.price * +qtys[i.id], 0);
++
++  // The old script's first updateTotal() ran before analytics.js registered
++  // its listener, so the initial total was never reported. Keep that: only
++  // emit on changes after mount.
++  const mounted = useRef(false);
++  useEffect(() => {
++    if (!mounted.current) {
++      mounted.current = true;
++      return;
++    }
++    window.jQuery?.(document).trigger('cart:updated', [total]);
++  }, [total]);
++
++  async function remove(id: number) {
++    const res = await fetch('/cart/remove', {
++      method: 'POST',
++      headers: {
++        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
++        'X-CSRF-Token': csrfToken(),
++      },
++      body: new URLSearchParams({ id: String(id) }),
++      credentials: 'same-origin',
++    });
++    if (res.ok) setItems((prev) => prev.filter((i) => i.id !== id));
++  }
++
++  return (
++    <>
++      <table className="cart">
++        <tbody>
++          {items.map((i) => (
++            <tr key={i.id}>
++              <td>{i.name}</td>
++              <td>
++                <input
++                  className="qty"
++                  value={qtys[i.id]}
++                  onChange={(e) => setQtys((q) => ({ ...q, [i.id]: e.target.value }))}
++                />
++              </td>
++              <td>
++                <a
++                  href="#"
++                  className="remove"
++                  onClick={(e) => {
++                    e.preventDefault();
++                    void remove(i.id);
++                  }}
++                >
++                  Remove
++                </a>
++              </td>
++            </tr>
++          ))}
++        </tbody>
++      </table>
++      <p>
++        Total: <span id="total">{total.toFixed(2)}</span>
++      </p>
++      <button id="checkout" disabled={total === 0}>
++        Checkout
++      </button>
++    </>
++  );
++}
+diff --git a/src/main.tsx b/src/main.tsx
+new file mode 100644
+index 0000000..a6cb143
+--- /dev/null
++++ b/src/main.tsx
+@@ -0,0 +1,8 @@
++import { createRoot } from 'react-dom/client';
++import { Cart, type CartItem } from './Cart';
++
++const root = document.getElementById('cart-root');
++if (root) {
++  const items: CartItem[] = JSON.parse(root.dataset.items ?? '[]');
++  createRoot(root).render(<Cart initialItems={items} />);
++}
+diff --git a/tsconfig.json b/tsconfig.json
+new file mode 100644
+index 0000000..b7e2e0b
+--- /dev/null
++++ b/tsconfig.json
+@@ -0,0 +1,13 @@
++{
++  "compilerOptions": {
++    "target": "ES2020",
++    "lib": ["ES2020", "DOM", "DOM.Iterable"],
++    "module": "ESNext",
++    "moduleResolution": "Bundler",
++    "jsx": "react-jsx",
++    "strict": true,
++    "noEmit": true,
++    "skipLibCheck": true
++  },
++  "include": ["src", "vite.config.ts"]
++}
+diff --git a/vite.config.ts b/vite.config.ts
+new file mode 100644
+index 0000000..31e0d27
+--- /dev/null
++++ b/vite.config.ts
+@@ -0,0 +1,15 @@
++import { defineConfig } from 'vite';
++
++// Builds the cart bundle to public/js/dist/cart.js (served at /js/dist/cart.js).
++export default defineConfig({
++  publicDir: false,
++  build: {
++    outDir: 'public/js/dist',
++    emptyOutDir: true,
++    rollupOptions: {
++      input: 'src/main.tsx',
++      output: { entryFileNames: 'cart.js', format: 'iife' },
++    },
++  },
++  define: { 'process.env.NODE_ENV': '"production"' },
++});

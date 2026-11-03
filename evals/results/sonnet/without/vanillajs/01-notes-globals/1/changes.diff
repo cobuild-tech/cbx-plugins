@@ -1,0 +1,153 @@
+diff --git a/index.html b/index.html
+index f699b76..f737cb5 100644
+--- a/index.html
++++ b/index.html
+@@ -1,4 +1,4 @@
+-<ul id="notes"></ul><form id="add"><input name="t"><button>Add</button></form>
++<div id="root"></div>
+ <button id="export">Export</button>
+-<script src="notes.js"></script>
+ <script src="export.js"></script>
++<script type="module" src="/src/main.tsx"></script>
+diff --git a/package.json b/package.json
+index f74b0be..d71b0b0 100644
+--- a/package.json
++++ b/package.json
+@@ -1 +1,12 @@
+-{ "name": "notes", "private": true, "dependencies": { "react": "^18.3.1", "react-dom": "^18.3.1" }, "devDependencies": { "vite": "^5.2.0", "typescript": "^5.4.0" } }
++{
++  "name": "notes",
++  "private": true,
++  "scripts": { "dev": "vite", "build": "tsc && vite build" },
++  "dependencies": { "react": "^18.3.1", "react-dom": "^18.3.1" },
++  "devDependencies": {
++    "@types/react": "^18.3.0",
++    "@types/react-dom": "^18.3.0",
++    "typescript": "^5.4.0",
++    "vite": "^5.2.0"
++  }
++}
+diff --git a/src/App.tsx b/src/App.tsx
+new file mode 100644
+index 0000000..efe7c72
+--- /dev/null
++++ b/src/App.tsx
+@@ -0,0 +1,29 @@
++import { FormEvent, useSyncExternalStore } from 'react';
++import { addNote, getSnapshot, removeNote, subscribe } from './store';
++
++export default function App() {
++  const notes = useSyncExternalStore(subscribe, getSnapshot);
++
++  const onSubmit = (e: FormEvent<HTMLFormElement>) => {
++    e.preventDefault();
++    const form = e.currentTarget;
++    const t = (form.elements.namedItem('t') as HTMLInputElement).value.trim();
++    if (!t) return;
++    addNote(t);
++    form.reset();
++  };
++
++  return (
++    <>
++      <ul id="notes">
++        {notes.map((n, i) => (
++          <li key={`${n.at}-${i}`} onDoubleClick={() => removeNote(i)}>{n.text}</li>
++        ))}
++      </ul>
++      <form id="add" onSubmit={onSubmit}>
++        <input name="t" />
++        <button>Add</button>
++      </form>
++    </>
++  );
++}
+diff --git a/src/main.tsx b/src/main.tsx
+new file mode 100644
+index 0000000..2438ab5
+--- /dev/null
++++ b/src/main.tsx
+@@ -0,0 +1,5 @@
++import { createRoot } from 'react-dom/client';
++import './store';
++import App from './App';
++
++createRoot(document.getElementById('root')!).render(<App />);
+diff --git a/src/store.ts b/src/store.ts
+new file mode 100644
+index 0000000..78ddc60
+--- /dev/null
++++ b/src/store.ts
+@@ -0,0 +1,52 @@
++export interface Note { text: string; at: number }
++
++declare global {
++  interface Window {
++    notes: Note[];
++    save: () => void;
++    render: () => void;
++  }
++}
++
++const KEY = 'notes';
++const parse = (raw: string | null): Note[] => JSON.parse(raw || '[]');
++
++let notes: Note[] = parse(localStorage.getItem(KEY));
++let snapshot: Note[] = notes.slice();
++const listeners = new Set<() => void>();
++
++export function save(): void { localStorage.setItem(KEY, JSON.stringify(notes)); }
++
++// Notifies React; takes a fresh snapshot since legacy code may mutate `notes` in place.
++export function render(): void {
++  snapshot = notes.slice();
++  listeners.forEach((l) => l());
++}
++
++export function subscribe(l: () => void): () => void {
++  listeners.add(l);
++  return () => { listeners.delete(l); };
++}
++export const getSnapshot = (): Note[] => snapshot;
++
++export function addNote(text: string): void {
++  notes.push({ text, at: Date.now() });
++  save(); render();
++}
++export function removeNote(i: number): void {
++  notes.splice(i, 1);
++  save(); render();
++}
++
++window.addEventListener('storage', (e) => {
++  if (e.key === KEY) { notes = parse(e.newValue); render(); }
++});
++
++// Compatibility bridge: export.js (other team) relies on these globals.
++Object.defineProperty(window, 'notes', {
++  configurable: true,
++  get: () => notes,
++  set: (v: Note[]) => { notes = v; },
++});
++window.save = save;
++window.render = render;
+diff --git a/tsconfig.json b/tsconfig.json
+new file mode 100644
+index 0000000..5db5252
+--- /dev/null
++++ b/tsconfig.json
+@@ -0,0 +1,14 @@
++{
++  "compilerOptions": {
++    "target": "ES2020",
++    "lib": ["ES2020", "DOM", "DOM.Iterable"],
++    "module": "ESNext",
++    "moduleResolution": "Bundler",
++    "jsx": "react-jsx",
++    "strict": true,
++    "noEmit": true,
++    "skipLibCheck": true,
++    "isolatedModules": true
++  },
++  "include": ["src"]
++}

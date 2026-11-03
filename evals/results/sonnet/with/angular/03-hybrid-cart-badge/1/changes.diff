@@ -1,0 +1,78 @@
+diff --git a/src/app/app.module.ts b/src/app/app.module.ts
+index 4fec7e7..f985f6e 100644
+--- a/src/app/app.module.ts
++++ b/src/app/app.module.ts
+@@ -1,11 +1,10 @@
+ import { NgModule } from '@angular/core';
+ import { BrowserModule } from '@angular/platform-browser';
+-import { UpgradeModule, downgradeComponent, downgradeInjectable } from '@angular/upgrade/static';
+-import { CartBadgeComponent } from './cart-badge.component';
++import { UpgradeModule, downgradeInjectable } from '@angular/upgrade/static';
+ import { CartService } from './cart.service';
++import '../react/cart-badge.mount';
+ declare const angular: any;
+ angular.module('shop')
+-  .directive('cartBadge', downgradeComponent({ component: CartBadgeComponent }))
+   .factory('cartService', downgradeInjectable(CartService));
+-@NgModule({ imports: [BrowserModule, UpgradeModule], declarations: [CartBadgeComponent] })
++@NgModule({ imports: [BrowserModule, UpgradeModule] })
+ export class AppModule { constructor(private upgrade: UpgradeModule) {} ngDoBootstrap() { this.upgrade.bootstrap(document.body, ['shop']); } }
+diff --git a/src/react/CartBadge.tsx b/src/react/CartBadge.tsx
+new file mode 100644
+index 0000000..c2799ee
+--- /dev/null
++++ b/src/react/CartBadge.tsx
+@@ -0,0 +1,21 @@
++import { useEffect, useState } from 'react';
++import type { Observable } from 'rxjs';
++
++export interface CartBadgeProps {
++  count$: Observable<number>;
++}
++
++export function CartBadge({ count$ }: CartBadgeProps) {
++  const [count, setCount] = useState(0);
++
++  useEffect(() => {
++    const sub = count$.subscribe(c => setCount(c));
++    return () => sub.unsubscribe();
++  }, [count$]);
++
++  return (
++    <a href="/cart" className={count === 0 ? 'badge empty' : 'badge'}>
++      {count}
++    </a>
++  );
++}
+diff --git a/src/react/cart-badge.mount.tsx b/src/react/cart-badge.mount.tsx
+new file mode 100644
+index 0000000..02849d2
+--- /dev/null
++++ b/src/react/cart-badge.mount.tsx
+@@ -0,0 +1,26 @@
++import { createRoot, type Root } from 'react-dom/client';
++import { CartBadge } from './CartBadge';
++
++declare const angular: any;
++
++// AngularJS wrapper: keeps the <cart-badge> element used by legacy/header.html.
++// The downgraded Angular CartService is injected, so React reads the same
++// instance (and the same BehaviorSubject) as the AngularJS controllers.
++angular.module('shop').component('cartBadge', {
++  controller: [
++    '$element',
++    'cartService',
++    class CartBadgeCtrl {
++      private root: Root | null = null;
++      constructor(private $element: any, private cartService: any) {}
++      $postLink() {
++        this.root = createRoot(this.$element[0]);
++        this.root.render(<CartBadge count$={this.cartService.count$} />);
++      }
++      $onDestroy() {
++        this.root?.unmount();
++        this.root = null;
++      }
++    },
++  ],
++});

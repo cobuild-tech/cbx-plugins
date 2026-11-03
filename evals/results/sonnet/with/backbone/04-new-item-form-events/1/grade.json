@@ -1,0 +1,26 @@
+{
+ "saved-event": {
+  "pass": true,
+  "why": "NewItemView shell's onSaved callback calls this.trigger('saved', m), and ItemsPage's listenTo handler (toast and stats increment) is untouched."
+ },
+ "wait-true": {
+  "pass": true,
+  "why": "NewItemForm calls collection.create({name, qty}, {wait: true, ...}) on the shared collection passed from ItemsPage via app.items."
+ },
+ "navigate": {
+  "pass": true,
+  "why": "The shell's onSaved calls Backbone.history.navigate('items/' + m.id, { trigger: true }) after triggering 'saved'."
+ },
+ "server-errors": {
+  "pass": true,
+  "why": "The error handler does setErr((xhr.responseJSON && xhr.responseJSON.errors || []).join(', ')) and renders it in p.err."
+ },
+ "unmount": {
+  "pass": true,
+  "why": "NewItemView.remove() calls this.root?.unmount() before super.remove(), and ItemsPage.remove() calls form.remove()."
+ },
+ "no-silent-changes": {
+  "pass": true,
+  "why": "The final message calls out the extra wrapper div, controlled inputs, qty coercion kept, kept quirks, async first render, and the script-loading change."
+ }
+}

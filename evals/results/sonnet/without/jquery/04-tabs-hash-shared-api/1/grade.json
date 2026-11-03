@@ -1,0 +1,26 @@
+{
+ "hash-sync": {
+  "pass": true,
+  "why": "main.tsx passes `initialId={location.hash.slice(1)}` and onActivate calls `history.replaceState(null, '', `#${id}`)`, not pushState."
+ },
+ "tab-event": {
+  "pass": true,
+  "why": "onActivate calls `window.jQuery?.(document).trigger('account:tab', [id])` with the panel id, and jQuery is still loaded before the bundle."
+ },
+ "billing-dom": {
+  "pass": true,
+  "why": "Tabs.tsx memoizes the `{__html}` objects so React never rewrites panel innerHTML on re-render, and the summary explains billing.js's `.load` is not overwritten."
+ },
+ "help-widget": {
+  "pass": true,
+  "why": "help-widget.js now reads `aria-controls` from the selected `[role=tab]`, returning the same ids, and the summary flags the change and the third-party ownership question."
+ },
+ "a11y": {
+  "pass": true,
+  "why": "Tabs.tsx implements role tablist/tab/tabpanel, aria-selected, aria-controls, roving tabIndex and Arrow/Home/End key handling."
+ },
+ "no-silent-changes": {
+  "pass": true,
+  "why": "The summary calls out the help-widget edit, the markup change from ul/li/a to buttons with the CSS impact, the removal of jQuery UI, the manual deletion of tabs.js, and that the event does not fire on the initial tab."
+ }
+}

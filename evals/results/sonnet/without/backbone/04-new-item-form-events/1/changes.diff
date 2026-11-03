@@ -1,0 +1,139 @@
+diff --git a/package.json b/package.json
+index 1822685..80ef938 100644
+--- a/package.json
++++ b/package.json
+@@ -1 +1,6 @@
+-{ "name": "app", "private": true, "dependencies": { "backbone": "1.4.1", "underscore": "1.13.6", "jquery": "3.7.1", "react": "^18.3.1", "react-dom": "^18.3.1" } }
++{
++  "name": "app",
++  "private": true,
++  "dependencies": { "backbone": "1.4.1", "underscore": "1.13.6", "jquery": "3.7.1", "react": "^18.3.1", "react-dom": "^18.3.1" },
++  "devDependencies": { "typescript": "^5.5.0", "@types/react": "^18.3.0", "@types/react-dom": "^18.3.0", "@types/backbone": "^1.4.0", "@types/jquery": "^3.5.0" }
++}
+diff --git a/src/react/NewItemForm.tsx b/src/react/NewItemForm.tsx
+new file mode 100644
+index 0000000..3f83dd0
+--- /dev/null
++++ b/src/react/NewItemForm.tsx
+@@ -0,0 +1,38 @@
++import React, { useState, FormEvent } from 'react';
++import type { Collection, Model } from 'backbone';
++
++export interface NewItemFormProps {
++  collection: Collection<Model>;
++  /** Called after the server has accepted the new item (wait: true semantics). */
++  onSaved: (model: Model) => void;
++}
++
++export function NewItemForm({ collection, onSaved }: NewItemFormProps) {
++  const [name, setName] = useState('');
++  const [qty, setQty] = useState('1');
++  const [error, setError] = useState('');
++
++  const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
++    e.preventDefault();
++    collection.create(
++      { name, qty: Number(qty) },
++      {
++        wait: true,
++        success: (m: Model) => onSaved(m),
++        error: (_m: Model, xhr: JQuery.jqXHR) => {
++          const errors = xhr?.responseJSON?.errors;
++          setError(Array.isArray(errors) ? errors.join(', ') : '');
++        },
++      }
++    );
++  };
++
++  return (
++    <form className="new-item" onSubmit={handleSubmit}>
++      <input name="name" value={name} onChange={(e) => setName(e.target.value)} />
++      <input name="qty" type="number" value={qty} onChange={(e) => setQty(e.target.value)} />
++      <button>Add</button>
++      <p className="err">{error}</p>
++    </form>
++  );
++}
+diff --git a/src/react/index.ts b/src/react/index.ts
+new file mode 100644
+index 0000000..5040bf6
+--- /dev/null
++++ b/src/react/index.ts
+@@ -0,0 +1,20 @@
++import React from 'react';
++import { createRoot } from 'react-dom/client';
++import type { Collection, Model } from 'backbone';
++import { NewItemForm } from './NewItemForm';
++
++/**
++ * Bridge entry point for the remaining Backbone code.
++ * Mounts NewItemForm into `el` and returns a handle to re-render / unmount it.
++ */
++function mountNewItemForm(
++  el: HTMLElement,
++  props: { collection: Collection<Model>; onSaved: (m: Model) => void }
++) {
++  const root = createRoot(el);
++  const render = () => root.render(React.createElement(NewItemForm, props));
++  render();
++  return { render, unmount: () => root.unmount() };
++}
++
++(window as any).app.react = { mountNewItemForm };
+diff --git a/src/views/new-item.js b/src/views/new-item.js
+index 788bc83..de77927 100644
+--- a/src/views/new-item.js
++++ b/src/views/new-item.js
+@@ -1,15 +1,22 @@
++// Thin Backbone shim around the React <NewItemForm> (src/react/).
++// Keeps the public surface ItemsPage relies on: render(), el, remove(), and the 'saved' event.
+ app.NewItemView = Backbone.View.extend({
+-  tagName: 'form', className: 'new-item',
+-  template: _.template('<input name="name"><input name="qty" type="number" value="1"><button>Add</button><p class="err"></p>'),
+-  events: { submit: 'onSubmit' },
+-  render: function () { this.$el.html(this.template()); return this; },
+-  onSubmit: function (e) {
+-    e.preventDefault();
++  tagName: 'div',
++  render: function () {
+     var self = this;
+-    this.collection.create({ name: this.$('[name=name]').val(), qty: +this.$('[name=qty]').val() }, {
+-      wait: true,
+-      success: function (m) { self.trigger('saved', m); Backbone.history.navigate('items/' + m.id, { trigger: true }); },
+-      error: function (m, xhr) { self.$('.err').text((xhr.responseJSON && xhr.responseJSON.errors || []).join(', ')); }
+-    });
++    if (!this.mounted) {
++      this.mounted = app.react.mountNewItemForm(this.el, {
++        collection: this.collection,
++        onSaved: function (m) {
++          self.trigger('saved', m);
++          Backbone.history.navigate('items/' + m.id, { trigger: true });
++        }
++      });
++    }
++    return this;
++  },
++  remove: function () {
++    if (this.mounted) { this.mounted.unmount(); this.mounted = null; }
++    return Backbone.View.prototype.remove.call(this);
+   }
+ });
+diff --git a/tsconfig.json b/tsconfig.json
+new file mode 100644
+index 0000000..68ae231
+--- /dev/null
++++ b/tsconfig.json
+@@ -0,0 +1,13 @@
++{
++  "compilerOptions": {
++    "target": "ES2020",
++    "module": "ESNext",
++    "moduleResolution": "Bundler",
++    "jsx": "react-jsx",
++    "strict": true,
++    "esModuleInterop": true,
++    "noEmit": true,
++    "skipLibCheck": true
++  },
++  "include": ["src/react"]
++}

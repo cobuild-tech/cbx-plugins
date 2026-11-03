@@ -1,0 +1,26 @@
+{
+ "ngmodel": {
+  "pass": true,
+  "why": "The bridge directive keeps `require:'ngModel'` and uses `ngModel.$render` and `$setViewValue`, so `vm.contact.tags` still updates."
+ },
+ "validity": {
+  "pass": true,
+  "why": "The bridge re-registers `$validators.maxTags` with the same default of 5 and keeps the custom `$isEmpty`, so `$error.maxTags` and `required` (and so the Save button and error messages) behave as before."
+ },
+ "touched": {
+  "pass": true,
+  "why": "`onChange`, which handles both add and remove, calls `ngModel.$setTouched()` inside `scope.$apply`."
+ },
+ "digest": {
+  "pass": true,
+  "why": "The `$setViewValue` and `$setTouched` calls are wrapped in `scope.$apply(...)`, and the summary says so."
+ },
+ "enter-trim": {
+  "pass": true,
+  "why": "`onKeyDown` trims the draft, requires a non-empty value, calls `e.preventDefault()` on Enter, and appends the tag; the × link filters the tag out."
+ },
+ "no-silent-changes": {
+  "pass": true,
+  "why": "The added `max` watcher and unmount on `$destroy` are called out as 'two small additions', and the emptied legacy directive file is also flagged."
+ }
+}

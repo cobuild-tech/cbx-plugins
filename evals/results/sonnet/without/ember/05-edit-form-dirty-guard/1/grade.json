@@ -1,0 +1,26 @@
+{
+ "dirty-guard": {
+  "pass": true,
+  "why": "The new controller actions `setName`/`setDescription` write to `this.model.name`/`description`, so `hasDirtyAttributes` still goes true, and the unchanged route guard sees it; the message states this."
+ },
+ "save-via-model": {
+  "pass": true,
+  "why": "The controller's `save` still calls `await this.model.save()` and is passed to React as `onSave`."
+ },
+ "server-errors": {
+  "pass": true,
+  "why": "The new `nameErrors` getter maps `this.model.errors.name` to messages, and React renders them as `<p class=\"err\">`."
+ },
+ "cancel-rollback": {
+  "pass": true,
+  "why": "The controller's `cancel` is unchanged (`rollbackAttributes()` then `transitionToRoute('projects')`) and is wired to the Cancel button as `onCancel`."
+ },
+ "saving-disabled": {
+  "pass": true,
+  "why": "`isSaving=this.model.isSaving` is passed to the form, which sets `disabled={isSaving}` on Save, and `save` still calls `transitionToRoute('projects.show', this.model)` on success."
+ },
+ "no-silent-changes": {
+  "pass": true,
+  "why": "The final message calls out the changes it made: the removed submit event, the new setters and getter, the hand-written modifier, the swap to plain inputs, and that nothing was built or run."
+ }
+}

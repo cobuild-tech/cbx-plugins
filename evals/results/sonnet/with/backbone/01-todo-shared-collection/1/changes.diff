@@ -1,0 +1,103 @@
+diff --git a/src/react/TodoList.tsx b/src/react/TodoList.tsx
+new file mode 100644
+index 0000000..702046f
+--- /dev/null
++++ b/src/react/TodoList.tsx
+@@ -0,0 +1,61 @@
++import React, { useEffect, useReducer } from 'react';
++import { createRoot, Root } from 'react-dom/client';
++
++// Minimal typings for the shared Backbone collection (app.todos).
++export interface TodoModel {
++  id?: string | number;
++  cid: string;
++  get(attr: 'done'): boolean;
++  get(attr: 'title'): string;
++  save(attrs: { done: boolean }, opts: { patch: boolean }): unknown;
++  destroy(): unknown;
++}
++
++export interface TodoCollection {
++  map<T>(fn: (t: TodoModel) => T): T[];
++  on(events: string, cb: () => void): unknown;
++  off(events: string, cb: () => void): unknown;
++}
++
++// Same events the Backbone view re-rendered on. Notably NOT 'change:title'.
++const RENDER_EVENTS = 'add remove reset sort change:done';
++
++export function TodoList({ todos }: { todos: TodoCollection }) {
++  const [, rerender] = useReducer((n: number) => n + 1, 0);
++
++  useEffect(() => {
++    // Subscribe to the shared collection instance; do not copy into state.
++    todos.on(RENDER_EVENTS, rerender);
++    return () => {
++      todos.off(RENDER_EVENTS, rerender);
++    };
++  }, [todos]);
++
++  return (
++    <>
++      {todos.map((t) => (
++        <li key={t.cid} data-id={t.id}>
++          <input
++            className="toggle"
++            type="checkbox"
++            checked={!!t.get('done')}
++            onChange={(e) => {
++              t.save({ done: e.target.checked }, { patch: true });
++            }}
++          />
++          {t.get('title')}
++          <a className="destroy" onClick={() => t.destroy()}>
++            ×
++          </a>
++        </li>
++      ))}
++    </>
++  );
++}
++
++/** Mounts <TodoList> into `el`; returns an unmount function. */
++export function mountTodoList(el: HTMLElement, todos: TodoCollection): () => void {
++  const root: Root = createRoot(el);
++  root.render(<TodoList todos={todos} />);
++  return () => root.unmount();
++}
+diff --git a/src/react/index.ts b/src/react/index.ts
+new file mode 100644
+index 0000000..f52227d
+--- /dev/null
++++ b/src/react/index.ts
+@@ -0,0 +1,4 @@
++import { mountTodoList } from './TodoList';
++
++// Bridge for the Backbone globals-based code (no module loader on that side).
++(window as unknown as { mountTodoList: typeof mountTodoList }).mountTodoList = mountTodoList;
+diff --git a/src/views/todo-list.js b/src/views/todo-list.js
+index 579da20..b77ea25 100644
+--- a/src/views/todo-list.js
++++ b/src/views/todo-list.js
+@@ -1,15 +1,12 @@
++// Thin Backbone shell: mounts the React <TodoList> (src/react/TodoList.tsx)
++// into #todo-list and unmounts it when the view is removed.
+ app.TodoListView = Backbone.View.extend({
+   el: '#todo-list',
+   initialize: function () {
+-    this.listenTo(app.todos, 'add remove reset sort change:done', this.render);
++    this._unmount = window.mountTodoList(this.el, app.todos);
+   },
+-  events: { 'change .toggle': 'toggle', 'click .destroy': 'destroy' },
+-  toggle: function (e) { app.todos.get($(e.target).closest('li').data('id')).save({ done: e.target.checked }, { patch: true }); },
+-  destroy: function (e) { app.todos.get($(e.target).closest('li').data('id')).destroy(); },
+-  render: function () {
+-    this.$el.html(app.todos.map(function (t) {
+-      return '<li data-id="' + t.id + '"><input class="toggle" type="checkbox"' + (t.get('done') ? ' checked' : '') + '>' + _.escape(t.get('title')) + '<a class="destroy">×</a></li>';
+-    }).join(''));
+-    return this;
++  remove: function () {
++    if (this._unmount) { this._unmount(); this._unmount = null; }
++    return Backbone.View.prototype.remove.apply(this, arguments);
+   }
+ });

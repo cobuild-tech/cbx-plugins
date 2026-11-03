@@ -1,0 +1,26 @@
+{
+ "interceptor": {
+  "pass": true,
+  "why": "InvoiceList receives AngularJS $http via react2angular's injected-props argument ['$http'], so authInterceptor (headers and 401 retry) still applies, and the message says so."
+ },
+ "currency-format": {
+  "pass": false,
+  "why": "It uses Intl.NumberFormat en-US USD and claims it matches the old currency filter, without flagging differences (e.g. negative formatting '-$1.00' vs Intl's default, which happens to be '-$1.00', but no differences were flagged or verified); the message asserts equivalence rather than flagging differences."
+ },
+ "order": {
+  "pass": true,
+  "why": "The component sorts a copy of invoices by issuedAt descending via time(b.issuedAt) - time(a.issuedAt)."
+ },
+ "mount": {
+  "pass": true,
+  "why": "react2angular(InvoiceList, ['customerId'], ['$http']) registers the 'invoiceList' component, and the useEffect depends on customerId so binding changes refetch."
+ },
+ "no-silent-changes": {
+  "pass": true,
+  "why": "The final message explicitly lists the added stale-response handling and the loading-cleared-on-failure fix under 'Fixes I added'."
+ },
+ "tests": {
+  "pass": false,
+  "why": "The diff adds no tests and the message does not recommend tests to pin behaviour before or after the swap."
+ }
+}

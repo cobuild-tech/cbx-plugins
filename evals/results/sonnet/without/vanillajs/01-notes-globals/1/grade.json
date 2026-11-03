@@ -1,0 +1,26 @@
+{
+ "globals": {
+  "pass": true,
+  "why": "store.ts defines a `window.notes` getter/setter over the live array and sets `window.save` and `window.render`, so export.js's click handler and `importNotes` still work, and the message states this bridge."
+ },
+ "storage-sync": {
+  "pass": true,
+  "why": "store.ts keeps a `window` 'storage' listener that, for key 'notes', re-parses `e.newValue` and calls `render()`."
+ },
+ "storage-format": {
+  "pass": true,
+  "why": "store.ts uses `KEY = 'notes'` and `Note { text; at }`, with the same JSON parse and stringify as the original."
+ },
+ "dblclick-delete": {
+  "pass": true,
+  "why": "App.tsx puts `onDoubleClick={() => removeNote(i)}` on each li, and `removeNote` splices, saves and renders."
+ },
+ "trim-empty": {
+  "pass": true,
+  "why": "App.tsx's onSubmit trims the `t` input value, returns if it is empty, then calls `addNote` and `form.reset()`."
+ },
+ "no-silent-changes": {
+  "pass": true,
+  "why": "The markup, behaviour and DOM order are unchanged, and the message discloses the global bridge, the leftover notes.js, the added scripts and types, and that nothing was run."
+ }
+}

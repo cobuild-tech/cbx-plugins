@@ -1,0 +1,26 @@
+{
+ "collection-source": {
+  "pass": true,
+  "why": "TasksView reads directly from the passed collection (collection.filter) and subscribes via useBackbone to add/remove/reset/sort/change:archived/change:priority, and the adapter defaults to window.app.tasks, so no copied array."
+ },
+ "paging": {
+  "pass": true,
+  "why": "The effect uses _.throttle(250) and calls collection.fetch({remove:false, data:{page:++page}}) when within 200px of the bottom, and the cleanup removes the scroll listener and cancels the throttle."
+ },
+ "filter-sort": {
+  "pass": true,
+  "why": "collection.filter drops archived models and sorts by b.priority - a.priority on each render, and the collection's change:priority subscription triggers a re-sort."
+ },
+ "empty": {
+  "pass": true,
+  "why": "Emptiness is checked on the filtered list (tasks.length === 0), so it renders <li className=\"empty\">No open tasks</li> when nothing is visible."
+ },
+ "tooltip": {
+  "pass": true,
+  "why": "TaskRow runs $(...).find('[title]').tooltip({placement:'top'}) in a useEffect and calls tooltip('dispose') in the cleanup, replacing TooltipBehavior."
+ },
+ "no-silent-changes": {
+  "pass": true,
+  "why": "React's JSX escapes title and owner, and the one behaviour change (re-rendering on any model 'change' instead of only change:priority) is noted in a code comment and in the final summary, so it isn't silent."
+ }
+}

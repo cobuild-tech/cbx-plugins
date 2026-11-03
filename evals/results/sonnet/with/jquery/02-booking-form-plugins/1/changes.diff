@@ -1,0 +1,226 @@
+diff --git a/package.json b/package.json
+index 6c19637..ef5a3ef 100644
+--- a/package.json
++++ b/package.json
+@@ -1 +1,15 @@
+-{ "name": "booking", "private": true, "dependencies": { "react": "^18.3.1", "react-dom": "^18.3.1" }, "devDependencies": { "typescript": "^5.4.0" } }
++{
++  "name": "booking",
++  "private": true,
++  "scripts": {
++    "build": "esbuild src/main.tsx --bundle --minify --outfile=public/js/booking-react.js",
++    "typecheck": "tsc"
++  },
++  "dependencies": { "react": "^18.3.1", "react-dom": "^18.3.1" },
++  "devDependencies": {
++    "@types/react": "^18.3.0",
++    "@types/react-dom": "^18.3.0",
++    "esbuild": "^0.21.0",
++    "typescript": "^5.4.0"
++  }
++}
+diff --git a/public/js/widgets.js b/public/js/widgets.js
+index 9ade880..22ce221 100644
+--- a/public/js/widgets.js
++++ b/public/js/widgets.js
+@@ -1,6 +1,7 @@
+ // Re-initialises widgets after any AJAX partial is injected anywhere on the page.
+ function initWidgets(root) {
+-  $(root).find('input[id$="date"]').datepicker({ dateFormat: 'dd/mm/yy', minDate: 1, beforeShowDay: $.datepicker.noWeekends });
++  // Skip React-owned subtrees; those components wire up their own widgets.
++  $(root).find('input[id$="date"]').not('[data-react-root] *').datepicker({ dateFormat: 'dd/mm/yy', minDate: 1, beforeShowDay: $.datepicker.noWeekends });
+ }
+ $(function () { initWidgets(document); });
+ $(document).ajaxComplete(function () { initWidgets(document); });
+diff --git a/src/BookingForm.tsx b/src/BookingForm.tsx
+new file mode 100644
+index 0000000..8eb901b
+--- /dev/null
++++ b/src/BookingForm.tsx
+@@ -0,0 +1,128 @@
++import { useEffect, useRef, useState } from 'react';
++import type { FormEvent, KeyboardEvent } from 'react';
++
++type Slot = { id: string | number; label: string };
++type Field = 'name' | 'ship_date';
++
++// Same messages jquery-validate produced for these rules.
++const REQUIRED = 'This field is required.';
++const SHIP_DATE_MESSAGE = 'Pick a weekday from tomorrow onward'; // overrides every ship_date rule
++
++function validateField(field: Field, value: string): string | null {
++  // jquery-validate "required" trims; "minlength" uses the raw length.
++  if (value.trim().length === 0) return field === 'ship_date' ? SHIP_DATE_MESSAGE : REQUIRED;
++  if (field === 'name' && value.length < 2) return 'Please enter at least 2 characters.';
++  return null;
++}
++
++// Keys jquery-validate ignores on keyup.
++const EXCLUDED_KEYS = [16, 17, 18, 20, 35, 36, 37, 38, 39, 40, 45, 144, 225];
++
++export function BookingForm() {
++  const [name, setName] = useState('');
++  const [shipDate, setShipDate] = useState('');
++  const [slots, setSlots] = useState<Slot[]>([]);
++  const [slot, setSlot] = useState('');
++  const [errors, setErrors] = useState<Partial<Record<Field, string>>>({});
++  // Mirrors jquery-validate's `submitted` map: fields that failed at a submit attempt.
++  const submitted = useRef<Set<Field>>(new Set());
++  const nameRef = useRef<HTMLInputElement>(null);
++  const dateRef = useRef<HTMLInputElement>(null);
++
++  const values: Record<Field, string> = { name, ship_date: shipDate };
++
++  function checkField(field: Field, value: string) {
++    const message = validateField(field, value);
++    setErrors((prev) => {
++      const next = { ...prev };
++      if (message) next[field] = message;
++      else delete next[field];
++      return next;
++    });
++  }
++
++  // jQuery UI datepicker stays (same options as widgets.js). Its selection and the
++  // original jQuery 'change' handler both go through jQuery events, so bind there.
++  useEffect(() => {
++    const $input = window.jQuery(dateRef.current);
++    $input.datepicker({
++      dateFormat: 'dd/mm/yy',
++      minDate: 1,
++      beforeShowDay: window.jQuery.datepicker.noWeekends,
++    });
++    $input.on('change', () => {
++      const value = dateRef.current!.value;
++      setShipDate(value); // datepicker writes the DOM value without a React event
++      // Still $.getJSON on purpose: same headers/encoding, and it keeps firing ajaxComplete.
++      window.jQuery.getJSON('/slots', { date: value }, (result: Slot[]) => {
++        setSlots(result);
++        setSlot(result.length ? String(result[0].id) : ''); // browser selects first option
++      });
++    });
++    return () => {
++      $input.off('change');
++      $input.datepicker('destroy');
++    };
++  }, []);
++
++  function onSubmit(e: FormEvent<HTMLFormElement>) {
++    const next: Partial<Record<Field, string>> = {};
++    (['name', 'ship_date'] as Field[]).forEach((f) => {
++      const message = validateField(f, values[f]);
++      if (message) next[f] = message;
++    });
++    setErrors(next);
++    const failed = Object.keys(next) as Field[];
++    if (failed.length) {
++      e.preventDefault();
++      failed.forEach((f) => submitted.current.add(f));
++      (failed.includes('name') ? nameRef : dateRef).current?.focus();
++    }
++    // Valid: let the browser post the form natively, as before.
++  }
++
++  function onBlur(field: Field) {
++    // jquery-validate: validate on blur if previously submitted or non-empty.
++    if (submitted.current.has(field) || values[field].trim().length > 0) checkField(field, values[field]);
++  }
++
++  function onKeyUp(field: Field, e: KeyboardEvent<HTMLInputElement>) {
++    if ((e.which === 9 && values[field] === '') || EXCLUDED_KEYS.includes(e.which)) return;
++    if (submitted.current.has(field) || errors[field]) checkField(field, e.currentTarget.value);
++  }
++
++  return (
++    <form id="booking" action="/bookings" method="post" onSubmit={onSubmit}>
++      <input
++        ref={nameRef}
++        name="name"
++        id="name"
++        className={errors.name ? 'error' : undefined}
++        value={name}
++        onChange={(e) => setName(e.target.value)}
++        onBlur={() => onBlur('name')}
++        onKeyUp={(e) => onKeyUp('name', e)}
++      />
++      {errors.name && <label id="name-error" className="error" htmlFor="name">{errors.name}</label>}
++      <input
++        ref={dateRef}
++        name="ship_date"
++        id="ship-date"
++        className={errors.ship_date ? 'error' : undefined}
++        value={shipDate}
++        onChange={(e) => setShipDate(e.target.value)}
++        onBlur={() => onBlur('ship_date')}
++        onKeyUp={(e) => onKeyUp('ship_date', e)}
++      />
++      {errors.ship_date && (
++        <label id="ship-date-error" className="error" htmlFor="ship-date">{errors.ship_date}</label>
++      )}
++      <select name="slot" id="slot" value={slot} onChange={(e) => setSlot(e.target.value)}>
++        {slots.map((s) => (
++          <option key={s.id} value={s.id}>{s.label}</option>
++        ))}
++      </select>
++      <button type="submit">Book</button>
++    </form>
++  );
++}
+diff --git a/src/jquery.d.ts b/src/jquery.d.ts
+new file mode 100644
+index 0000000..53c0aad
+--- /dev/null
++++ b/src/jquery.d.ts
+@@ -0,0 +1,4 @@
++// Minimal typing for the page-global jQuery (1.12.4 + jQuery UI) still loaded via <script>.
++interface Window {
++  jQuery: any;
++}
+diff --git a/src/main.tsx b/src/main.tsx
+new file mode 100644
+index 0000000..9d3a09a
+--- /dev/null
++++ b/src/main.tsx
+@@ -0,0 +1,4 @@
++import { createRoot } from 'react-dom/client';
++import { BookingForm } from './BookingForm';
++
++createRoot(document.getElementById('booking-root')!).render(<BookingForm />);
+diff --git a/tsconfig.json b/tsconfig.json
+new file mode 100644
+index 0000000..ce9282d
+--- /dev/null
++++ b/tsconfig.json
+@@ -0,0 +1,13 @@
++{
++  "compilerOptions": {
++    "target": "ES2020",
++    "lib": ["ES2020", "DOM"],
++    "module": "ESNext",
++    "moduleResolution": "Bundler",
++    "jsx": "react-jsx",
++    "strict": true,
++    "noEmit": true,
++    "skipLibCheck": true
++  },
++  "include": ["src"]
++}
+diff --git a/views/booking.html b/views/booking.html
+index f6f9e7a..43e20ad 100644
+--- a/views/booking.html
++++ b/views/booking.html
+@@ -1,12 +1,6 @@
+-<form id="booking" action="/bookings" method="post">
+-  <input name="name" id="name">
+-  <input name="ship_date" id="ship-date">
+-  <select name="slot" id="slot"></select>
+-  <button type="submit">Book</button>
+-</form>
++<div id="booking-root" data-react-root></div>
+ <div id="partials"></div>
+ <script src="https://code.jquery.com/jquery-1.12.4.min.js"></script>
+ <script src="https://code.jquery.com/ui/1.12.1/jquery-ui.min.js"></script>
+-<script src="https://cdn.jsdelivr.net/npm/jquery-validation@1.19.5/dist/jquery.validate.min.js"></script>
+ <script src="/js/widgets.js"></script>
+-<script src="/js/booking.js"></script>
++<script src="/js/booking-react.js"></script>

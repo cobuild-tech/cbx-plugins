@@ -1,0 +1,26 @@
+{
+ "dom-truth": {
+  "pass": false,
+  "why": "The component copies the theme into React state (useState(readTheme)) that is read only once at first render, so label/aria-pressed drift when chart.js's hc=1 mode sets data-theme externally, and the summary does not flag this drift."
+ },
+ "themechange-event": {
+  "pass": true,
+  "why": "toggle() dispatches new CustomEvent('themechange', { detail: next }) on document, matching the original."
+ },
+ "boot-script": {
+  "pass": true,
+  "why": "theme-boot.js and index.html are untouched, so the boot script stays in <head> and the message notes the component reads the attribute it sets."
+ },
+ "a11y": {
+  "pass": true,
+  "why": "The button renders aria-pressed={dark} and the 'Light mode'/'Dark mode' label from state, matching the original behaviour."
+ },
+ "persist": {
+  "pass": true,
+  "why": "toggle() calls localStorage.setItem('theme', next) as in the original."
+ },
+ "no-silent-changes": {
+  "pass": true,
+  "why": "The summary calls out the added type=\"button\", the new devDependencies, and that index.html still uses the old script and the component is not wired up or type-checked."
+ }
+}

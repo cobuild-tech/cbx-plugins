@@ -1,0 +1,130 @@
+diff --git a/app/components/product-search.hbs b/app/components/product-search.hbs
+index 7bbb4d8..ad5262d 100644
+--- a/app/components/product-search.hbs
++++ b/app/components/product-search.hbs
+@@ -1,4 +1 @@
+-<div class="product-search">
+-  <input {{on "input" (perform this.search value="target.value")}} />
+-  {{#each this.results as |p|}}<ProductRow @product={{p}} />{{/each}}
+-</div>
++<div {{react-product-search this.search}}></div>
+diff --git a/app/components/product-search.js b/app/components/product-search.js
+index 7ec495d..304ffc5 100644
+--- a/app/components/product-search.js
++++ b/app/components/product-search.js
+@@ -1,12 +1,15 @@
++// Thin Ember shell: mounts the React ProductSearch and bridges it to the store.
+ import Component from '@glimmer/component';
+-import { tracked } from '@glimmer/tracking';
++import { action } from '@ember/object';
+ import { inject as service } from '@ember/service';
+-import { restartableTask, timeout } from 'ember-concurrency';
++
+ export default class ProductSearch extends Component {
+   @service store;
+-  @tracked results = [];
+-  @restartableTask *search(q) {
+-    yield timeout(250);
+-    this.results = yield this.store.query('product', { filter: { q } });
++
++  // Query via the store so records remain visible to CompareTray (peekAll).
++  @action
++  async search(q) {
++    const products = await this.store.query('product', { filter: { q } });
++    return products.map((p) => ({ id: p.id, name: p.name, priceCents: p.priceCents }));
+   }
+ }
+diff --git a/app/modifiers/react-product-search.js b/app/modifiers/react-product-search.js
+new file mode 100644
+index 0000000..eccaf31
+--- /dev/null
++++ b/app/modifiers/react-product-search.js
+@@ -0,0 +1,7 @@
++import { modifier } from 'ember-modifier';
++import { mountProductSearch } from '../react/mount';
++
++export default modifier((element, [search]) => {
++  const handle = mountProductSearch(element, { search });
++  return () => handle.unmount();
++});
+diff --git a/app/react/ProductSearch.tsx b/app/react/ProductSearch.tsx
+new file mode 100644
+index 0000000..c5edde5
+--- /dev/null
++++ b/app/react/ProductSearch.tsx
+@@ -0,0 +1,51 @@
++import { useEffect, useState } from 'react';
++
++export interface ProductSummary {
++  id: string;
++  name: string;
++  priceCents: number;
++}
++
++export interface ProductSearchProps {
++  /**
++   * Provided by the Ember host. Must run the query through the Ember Data
++   * store so results stay in the store (CompareTray relies on peekAll).
++   */
++  search: (q: string) => Promise<ProductSummary[]>;
++  debounceMs?: number;
++}
++
++export default function ProductSearch({ search, debounceMs = 250 }: ProductSearchProps) {
++  const [query, setQuery] = useState<string | null>(null);
++  const [results, setResults] = useState<ProductSummary[]>([]);
++
++  // Equivalent of ember-concurrency's restartableTask: each new query cancels
++  // the pending timer and discards any in-flight response.
++  useEffect(() => {
++    if (query === null) return;
++    let cancelled = false;
++    const timer = setTimeout(async () => {
++      try {
++        const next = await search(query);
++        if (!cancelled) setResults(next);
++      } catch (e) {
++        if (!cancelled) console.error('Product search failed', e);
++      }
++    }, debounceMs);
++    return () => {
++      cancelled = true;
++      clearTimeout(timer);
++    };
++  }, [query, search, debounceMs]);
++
++  return (
++    <div className="product-search">
++      <input value={query ?? ''} onChange={(e) => setQuery(e.target.value)} />
++      {results.map((p) => (
++        <div key={p.id} className="product-row">
++          {p.name} — ${(p.priceCents / 100).toFixed(2)}
++        </div>
++      ))}
++    </div>
++  );
++}
+diff --git a/app/react/mount.tsx b/app/react/mount.tsx
+new file mode 100644
+index 0000000..d81a402
+--- /dev/null
++++ b/app/react/mount.tsx
+@@ -0,0 +1,11 @@
++import { createRoot } from 'react-dom/client';
++import ProductSearch, { type ProductSearchProps } from './ProductSearch';
++
++export function mountProductSearch(el: HTMLElement, props: ProductSearchProps) {
++  const root = createRoot(el);
++  root.render(<ProductSearch {...props} />);
++  return {
++    update: (next: ProductSearchProps) => root.render(<ProductSearch {...next} />),
++    unmount: () => root.unmount(),
++  };
++}
+diff --git a/package.json b/package.json
+index 8422cfe..583a285 100644
+--- a/package.json
++++ b/package.json
+@@ -1 +1 @@
+-{ "name": "store-front", "private": true, "dependencies": { "ember-source": "~5.4.0", "ember-data": "~5.3.0", "ember-concurrency": "^4.0.0", "react": "^18.3.1", "react-dom": "^18.3.1" } }
++{ "name": "store-front", "private": true, "dependencies": { "ember-source": "~5.4.0", "ember-data": "~5.3.0", "ember-concurrency": "^4.0.0", "ember-modifier": "^4.1.0", "react": "^18.3.1", "react-dom": "^18.3.1" }, "devDependencies": { "typescript": "^5.4.0", "@types/react": "^18.3.0", "@types/react-dom": "^18.3.0" } }

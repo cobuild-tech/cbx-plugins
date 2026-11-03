@@ -1,0 +1,156 @@
+diff --git a/checkout.html b/checkout.html
+index b4671a4..ff72abf 100644
+--- a/checkout.html
++++ b/checkout.html
+@@ -1,4 +1,4 @@
+-<form id="checkout"><input name="email"><input name="card"><select name="country"></select><button>Pay</button></form>
++<div id="checkout-root"></div>
+ <script>window.App = window.App || { q: [] }; App.q.push(function () { App.checkout.prefill({ country: 'DE' }); });</script>
+-<script src="checkout.js" defer></script>
++<script type="module" src="/src/main.tsx"></script>
+ <script src="tracking.js" defer></script>
+diff --git a/package.json b/package.json
+index 895973f..311a00c 100644
+--- a/package.json
++++ b/package.json
+@@ -1 +1,14 @@
+-{ "name": "checkout", "private": true, "dependencies": { "react": "^18.3.1", "react-dom": "^18.3.1" } }
++{
++  "name": "checkout",
++  "private": true,
++  "type": "module",
++  "scripts": { "dev": "vite", "build": "tsc --noEmit && vite build" },
++  "dependencies": { "react": "^18.3.1", "react-dom": "^18.3.1" },
++  "devDependencies": {
++    "@types/react": "^18.3.1",
++    "@types/react-dom": "^18.3.1",
++    "@vitejs/plugin-react": "^4.3.1",
++    "typescript": "^5.5.0",
++    "vite": "^5.4.0"
++  }
++}
+diff --git a/src/CheckoutForm.tsx b/src/CheckoutForm.tsx
+new file mode 100644
+index 0000000..7ecc977
+--- /dev/null
++++ b/src/CheckoutForm.tsx
+@@ -0,0 +1,80 @@
++import { useLayoutEffect, useRef, useState } from 'react';
++import type { FormEvent } from 'react';
++
++const DRAFT = 'checkout-draft';
++
++type Prefill = (values: Record<string, string>) => void;
++type QueuedFn = () => void;
++
++declare global {
++  interface Window {
++    App: {
++      q: QueuedFn[] | { push: (fn: QueuedFn) => void };
++      checkout?: { prefill: Prefill };
++    };
++  }
++}
++
++// The form stays uncontrolled on purpose: the original read and wrote the DOM
++// values directly (prefill only fills empty fields, the draft reads the live
++// values on unload, FormData reads the fields on submit).
++export function CheckoutForm() {
++  const formRef = useRef<HTMLFormElement>(null);
++  const [submitting, setSubmitting] = useState(false);
++
++  // Layout effect so the draft and the queued prefill land before first paint,
++  // as they did when the deferred script ran.
++  useLayoutEffect(() => {
++    const form = formRef.current!;
++
++    const prefill: Prefill = (values) => {
++      Object.keys(values).forEach((k) => {
++        const el = form.elements.namedItem(k);
++        if (el && 'value' in el && !el.value) el.value = values[k];
++      });
++    };
++
++    prefill(JSON.parse(sessionStorage.getItem(DRAFT) || '{}'));
++
++    const onBeforeUnload = () => {
++      const f = form.elements as HTMLFormControlsCollection & {
++        email: HTMLInputElement;
++        country: HTMLSelectElement;
++      };
++      // never the card number
++      sessionStorage.setItem(DRAFT, JSON.stringify({ email: f.email.value, country: f.country.value }));
++    };
++    window.addEventListener('beforeunload', onBeforeUnload);
++
++    // Bridge for old scripts: window.App.checkout + the App.q queue.
++    window.App = window.App || { q: [] };
++    window.App.checkout = { prefill };
++    if (Array.isArray(window.App.q)) {
++      window.App.q.forEach((fn) => fn());
++      window.App.q = { push: (fn) => fn() };
++    }
++
++    return () => window.removeEventListener('beforeunload', onBeforeUnload);
++  }, []);
++
++  const onSubmit = (e: FormEvent<HTMLFormElement>) => {
++    e.preventDefault();
++    setSubmitting(true); // prevent double charge
++    fetch('/pay', { method: 'POST', body: new FormData(e.currentTarget) }).then((r) => {
++      if (r.ok) {
++        sessionStorage.removeItem(DRAFT);
++        window.location.href = '/thanks';
++      } else setSubmitting(false);
++    });
++    document.dispatchEvent(new Event('checkout:submit')); // tracking.js listens
++  };
++
++  return (
++    <form id="checkout" ref={formRef} onSubmit={onSubmit}>
++      <input name="email" />
++      <input name="card" />
++      <select name="country"></select>
++      <button disabled={submitting}>Pay</button>
++    </form>
++  );
++}
+diff --git a/src/main.tsx b/src/main.tsx
+new file mode 100644
+index 0000000..de7a5b3
+--- /dev/null
++++ b/src/main.tsx
+@@ -0,0 +1,4 @@
++import { createRoot } from 'react-dom/client';
++import { CheckoutForm } from './CheckoutForm';
++
++createRoot(document.getElementById('checkout-root')!).render(<CheckoutForm />);
+diff --git a/tsconfig.json b/tsconfig.json
+new file mode 100644
+index 0000000..c907703
+--- /dev/null
++++ b/tsconfig.json
+@@ -0,0 +1,13 @@
++{
++  "compilerOptions": {
++    "target": "ES2020",
++    "lib": ["ES2020", "DOM", "DOM.Iterable"],
++    "module": "ESNext",
++    "moduleResolution": "bundler",
++    "jsx": "react-jsx",
++    "strict": true,
++    "noEmit": true,
++    "skipLibCheck": true
++  },
++  "include": ["src", "vite.config.ts"]
++}
+diff --git a/vite.config.ts b/vite.config.ts
+new file mode 100644
+index 0000000..56f7628
+--- /dev/null
++++ b/vite.config.ts
+@@ -0,0 +1,4 @@
++import { defineConfig } from 'vite';
++import react from '@vitejs/plugin-react';
++
++export default defineConfig({ plugins: [react()] });

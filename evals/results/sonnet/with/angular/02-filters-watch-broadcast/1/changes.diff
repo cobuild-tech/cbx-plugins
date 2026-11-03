@@ -1,0 +1,176 @@
+diff --git a/package.json b/package.json
+index 5667e12..4776c4f 100644
+--- a/package.json
++++ b/package.json
+@@ -1 +1 @@
+-{ "name": "catalog", "private": true, "dependencies": { "angular": "1.8.3", "react": "^18.3.1", "react-dom": "^18.3.1" } }
++{ "name": "catalog", "private": true, "dependencies": { "angular": "1.8.3", "react": "^18.3.1", "react-dom": "^18.3.1" }, "devDependencies": { "typescript": "^5.6.0", "@types/react": "^18.3.0", "@types/react-dom": "^18.3.0" } }
+diff --git a/src/filters.controller.js b/src/filters.controller.js
+index 140753c..c54c584 100644
+--- a/src/filters.controller.js
++++ b/src/filters.controller.js
+@@ -1,3 +1,6 @@
++// Replaced by the React <filters-panel> (src/react/). Safe to delete once the
++// unit is validated; kept for rollback (nothing registers it as the template now).
++// To roll back: restore the old filters.html and keep this file loaded.
+ angular.module('catalog').controller('FiltersCtrl', ['$scope', '$rootScope', '$timeout', '$location',
+ function ($scope, $rootScope, $timeout, $location) {
+   $scope.filters = angular.extend({ q: '', brands: [], inStock: false }, $location.search());
+diff --git a/src/filters.html b/src/filters.html
+index 871696e..88068cf 100644
+--- a/src/filters.html
++++ b/src/filters.html
+@@ -1,5 +1 @@
+-<div ng-controller="FiltersCtrl">
+-  <input ng-model="filters.q" placeholder="Search">
+-  <label ng-repeat="b in ['Acme','Globex','Initech']"><input type="checkbox" checklist-model="filters.brands" checklist-value="b">{{b}}</label>
+-  <label><input type="checkbox" ng-model="filters.inStock"> In stock</label>
+-</div>
++<filters-panel></filters-panel>
+diff --git a/src/react/FiltersPanel.tsx b/src/react/FiltersPanel.tsx
+new file mode 100644
+index 0000000..8bcd888
+--- /dev/null
++++ b/src/react/FiltersPanel.tsx
+@@ -0,0 +1,69 @@
++import { useEffect, useRef, useState } from 'react';
++
++export interface Filters {
++  q: string;
++  brands: string[];
++  inStock: boolean;
++  [key: string]: unknown; // extra keys from $location.search() are carried through, as before
++}
++
++export interface FiltersPanelProps {
++  /** Defaults merged with $location.search(), computed by the AngularJS wrapper. */
++  initial: Filters;
++  /** Called 300ms after the last change (debounced), never for the initial value. */
++  onChange: (filters: Filters) => void;
++}
++
++const BRANDS = ['Acme', 'Globex', 'Initech'];
++const DEBOUNCE_MS = 300;
++
++export function FiltersPanel({ initial, onChange }: FiltersPanelProps) {
++  const [filters, setFilters] = useState<Filters>(initial);
++  const initialRef = useRef(filters);
++  const onChangeRef = useRef(onChange);
++  onChangeRef.current = onChange;
++
++  // Replaces $watch('filters', ..., true) + $timeout debounce.
++  useEffect(() => {
++    if (filters === initialRef.current) return; // nv === ov
++    const t = setTimeout(() => onChangeRef.current(filters), DEBOUNCE_MS);
++    return () => clearTimeout(t); // $timeout.cancel(pending)
++  }, [filters]);
++
++  const brands = Array.isArray(filters.brands) ? filters.brands : [];
++
++  const toggleBrand = (b: string, checked: boolean) =>
++    setFilters(f => {
++      const cur = Array.isArray(f.brands) ? f.brands : [];
++      const next = checked ? (cur.includes(b) ? cur : [...cur, b]) : cur.filter(x => x !== b);
++      return { ...f, brands: next };
++    });
++
++  return (
++    <div>
++      <input
++        placeholder="Search"
++        value={String(filters.q ?? '')}
++        onChange={e => setFilters(f => ({ ...f, q: e.target.value }))}
++      />
++      {BRANDS.map(b => (
++        <label key={b}>
++          <input
++            type="checkbox"
++            checked={brands.includes(b)}
++            onChange={e => toggleBrand(b, e.target.checked)}
++          />
++          {b}
++        </label>
++      ))}
++      <label>
++        <input
++          type="checkbox"
++          checked={!!filters.inStock}
++          onChange={e => setFilters(f => ({ ...f, inStock: e.target.checked }))}
++        />{' '}
++        In stock
++      </label>
++    </div>
++  );
++}
+diff --git a/src/react/filtersPanel.component.tsx b/src/react/filtersPanel.component.tsx
+new file mode 100644
+index 0000000..a9b3dc2
+--- /dev/null
++++ b/src/react/filtersPanel.component.tsx
+@@ -0,0 +1,46 @@
++import { createRoot, type Root } from 'react-dom/client';
++import { FiltersPanel, type Filters } from './FiltersPanel';
++
++declare const angular: any; // AngularJS global (script-tag build)
++
++/**
++ * AngularJS wrapper: <filters-panel></filters-panel> replaces
++ * <div ng-controller="FiltersCtrl"> + filters.html.
++ * Still owns the AngularJS side: $location (URL) and the 'filters:changed'
++ * broadcast that ResultsCtrl listens to.
++ */
++angular.module('catalog').component('filtersPanel', {
++  controller: [
++    '$element', '$location', '$rootScope',
++    class FiltersPanelCtrl {
++      private root: Root | null = null;
++      constructor(
++        private $element: any,
++        private $location: any,
++        private $rootScope: any,
++      ) {}
++
++      $postLink() {
++        const initial: Filters = angular.extend(
++          { q: '', brands: [], inStock: false },
++          this.$location.search(),
++        );
++        this.root = createRoot(this.$element[0]);
++        this.root.render(<FiltersPanel initial={initial} onChange={this.onChange} />);
++      }
++
++      // Fires from a setTimeout (outside a digest), mirroring $timeout's trailing digest.
++      private onChange = (nv: Filters) => {
++        this.$rootScope.$apply(() => {
++          this.$location.search(nv); // keeps URL shareable
++          this.$rootScope.$broadcast('filters:changed', angular.copy(nv));
++        });
++      };
++
++      $onDestroy() {
++        this.root?.unmount();
++        this.root = null;
++      }
++    },
++  ],
++});
+diff --git a/tsconfig.json b/tsconfig.json
+new file mode 100644
+index 0000000..a5260a3
+--- /dev/null
++++ b/tsconfig.json
+@@ -0,0 +1,14 @@
++{
++  "compilerOptions": {
++    "target": "ES2020",
++    "module": "ESNext",
++    "moduleResolution": "Bundler",
++    "jsx": "react-jsx",
++    "strict": true,
++    "noEmit": true,
++    "skipLibCheck": true,
++    "experimentalDecorators": false,
++    "useDefineForClassFields": false
++  },
++  "include": ["src/react"]
++}

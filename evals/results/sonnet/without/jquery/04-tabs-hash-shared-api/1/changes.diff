@@ -1,0 +1,182 @@
+diff --git a/package.json b/package.json
+index a30bb5e..9d56866 100644
+--- a/package.json
++++ b/package.json
+@@ -1 +1,15 @@
+-{ "name": "account", "private": true, "dependencies": { "react": "^18.3.1", "react-dom": "^18.3.1" } }
++{
++  "name": "account",
++  "private": true,
++  "scripts": {
++    "build": "esbuild src/main.tsx --bundle --minify --outfile=public/js/tabs.bundle.js",
++    "typecheck": "tsc"
++  },
++  "dependencies": { "react": "^18.3.1", "react-dom": "^18.3.1" },
++  "devDependencies": {
++    "@types/react": "^18.3.0",
++    "@types/react-dom": "^18.3.0",
++    "esbuild": "^0.24.0",
++    "typescript": "^5.6.0"
++  }
++}
+diff --git a/public/js/help-widget.js b/public/js/help-widget.js
+index 585f180..5bd8757 100644
+--- a/public/js/help-widget.js
++++ b/public/js/help-widget.js
+@@ -1,2 +1,5 @@
+ // Third-party help widget: asks which tab is open to pick an article.
+-window.HelpWidget = { context: function () { return ['profile', 'billing', 'security'][$('#tabs').tabs('option', 'active')]; } };
++window.HelpWidget = { context: function () {
++  var tab = document.querySelector('#tabs [role="tab"][aria-selected="true"]');
++  return tab ? tab.getAttribute('aria-controls') : undefined;
++} };
+diff --git a/src/Tabs.tsx b/src/Tabs.tsx
+new file mode 100644
+index 0000000..5b512b8
+--- /dev/null
++++ b/src/Tabs.tsx
+@@ -0,0 +1,77 @@
++import { KeyboardEvent, useMemo, useRef, useState } from 'react';
++
++export interface TabDef {
++  /** Becomes the panel element id and the URL hash (without '#'). */
++  id: string;
++  label: string;
++  /** Server-rendered panel markup. Never re-applied after mount, so scripts
++   *  that inject into a panel (e.g. billing.js) are not clobbered. */
++  html: string;
++}
++
++export interface TabsProps {
++  tabs: TabDef[];
++  /** Id of the tab to show first; falls back to the first tab. */
++  initialId?: string;
++  /** Called only when the user switches tabs (not on initial render). */
++  onActivate?: (id: string) => void;
++}
++
++export function Tabs({ tabs, initialId, onActivate }: TabsProps) {
++  const [active, setActive] = useState(() => Math.max(0, tabs.findIndex((t) => t.id === initialId)));
++  const buttons = useRef<(HTMLButtonElement | null)[]>([]);
++  // Stable objects so React never rewrites panel innerHTML on re-render.
++  const markup = useMemo(() => tabs.map((t) => ({ __html: t.html })), [tabs]);
++
++  const select = (i: number, focus = false) => {
++    if (focus) buttons.current[i]?.focus();
++    if (i === active) return;
++    setActive(i);
++    onActivate?.(tabs[i].id);
++  };
++
++  const onKeyDown = (e: KeyboardEvent, i: number) => {
++    const n = tabs.length;
++    const next =
++      e.key === 'ArrowRight' ? (i + 1) % n :
++      e.key === 'ArrowLeft' ? (i - 1 + n) % n :
++      e.key === 'Home' ? 0 :
++      e.key === 'End' ? n - 1 : -1;
++    if (next < 0) return;
++    e.preventDefault();
++    select(next, true);
++  };
++
++  return (
++    <div className="tabs">
++      <div role="tablist">
++        {tabs.map((t, i) => (
++          <button
++            key={t.id}
++            ref={(el) => { buttons.current[i] = el; }}
++            type="button"
++            role="tab"
++            id={`tab-${t.id}`}
++            aria-selected={i === active}
++            aria-controls={t.id}
++            tabIndex={i === active ? 0 : -1}
++            onClick={() => select(i)}
++            onKeyDown={(e) => onKeyDown(e, i)}
++          >
++            {t.label}
++          </button>
++        ))}
++      </div>
++      {tabs.map((t, i) => (
++        <div
++          key={t.id}
++          id={t.id}
++          role="tabpanel"
++          aria-labelledby={`tab-${t.id}`}
++          hidden={i !== active}
++          dangerouslySetInnerHTML={markup[i]}
++        />
++      ))}
++    </div>
++  );
++}
+diff --git a/src/main.tsx b/src/main.tsx
+new file mode 100644
+index 0000000..afe6a70
+--- /dev/null
++++ b/src/main.tsx
+@@ -0,0 +1,29 @@
++import { createRoot } from 'react-dom/client';
++import { Tabs, TabDef } from './Tabs';
++
++declare global {
++  interface Window {
++    jQuery?: (target: Document) => { trigger(event: string, args: unknown[]): void };
++  }
++}
++
++const root = document.getElementById('tabs');
++if (root) {
++  // Read the server-rendered markup (<ul><li><a href="#id">Label</a>… + <div id>…).
++  const tabs: TabDef[] = Array.from(root.querySelectorAll<HTMLAnchorElement>(':scope > ul > li > a')).map((a) => {
++    const id = (a.getAttribute('href') ?? '').replace(/^#/, '');
++    return { id, label: a.textContent ?? id, html: document.getElementById(id)?.innerHTML ?? '' };
++  });
++
++  createRoot(root).render(
++    <Tabs
++      tabs={tabs}
++      initialId={location.hash.slice(1)}
++      onActivate={(id) => {
++        history.replaceState(null, '', `#${id}`);
++        // billing.js listens via jQuery, so keep the jQuery event contract.
++        window.jQuery?.(document).trigger('account:tab', [id]);
++      }}
++    />,
++  );
++}
+diff --git a/tsconfig.json b/tsconfig.json
+new file mode 100644
+index 0000000..1477cd0
+--- /dev/null
++++ b/tsconfig.json
+@@ -0,0 +1,13 @@
++{
++  "compilerOptions": {
++    "target": "ES2020",
++    "module": "ESNext",
++    "moduleResolution": "Bundler",
++    "jsx": "react-jsx",
++    "strict": true,
++    "noEmit": true,
++    "skipLibCheck": true,
++    "lib": ["ES2020", "DOM", "DOM.Iterable"]
++  },
++  "include": ["src"]
++}
+diff --git a/views/account.html b/views/account.html
+index 7853cf5..399d649 100644
+--- a/views/account.html
++++ b/views/account.html
+@@ -3,7 +3,6 @@
+   <div id="profile">…</div><div id="billing">…</div><div id="security">…</div>
+ </div>
+ <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+-<script src="https://code.jquery.com/ui/1.13.2/jquery-ui.min.js"></script>
+-<script src="/js/tabs.js"></script>
++<script src="/js/tabs.bundle.js"></script>
+ <script src="/js/billing.js"></script>
+ <script src="/js/help-widget.js"></script>

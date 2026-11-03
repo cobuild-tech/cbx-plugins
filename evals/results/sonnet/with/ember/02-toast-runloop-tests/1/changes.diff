@@ -1,0 +1,150 @@
+diff --git a/app/components/toast-stack.hbs b/app/components/toast-stack.hbs
+index 36013de..d1bec8a 100644
+--- a/app/components/toast-stack.hbs
++++ b/app/components/toast-stack.hbs
+@@ -1 +1 @@
+-<ul class="toasts">{{#each this.toasts.items as |t|}}<li {{on "click" (fn this.toasts.dismiss t)}}>{{t.text}}</li>{{/each}}</ul>
++<div style="display: contents" {{mount-toast-stack}}></div>
+diff --git a/app/components/toast-stack.js b/app/components/toast-stack.js
+index 12f84cf..fb1f659 100644
+--- a/app/components/toast-stack.js
++++ b/app/components/toast-stack.js
+@@ -1,3 +1,3 @@
+ import Component from '@glimmer/component';
+-import { inject as service } from '@ember/service';
+-export default class ToastStack extends Component { @service toasts; }
++// Mounts the React ToastStack via the `mount-toast-stack` modifier (see template).
++export default class ToastStack extends Component {}
+diff --git a/app/modifiers/mount-toast-stack.js b/app/modifiers/mount-toast-stack.js
+new file mode 100644
+index 0000000..94a7d4b
+--- /dev/null
++++ b/app/modifiers/mount-toast-stack.js
+@@ -0,0 +1,11 @@
++import { modifier } from 'ember-modifier';
++import { createRoot } from 'react-dom/client';
++import { createElement } from 'react';
++import { ToastStack } from '../react/toasts/ToastStack';
++
++// Creates the React root once on insert; unmounts on teardown.
++export default modifier((element) => {
++  const root = createRoot(element);
++  root.render(createElement(ToastStack));
++  return () => root.unmount();
++});
+diff --git a/app/react/toasts/ToastStack.tsx b/app/react/toasts/ToastStack.tsx
+new file mode 100644
+index 0000000..4750952
+--- /dev/null
++++ b/app/react/toasts/ToastStack.tsx
+@@ -0,0 +1,15 @@
++import { useSyncExternalStore } from 'react';
++import { toastStore } from './store';
++
++export function ToastStack() {
++  const items = useSyncExternalStore(toastStore.subscribe, toastStore.getSnapshot);
++  return (
++    <ul className="toasts">
++      {items.map((t) => (
++        <li key={t.id} onClick={() => toastStore.dismiss(t)}>
++          {t.text}
++        </li>
++      ))}
++    </ul>
++  );
++}
+diff --git a/app/react/toasts/store.ts b/app/react/toasts/store.ts
+new file mode 100644
+index 0000000..ff8f426
+--- /dev/null
++++ b/app/react/toasts/store.ts
+@@ -0,0 +1,54 @@
++// Framework-agnostic toast store. Shared by React (useSyncExternalStore) and
++// the Ember `toasts` service wrapper. Temporary bridge: delete the wrapper
++// once no Ember code calls `this.toasts.show`.
++
++export interface Toast {
++  id: number;
++  text: string;
++  timer: unknown;
++}
++
++export interface Scheduler {
++  later(fn: () => void, ms: number): unknown;
++  cancel(timer: unknown): void;
++}
++
++// Default: plain timers. The Ember service swaps in the run loop's
++// later/cancel so `settled()` keeps waiting for toast expiry in tests.
++let scheduler: Scheduler = {
++  later: (fn, ms) => setTimeout(fn, ms),
++  cancel: (timer) => clearTimeout(timer as ReturnType<typeof setTimeout>),
++};
++
++export function setScheduler(next: Scheduler): void {
++  scheduler = next;
++}
++
++let snapshot: readonly Toast[] = [];
++const listeners = new Set<() => void>();
++
++function publish(next: readonly Toast[]): void {
++  snapshot = next;
++  listeners.forEach((l) => l());
++}
++
++export const toastStore = {
++  subscribe(listener: () => void): () => void {
++    listeners.add(listener);
++    return () => {
++      listeners.delete(listener);
++    };
++  },
++  getSnapshot(): readonly Toast[] {
++    return snapshot; // same reference until items change
++  },
++  show(text: string, ms = 4000): void {
++    const t: Toast = { text, id: Math.random(), timer: null };
++    t.timer = scheduler.later(() => toastStore.dismiss(t), ms);
++    publish([...snapshot, t]);
++  },
++  dismiss(t: Toast): void {
++    scheduler.cancel(t.timer);
++    publish(snapshot.filter((x) => x !== t));
++  },
++};
+diff --git a/app/services/toasts.js b/app/services/toasts.js
+index 14b0582..1d3f0d4 100644
+--- a/app/services/toasts.js
++++ b/app/services/toasts.js
+@@ -1,12 +1,16 @@
+ import Service from '@ember/service';
+-import { tracked } from '@glimmer/tracking';
+ import { later, cancel } from '@ember/runloop';
++import { toastStore, setScheduler } from '../react/toasts/store';
++
++// Thin Ember facade over the React-side store so existing
++// `this.toasts.show(...)` callers keep working.
+ export default class ToastsService extends Service {
+-  @tracked items = [];
+-  show(text, ms = 4000) {
+-    const t = { text, id: Math.random() };
+-    t.timer = later(() => this.dismiss(t), ms);
+-    this.items = [...this.items, t];
++  constructor() {
++    super(...arguments);
++    // Keep expiry on the Ember run loop so `settled()` waits for it.
++    setScheduler({ later: (fn, ms) => later(fn, ms), cancel });
+   }
+-  dismiss(t) { cancel(t.timer); this.items = this.items.filter((x) => x !== t); }
++  get items() { return toastStore.getSnapshot(); }
++  show(text, ms = 4000) { toastStore.show(text, ms); }
++  dismiss(t) { toastStore.dismiss(t); }
+ }
+diff --git a/package.json b/package.json
+index b4c16de..a8db258 100644
+--- a/package.json
++++ b/package.json
+@@ -1 +1 @@
+-{ "name": "profile", "private": true, "dependencies": { "ember-source": "~5.4.0", "react": "^18.3.1", "react-dom": "^18.3.1" }, "devDependencies": { "ember-qunit": "^8.0.0" } }
++{ "name": "profile", "private": true, "dependencies": { "ember-modifier": "^4.1.0", "ember-source": "~5.4.0","react": "^18.3.1", "react-dom": "^18.3.1" }, "devDependencies": { "ember-qunit": "^8.0.0" } }

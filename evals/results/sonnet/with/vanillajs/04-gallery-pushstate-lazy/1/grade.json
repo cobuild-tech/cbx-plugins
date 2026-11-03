@@ -1,0 +1,26 @@
+{
+ "pushstate-analytics": {
+  "pass": true,
+  "why": "`select` calls `history.pushState({ tag: next }, '', '?tag=' + next)` at call time, so the analytics.js wrapper still fires, and the message says so."
+ },
+ "popstate": {
+  "pass": true,
+  "why": "`useEffect` adds a popstate listener and removes it on cleanup, and the initial state comes from `new URLSearchParams(location.search).get('tag') || 'all'`."
+ },
+ "lazy": {
+  "pass": true,
+  "why": "`LazyImage` uses an IntersectionObserver with rootMargin '300px' and calls `io.disconnect()` in the effect cleanup."
+ },
+ "active-class": {
+  "pass": true,
+  "why": "Each filter button gets `className={f.tag === tag ? 'active' : undefined}`."
+ },
+ "escape": {
+  "pass": true,
+  "why": "Titles render as JSX text in `<figcaption>{p.title}</figcaption>` and `alt={alt}` is preserved on the image."
+ },
+ "no-silent-changes": {
+  "pass": true,
+  "why": "The behavioural shift (photos must be set before the module script runs) is flagged, along with the untested state and the undeleted gallery.js, and no other unflagged behaviour changes appear in the diff."
+ }
+}

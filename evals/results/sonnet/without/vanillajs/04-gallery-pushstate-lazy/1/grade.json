@@ -1,0 +1,26 @@
+{
+ "pushstate-analytics": {
+  "pass": true,
+  "why": "select() calls the global history.pushState at call time (not a cached reference), so analytics.js's patched wrapper would still fire."
+ },
+ "popstate": {
+  "pass": true,
+  "why": "Initial tag comes from URLSearchParams on ?tag= via tagFromLocation, and the popstate listener is added and removed in a useEffect cleanup."
+ },
+ "lazy": {
+  "pass": true,
+  "why": "LazyImage uses IntersectionObserver with rootMargin '300px' and disconnects in the effect cleanup on unmount."
+ },
+ "active-class": {
+  "pass": true,
+  "why": "The button gets className='active' when f.tag === tag."
+ },
+ "escape": {
+  "pass": true,
+  "why": "Titles are rendered as JSX text in figcaption and alt={p.title} is kept on the img."
+ },
+ "no-silent-changes": {
+  "pass": true,
+  "why": "The summary calls out the URL-encoding of the tag and the per-image observers replacing the shared one, and states gallery.js and index.html were left unwired."
+ }
+}

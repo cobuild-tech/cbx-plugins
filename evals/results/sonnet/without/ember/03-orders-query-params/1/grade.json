@@ -1,0 +1,26 @@
+{
+ "qp-through-router": {
+  "pass": true,
+  "why": "The React callbacks call the controller actions setStatus/setPage/setSort, which assign the tracked query-param properties, so the URL stays managed by Ember."
+ },
+ "refresh-model": {
+  "pass": true,
+  "why": "routes/orders.js is unchanged, so status and page keep refreshModel: true and sort keeps refreshModel: false; the summary states this."
+ },
+ "defaults": {
+  "pass": true,
+  "why": "The controller still declares status='open', page=1, sort='date' with queryParams intact, so Ember still omits the defaults from the URL."
+ },
+ "loading": {
+  "pass": true,
+  "why": "orders-loading.hbs is untouched so the loading substate still shows on refetch, and the summary flags that the in-page is-loading Spinner was dropped."
+ },
+ "sort-semantics": {
+  "pass": true,
+  "why": "OrdersPage.tsx keeps the same comparator, (a[sort] > b[sort] ? -1 : 1), so the sort stays descending."
+ },
+ "no-silent-changes": {
+  "pass": true,
+  "why": "The summary calls out the dropped spinner, the placeholder OrdersTable with guessed columns, and the select becoming controlled, and it notes that nothing was built or run."
+ }
+}

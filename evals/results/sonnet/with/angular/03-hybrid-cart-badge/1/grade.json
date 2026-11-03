@@ -1,0 +1,26 @@
+{
+ "same-instance": {
+  "pass": true,
+  "why": "The AngularJS wrapper injects the downgraded 'cartService' (downgradeInjectable of CartService) and passes its count$ to React, so it is the same instance/BehaviorSubject as ProductCtrl uses."
+ },
+ "unsubscribe": {
+  "pass": true,
+  "why": "CartBadge's useEffect returns () => sub.unsubscribe(), and the wrapper unmounts the root in $onDestroy."
+ },
+ "mount-path": {
+  "pass": true,
+  "why": "An AngularJS .component('cartBadge') wrapper using createRoot in $postLink keeps <cart-badge> working in header.html, and the downgradeComponent registration is removed from app.module.ts."
+ },
+ "zone": {
+  "pass": true,
+  "why": "The summary addresses it under 'Zone and digest', saying no change detection is needed because React owns its own state, so it is at least mentioned and reasoned about."
+ },
+ "empty-class": {
+  "pass": true,
+  "why": "CartBadge renders <a href=\"/cart\"> with className 'badge empty' when count === 0, otherwise 'badge'."
+ },
+ "no-silent-changes": {
+  "pass": true,
+  "why": "The summary flags the class-order difference, the empty pipe, the undeleted old file, and the missing build config, and the diff shows no unflagged behavior changes."
+ }
+}

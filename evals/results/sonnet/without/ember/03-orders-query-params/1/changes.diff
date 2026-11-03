@@ -1,0 +1,237 @@
+diff --git a/app/components/react-orders-page.js b/app/components/react-orders-page.js
+new file mode 100644
+index 0000000..da1e997
+--- /dev/null
++++ b/app/components/react-orders-page.js
+@@ -0,0 +1,37 @@
++import Component from '@ember/component';
++import { mountOrdersPage } from 'admin/react/orders/mount';
++
++// Thin bridge: renders the React OrdersPage inside the Ember route template.
++export default class ReactOrdersPageComponent extends Component {
++  tagName = 'div';
++
++  didInsertElement() {
++    super.didInsertElement(...arguments);
++    this._handle = mountOrdersPage(this.element, this._props());
++  }
++
++  didUpdateAttrs() {
++    super.didUpdateAttrs(...arguments);
++    this._handle?.update(this._props());
++  }
++
++  willDestroyElement() {
++    super.willDestroyElement(...arguments);
++    // Defer so we don't unmount synchronously during an Ember render.
++    const handle = this._handle;
++    this._handle = null;
++    queueMicrotask(() => handle?.unmount());
++  }
++
++  _props() {
++    return {
++      orders: this.orders.toArray?.() ?? [...this.orders],
++      status: this.status,
++      page: this.page,
++      sort: this.sort,
++      onStatusChange: this.onStatusChange,
++      onPageChange: this.onPageChange,
++      onSortChange: this.onSortChange,
++    };
++  }
++}
+diff --git a/app/controllers/orders.js b/app/controllers/orders.js
+index 6ba72ce..be28a54 100644
+--- a/app/controllers/orders.js
++++ b/app/controllers/orders.js
+@@ -1,7 +1,14 @@
+ import Controller from '@ember/controller';
++import { action } from '@ember/object';
+ import { tracked } from '@glimmer/tracking';
++
++// Only router-owned state (query params) remains here; UI logic lives in
++// app/react/orders/.
+ export default class OrdersController extends Controller {
+   queryParams = ['status', 'page', 'sort'];
+   @tracked status = 'open'; @tracked page = 1; @tracked sort = 'date';
+-  get sorted() { return [...this.model].sort((a, b) => (a[this.sort] > b[this.sort] ? -1 : 1)); }
++
++  @action setStatus(value) { this.status = value; }
++  @action setPage(value) { this.page = value; }
++  @action setSort(value) { this.sort = value; }
+ }
+diff --git a/app/react/orders/OrdersPage.tsx b/app/react/orders/OrdersPage.tsx
+new file mode 100644
+index 0000000..c7f7097
+--- /dev/null
++++ b/app/react/orders/OrdersPage.tsx
+@@ -0,0 +1,35 @@
++import { useMemo } from 'react';
++import { OrdersTable } from './OrdersTable';
++import type { OrderStatus, OrdersPageProps } from './types';
++
++export function OrdersPage({
++  orders,
++  status,
++  page,
++  sort,
++  onStatusChange,
++  onPageChange,
++  onSortChange,
++}: OrdersPageProps) {
++  // Moved from OrdersController#sorted (descending by the sort key).
++  const sorted = useMemo(
++    () => [...orders].sort((a, b) => (a[sort] > b[sort] ? -1 : 1)),
++    [orders, sort],
++  );
++
++  return (
++    <>
++      <select
++        value={status}
++        onChange={(e) => onStatusChange(e.target.value as OrderStatus)}
++      >
++        <option value="open">open</option>
++        <option value="shipped">shipped</option>
++      </select>
++      <OrdersTable orders={sorted} onSort={onSortChange} />
++      <button type="button" onClick={() => onPageChange(page + 1)}>
++        Next
++      </button>
++    </>
++  );
++}
+diff --git a/app/react/orders/OrdersTable.tsx b/app/react/orders/OrdersTable.tsx
+new file mode 100644
+index 0000000..602cbdf
+--- /dev/null
++++ b/app/react/orders/OrdersTable.tsx
+@@ -0,0 +1,37 @@
++import type { Order } from './types';
++
++interface OrdersTableProps {
++  orders: Order[];
++  onSort: (sort: string) => void;
++}
++
++// Placeholder for the Ember <OrdersTable> component, which is not defined in
++// this repo (likely from an addon). Replace with the real implementation.
++const COLUMNS = ['id', 'date', 'status'] as const;
++
++export function OrdersTable({ orders, onSort }: OrdersTableProps) {
++  return (
++    <table>
++      <thead>
++        <tr>
++          {COLUMNS.map((col) => (
++            <th key={col}>
++              <button type="button" onClick={() => onSort(col)}>
++                {col}
++              </button>
++            </th>
++          ))}
++        </tr>
++      </thead>
++      <tbody>
++        {orders.map((order) => (
++          <tr key={order.id}>
++            {COLUMNS.map((col) => (
++              <td key={col}>{String(order[col] ?? '')}</td>
++            ))}
++          </tr>
++        ))}
++      </tbody>
++    </table>
++  );
++}
+diff --git a/app/react/orders/mount.tsx b/app/react/orders/mount.tsx
+new file mode 100644
+index 0000000..fec51e0
+--- /dev/null
++++ b/app/react/orders/mount.tsx
+@@ -0,0 +1,21 @@
++import { createRoot, type Root } from 'react-dom/client';
++import { OrdersPage } from './OrdersPage';
++import type { OrdersPageProps } from './types';
++
++export interface OrdersPageHandle {
++  update(props: OrdersPageProps): void;
++  unmount(): void;
++}
++
++/** Entry point for Ember: mounts the React orders page into `element`. */
++export function mountOrdersPage(
++  element: HTMLElement,
++  props: OrdersPageProps,
++): OrdersPageHandle {
++  const root: Root = createRoot(element);
++  root.render(<OrdersPage {...props} />);
++  return {
++    update: (next) => root.render(<OrdersPage {...next} />),
++    unmount: () => root.unmount(),
++  };
++}
+diff --git a/app/react/orders/types.ts b/app/react/orders/types.ts
+new file mode 100644
+index 0000000..c672d71
+--- /dev/null
++++ b/app/react/orders/types.ts
+@@ -0,0 +1,18 @@
++export type OrderStatus = 'open' | 'shipped';
++
++export interface Order {
++  id: string;
++  date?: string;
++  status?: OrderStatus;
++  [key: string]: unknown;
++}
++
++export interface OrdersPageProps {
++  orders: Order[];
++  status: OrderStatus;
++  page: number;
++  sort: string;
++  onStatusChange: (status: OrderStatus) => void;
++  onPageChange: (page: number) => void;
++  onSortChange: (sort: string) => void;
++}
+diff --git a/app/templates/orders.hbs b/app/templates/orders.hbs
+index 46ec4e5..cd63e04 100644
+--- a/app/templates/orders.hbs
++++ b/app/templates/orders.hbs
+@@ -1,4 +1,9 @@
+-<select {{on "change" (pick "target.value" (set this "status"))}}><option>open</option><option>shipped</option></select>
+-<OrdersTable @orders={{this.sorted}} @onSort={{set this "sort"}} />
+-<button {{on "click" (set this "page" (inc this.page))}}>Next</button>
+-{{#if (is-loading)}}<Spinner/>{{/if}}
++<ReactOrdersPage
++  @orders={{@model}}
++  @status={{this.status}}
++  @page={{this.page}}
++  @sort={{this.sort}}
++  @onStatusChange={{this.setStatus}}
++  @onPageChange={{this.setPage}}
++  @onSortChange={{this.setSort}}
++/>
+diff --git a/tsconfig.json b/tsconfig.json
+new file mode 100644
+index 0000000..cc634d9
+--- /dev/null
++++ b/tsconfig.json
+@@ -0,0 +1,15 @@
++{
++  "compilerOptions": {
++    "target": "ES2020",
++    "module": "ESNext",
++    "moduleResolution": "bundler",
++    "jsx": "react-jsx",
++    "strict": true,
++    "noEmit": true,
++    "skipLibCheck": true,
++    "allowJs": true,
++    "baseUrl": ".",
++    "paths": { "admin/*": ["app/*"] }
++  },
++  "include": ["app/**/*"]
++}

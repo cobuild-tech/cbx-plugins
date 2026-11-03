@@ -19,7 +19,6 @@ one() { # case model arm rep
               --permission-mode acceptEdits --allowedTools "Read Edit Write Glob Grep Skill"
               --disallowedTools "Bash WebFetch WebSearch Agent" --output-format stream-json --verbose)
   [ "$a" = with ] && args+=(--plugin-dir "$ROOT/$fw-to-react")
-  [ "$a" = v1 ] && args+=(--plugin-dir "${V1_ROOT:?}/$fw-to-react")
   ( cd "$w" && claude "${args[@]}" > "$out/transcript.jsonl" 2> "$out/stderr.txt" ) || echo "FAIL $out"
   ( cd "$w" && git add -A && git diff --cached > "$out/changes.diff" )
   node -e '

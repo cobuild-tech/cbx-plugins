@@ -1,0 +1,26 @@
+{
+ "single-source": {
+  "pass": true,
+  "why": "TodoList subscribes to the shared `todos` collection via `todos.on(RENDER_EVENTS, rerender)` and renders from `todos.map`, with no copy into React state and no separate fetch, so SidebarView's 'all' listener and clear-done stay in sync."
+ },
+ "event-cleanup": {
+  "pass": true,
+  "why": "The useEffect cleanup calls `todos.off(RENDER_EVENTS, rerender)`, and the Backbone view's `remove()` calls the unmount function."
+ },
+ "patch-save": {
+  "pass": true,
+  "why": "The onChange handler calls `t.save({ done: e.target.checked }, { patch: true })` on the model."
+ },
+ "order": {
+  "pass": true,
+  "why": "Rows render from `todos.map(...)` over the collection, which is sorted by the 'order' comparator, and the 'sort' event triggers a re-render."
+ },
+ "escape": {
+  "pass": true,
+  "why": "Titles render as `{t.get('title')}` in JSX with no dangerouslySetInnerHTML, and the message confirms React escapes them."
+ },
+ "no-silent-changes": {
+  "pass": true,
+  "why": "The final message lists the behaviour differences (DOM reuse, cid keys, no rollback on failed save, unchanged event set, delegated-event replacement) and adds no unrequested optimistic or rollback behaviour."
+ }
+}
