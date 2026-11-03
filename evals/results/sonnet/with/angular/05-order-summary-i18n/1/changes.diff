@@ -1,0 +1,127 @@
+diff --git a/package.json b/package.json
+index ec9ebbf..3e8c5a7 100644
+--- a/package.json
++++ b/package.json
+@@ -1 +1 @@
+-{ "name": "app", "private": true, "dependencies": { "@angular/core": "^17.3.0", "@angular/common": "^17.3.0", "@ngx-translate/core": "^15.0.0", "rxjs": "^7.8.0", "react": "^18.3.1", "react-dom": "^18.3.1" } }
++{ "name": "app", "private": true, "dependencies": { "@angular/core": "^17.3.0", "@angular/common": "^17.3.0", "@ngx-translate/core": "^15.0.0", "rxjs": "^7.8.0", "react": "^18.3.1", "react-dom": "^18.3.1" }, "devDependencies": { "@types/react": "^18.3.0", "@types/react-dom": "^18.3.0" } }
+diff --git a/src/app/order-summary.component.ts b/src/app/order-summary.component.ts
+index 49f566f..4476c34 100644
+--- a/src/app/order-summary.component.ts
++++ b/src/app/order-summary.component.ts
+@@ -1,11 +1,59 @@
+-import { ChangeDetectionStrategy, Component, Input } from '@angular/core';
++import {
++  AfterViewInit, ChangeDetectionStrategy, Component, ElementRef, Inject, Input,
++  LOCALE_ID, OnChanges, OnDestroy,
++} from '@angular/core';
++import { TranslateService } from '@ngx-translate/core';
++import { merge, Subscription } from 'rxjs';
++import { createElement } from 'react';
++import { createRoot, Root } from 'react-dom/client';
++import { Order, OrderSummary } from '../react/OrderSummary';
++
++/** Thin Angular wrapper: same selector/input as before, renders the React OrderSummary. */
+ @Component({
+-  selector: 'app-order-summary', changeDetection: ChangeDetectionStrategy.OnPush,
+-  template: `
+-    <h3>{{ 'order.summary' | translate }}</h3>
+-    <p>{{ 'order.placed' | translate: { date: (order.placedAt | date: 'longDate') } }}</p>
+-    <p class="total">{{ order.total | currency: order.currency }}</p>
+-    <p *ngIf="order.items.length === 1">{{ 'order.oneItem' | translate }}</p>
+-    <p *ngIf="order.items.length !== 1">{{ 'order.nItems' | translate: { n: order.items.length } }}</p>`
++  selector: 'app-order-summary',
++  changeDetection: ChangeDetectionStrategy.OnPush,
++  template: '',
+ })
+-export class OrderSummaryComponent { @Input() order!: { placedAt: string; total: number; currency: string; items: unknown[] }; }
++export class OrderSummaryComponent implements AfterViewInit, OnChanges, OnDestroy {
++  @Input() order!: Order | null;
++
++  private root: Root | null = null;
++  private sub?: Subscription;
++
++  constructor(
++    private host: ElementRef<HTMLElement>,
++    private translate: TranslateService,
++    @Inject(LOCALE_ID) private locale: string,
++  ) {}
++
++  ngAfterViewInit() {
++    this.root = createRoot(this.host.nativeElement);
++    this.render();
++    // Runtime language switches / late-loaded translations must re-render (the old pipe was impure).
++    this.sub = merge(
++      this.translate.onLangChange,
++      this.translate.onTranslationChange,
++      this.translate.onDefaultLangChange,
++    ).subscribe(() => this.render());
++  }
++
++  ngOnChanges() {
++    this.render(); // first call precedes ngAfterViewInit, hence the guard
++  }
++
++  ngOnDestroy() {
++    this.sub?.unsubscribe();
++    this.root?.unmount();
++    this.root = null;
++  }
++
++  private render() {
++    this.root?.render(
++      createElement(OrderSummary, {
++        order: this.order,
++        locale: this.locale,
++        t: (key, params) => this.translate.instant(key, params),
++      }),
++    );
++  }
++}
+diff --git a/src/react/OrderSummary.tsx b/src/react/OrderSummary.tsx
+new file mode 100644
+index 0000000..3e14c74
+--- /dev/null
++++ b/src/react/OrderSummary.tsx
+@@ -0,0 +1,41 @@
++import React from 'react';
++
++export interface Order {
++  placedAt: string;
++  total: number;
++  currency: string;
++  items: unknown[];
++}
++
++export interface OrderSummaryProps {
++  order: Order | null;
++  /** Angular LOCALE_ID (e.g. 'de-DE'). */
++  locale: string;
++  /** Bridges to ngx-translate's TranslateService.instant (same instance, same runtime language). */
++  t: (key: string, params?: Record<string, unknown>) => string;
++}
++
++// Angular's DatePipe treats a date-only ISO string (yyyy-MM-dd) as a LOCAL date;
++// `new Date('2026-11-03')` would be UTC and can shift the day.
++function toDate(value: string): Date {
++  const m = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(value);
++  return m ? new Date(+m[1], +m[2] - 1, +m[3]) : new Date(value);
++}
++
++export function OrderSummary({ order, locale, t }: OrderSummaryProps) {
++  // Angular's `order$ | async` emits null first; render nothing until the order arrives.
++  if (!order) return null;
++
++  const date = new Intl.DateTimeFormat(locale, { dateStyle: 'long' }).format(toDate(order.placedAt));
++  const total = new Intl.NumberFormat(locale, { style: 'currency', currency: order.currency }).format(order.total);
++
++  return (
++    <>
++      <h3>{t('order.summary')}</h3>
++      <p>{t('order.placed', { date })}</p>
++      <p className="total">{total}</p>
++      {order.items.length === 1 && <p>{t('order.oneItem')}</p>}
++      {order.items.length !== 1 && <p>{t('order.nItems', { n: order.items.length })}</p>}
++    </>
++  );
++}

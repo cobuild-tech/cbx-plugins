@@ -1,0 +1,26 @@
+{
+ "testing-guard": {
+  "pass": true,
+  "why": "The wrapper passes `once: Ember.testing` and the React effect skips scheduling the next timeout when `once` is true, so only one poll runs under tests."
+ },
+ "stop-on-destroy": {
+  "pass": true,
+  "why": "The effect cleanup sets `cancelled = true` and clears the timer, and the wrapper's willDestroyElement unmounts the React root (deferred via setTimeout)."
+ },
+ "store-query": {
+  "pass": true,
+  "why": "The wrapper passes `session.currentUser.id` as userId and fetchUnreadCount calls `this.store.query('notification', { user, unread: true })`."
+ },
+ "on-read": {
+  "pass": true,
+  "why": "markAllRead calls `onRead(unread)` before `setUnread(0)`, and the wrapper forwards onRead to `this.onRead(count)`."
+ },
+ "classes": {
+  "pass": false,
+  "why": "The `bell` classes are rendered by React on an inner span inside the wrapper's own span (which has no classNames), and the message flags this DOM change, but the wrapper itself no longer carries `bell`/`bell--unread` so the original single-element structure is not preserved."
+ },
+ "no-silent-changes": {
+  "pass": false,
+  "why": "The `.drop()` concurrency semantics were silently removed and error handling was added (failed fetches are swallowed and retried), and the message mentions the error handling but never mentions the dropped concurrency; the polling order also changed (the interval no longer waits for the in-flight fetch in the same way)."
+ }
+}

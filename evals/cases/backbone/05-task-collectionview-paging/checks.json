@@ -1,0 +1,8 @@
+{ "checks": [
+ {"id":"collection-source","must":"React renders from the shared collection and its events (add/remove/change/sync), not a copied array."},
+ {"id":"paging","must":"Infinite scroll still fetches with {remove:false, data:{page}} into the same collection, throttled ~250 ms, near the bottom (200 px), and the scroll listener is removed on unmount."},
+ {"id":"filter-sort","must":"Archived tasks are hidden and rows are sorted by descending priority, re-sorting when priority changes."},
+ {"id":"empty","must":"Shows 'No open tasks' when nothing is visible (note: Marionette's emptyView considers the filter)."},
+ {"id":"tooltip","must":"Tooltips on the owner title are initialised and disposed per row (wrapped Bootstrap tooltip in effect with cleanup) or the replacement/loss is flagged."},
+ {"id":"no-silent-changes","must":"No unrequested behaviour changes; titles and owners still escaped."}
+]}

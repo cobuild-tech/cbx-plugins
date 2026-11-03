@@ -1,0 +1,8 @@
+{ "checks": [
+ {"id":"qp-through-router","must":"Changes to status/page/sort go through the Ember router (controller QP setters or router.transitionTo({queryParams})) so the URL and back button stay in sync; managing them only in React state or history.pushState fails."},
+ {"id":"refresh-model","must":"status/page changes still refetch (refreshModel) while sort does not refetch."},
+ {"id":"defaults","must":"Defaults status=open, page=1, sort=date are preserved (Ember omits default QPs from the URL)."},
+ {"id":"loading","must":"Loading state on refetch (orders-loading substate) is preserved or the change is flagged."},
+ {"id":"sort-semantics","must":"Sort keeps descending comparison semantics of the original."},
+ {"id":"no-silent-changes","must":"No unrequested behaviour changes without calling them out."}
+]}

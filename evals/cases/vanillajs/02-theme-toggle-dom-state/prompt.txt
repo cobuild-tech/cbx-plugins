@@ -1,0 +1,1 @@
+Turn the theme toggle (theme-toggle.js) into a React + TypeScript component under src/. Edit the repo and summarise.

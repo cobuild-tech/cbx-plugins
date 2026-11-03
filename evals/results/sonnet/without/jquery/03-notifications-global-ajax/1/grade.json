@@ -1,0 +1,26 @@
+{
+ "csrf": {
+  "pass": true,
+  "why": "The component calls global `$.post('/notifications/' + id + '/read')`, which goes through jQuery and inherits the `$.ajaxSetup` X-CSRF-Token header from global.js, as the message also explains."
+ },
+ "401-redirect": {
+  "pass": true,
+  "why": "Requests use `$.getJSON` and `$.post`, so the global `ajaxError` handler in global.js still redirects on 401, and the message states this."
+ },
+ "spinner": {
+  "pass": true,
+  "why": "Because the calls go through jQuery, the global ajaxStart/ajaxStop spinner handlers still fire, and the message notes the spinner is retained."
+ },
+ "cache-false": {
+  "pass": true,
+  "why": "GET uses `$.getJSON`, which still picks up `cache: false` from `$.ajaxSetup`, and the message says caching is still disabled."
+ },
+ "interval-cleanup": {
+  "pass": true,
+  "why": "The useEffect returns `() => clearInterval(timer)`, and the message confirms the interval is cleared on unmount."
+ },
+ "html-injection": {
+  "pass": true,
+  "why": "`n.html` is rendered via `dangerouslySetInnerHTML`, and the message notes it has the same trust model as before and that the server HTML must be trusted."
+ }
+}

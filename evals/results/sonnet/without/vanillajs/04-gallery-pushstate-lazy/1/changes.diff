@@ -1,0 +1,98 @@
+diff --git a/src/Gallery.tsx b/src/Gallery.tsx
+new file mode 100644
+index 0000000..60185b0
+--- /dev/null
++++ b/src/Gallery.tsx
+@@ -0,0 +1,92 @@
++import { useEffect, useRef, useState } from 'react';
++
++export interface Photo {
++  url: string;
++  title: string;
++  tags: string[];
++}
++
++declare global {
++  interface Window {
++    __PHOTOS__?: Photo[];
++  }
++}
++
++const FILTERS = [
++  { tag: 'all', label: 'All' },
++  { tag: 'cats', label: 'Cats' },
++  { tag: 'dogs', label: 'Dogs' },
++];
++
++const tagFromLocation = () =>
++  new URLSearchParams(window.location.search).get('tag') || 'all';
++
++function LazyImage({ src, alt }: { src: string; alt: string }) {
++  const ref = useRef<HTMLImageElement>(null);
++  const [visible, setVisible] = useState(false);
++
++  useEffect(() => {
++    const el = ref.current;
++    if (!el) return;
++    const io = new IntersectionObserver(
++      (entries) => {
++        if (entries.some((e) => e.isIntersecting)) {
++          setVisible(true);
++          io.disconnect();
++        }
++      },
++      { rootMargin: '300px' },
++    );
++    io.observe(el);
++    return () => io.disconnect();
++  }, []);
++
++  return <img ref={ref} className="lazy" alt={alt} src={visible ? src : undefined} />;
++}
++
++export interface GalleryProps {
++  photos?: Photo[];
++}
++
++export default function Gallery({ photos = window.__PHOTOS__ ?? [] }: GalleryProps) {
++  const [tag, setTag] = useState(tagFromLocation);
++
++  useEffect(() => {
++    const onPop = (e: PopStateEvent) => setTag(e.state?.tag || 'all');
++    window.addEventListener('popstate', onPop);
++    return () => window.removeEventListener('popstate', onPop);
++  }, []);
++
++  const select = (next: string) => {
++    history.pushState({ tag: next }, '', `?tag=${encodeURIComponent(next)}`);
++    setTag(next);
++  };
++
++  const visible = photos.filter((p) => tag === 'all' || p.tags.includes(tag));
++
++  return (
++    <>
++      <nav id="filters">
++        {FILTERS.map((f) => (
++          <button
++            key={f.tag}
++            data-tag={f.tag}
++            className={f.tag === tag ? 'active' : undefined}
++            onClick={() => select(f.tag)}
++          >
++            {f.label}
++          </button>
++        ))}
++      </nav>
++      <div id="grid">
++        {/* key includes tag so images re-lazy-load on filter change, as the original did */}
++        {visible.map((p) => (
++          <figure key={`${tag}:${p.url}`}>
++            <LazyImage src={p.url} alt={p.title} />
++            <figcaption>{p.title}</figcaption>
++          </figure>
++        ))}
++      </div>
++    </>
++  );
++}

@@ -1,0 +1,26 @@
+{
+ "no-double-handler": {
+  "pass": true,
+  "why": "The `<script src=\"/js/cart.js\">` tag is removed from cart.html, so the delegated jQuery handler no longer loads, and the message tells the user to `git rm` the file."
+ },
+ "csrf-kept": {
+  "pass": true,
+  "why": "The `fetch` in `Cart.tsx` explicitly sets `'X-CSRF-Token': csrfToken()` from the meta tag, and the message calls this out."
+ },
+ "event-kept": {
+  "pass": true,
+  "why": "`Cart.tsx` calls `window.jQuery?.(document).trigger('cart:updated', [total])` after mount, and the message explains that analytics.js depends on it."
+ },
+ "change-timing": {
+  "pass": true,
+  "why": "The message states 'The total now updates as you type in a quantity field, not only when the field loses focus.'"
+ },
+ "checkout-disabled": {
+  "pass": true,
+  "why": "The button renders with `disabled={total === 0}`."
+ },
+ "no-silent-changes": {
+  "pass": true,
+  "why": "The message calls out the dropped fade, per-keystroke updates, the `res.ok` check and the skipped initial emit, and the request format stays form-urlencoded, so no significant behavior change goes unmentioned."
+ }
+}

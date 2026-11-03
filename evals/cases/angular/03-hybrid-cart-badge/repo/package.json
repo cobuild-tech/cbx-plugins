@@ -1,0 +1,1 @@
+{ "name": "shop", "private": true, "dependencies": { "@angular/core": "^17.3.0", "@angular/upgrade": "^17.3.0", "angular": "1.8.3", "rxjs": "^7.8.0", "react": "^18.3.1", "react-dom": "^18.3.1" } }

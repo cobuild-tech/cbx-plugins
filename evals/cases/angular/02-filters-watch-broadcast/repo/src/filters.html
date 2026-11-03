@@ -1,0 +1,5 @@
+<div ng-controller="FiltersCtrl">
+  <input ng-model="filters.q" placeholder="Search">
+  <label ng-repeat="b in ['Acme','Globex','Initech']"><input type="checkbox" checklist-model="filters.brands" checklist-value="b">{{b}}</label>
+  <label><input type="checkbox" ng-model="filters.inStock"> In stock</label>
+</div>

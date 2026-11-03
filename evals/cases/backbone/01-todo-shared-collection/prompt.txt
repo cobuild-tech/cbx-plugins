@@ -1,0 +1,1 @@
+Port TodoListView to a React + TypeScript component (src/react/). SidebarView and the rest stay Backbone for now. Edit the repo and summarise.

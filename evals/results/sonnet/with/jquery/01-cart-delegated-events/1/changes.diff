@@ -1,0 +1,207 @@
+diff --git a/app/views/cart.html b/app/views/cart.html
+index 1b1ffae..cb2792b 100644
+--- a/app/views/cart.html
++++ b/app/views/cart.html
+@@ -1,11 +1,13 @@
+ <meta name="csrf-token" content="{{csrf}}">
++<div id="cart-root">
+ <table class="cart">
+   <tr data-id="11" data-price="4.50"><td>Pen</td><td><input class="qty" value="2"></td><td><a href="#" class="remove">Remove</a></td></tr>
+   <tr data-id="12" data-price="12.00"><td>Notebook</td><td><input class="qty" value="1"></td><td><a href="#" class="remove">Remove</a></td></tr>
+ </table>
+ <p>Total: <span id="total"></span></p>
+ <button id="checkout">Checkout</button>
++</div>
+ <script src="https://code.jquery.com/jquery-1.12.4.min.js"></script>
+ <script src="/js/setup.js"></script>
+-<script src="/js/cart.js"></script>
++<script src="/js/cart.bundle.js"></script>
+ <script src="/js/analytics.js"></script>
+diff --git a/package.json b/package.json
+index 2b17fd7..362b085 100644
+--- a/package.json
++++ b/package.json
+@@ -1 +1 @@
+-{ "name": "shop", "private": true, "dependencies": { "react": "^18.3.1", "react-dom": "^18.3.1" }, "devDependencies": { "typescript": "^5.4.0", "vite": "^5.2.0" } }
++{ "name": "shop", "private": true, "dependencies": { "react": "^18.3.1", "react-dom": "^18.3.1" }, "scripts": { "build": "vite build", "typecheck": "tsc" }, "devDependencies": { "@types/react": "^18.3.0", "@types/react-dom": "^18.3.0", "typescript": "^5.4.0", "vite": "^5.2.0" } }
+diff --git a/src/Cart.tsx b/src/Cart.tsx
+new file mode 100644
+index 0000000..004e767
+--- /dev/null
++++ b/src/Cart.tsx
+@@ -0,0 +1,119 @@
++import { useEffect, useRef, useState } from 'react';
++
++export interface CartRow {
++  id: string;
++  name: string;
++  price: number;
++  qty: string;
++}
++
++declare global {
++  interface Window {
++    jQuery: any;
++  }
++}
++
++const FADE_MS = 200;
++
++function csrfToken(): string {
++  return document.querySelector('meta[name=csrf-token]')?.getAttribute('content') ?? '';
++}
++
++// Mirrors $.post + the global $.ajaxSetup in setup.js (CSRF header, form encoding, XHR marker).
++async function postRemove(id: string): Promise<boolean> {
++  const res = await fetch('/cart/remove', {
++    method: 'POST',
++    credentials: 'same-origin',
++    headers: {
++      'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
++      'X-CSRF-Token': csrfToken(),
++      'X-Requested-With': 'XMLHttpRequest',
++    },
++    body: new URLSearchParams({ id }).toString(),
++  });
++  return res.ok;
++}
++
++export function Cart({ initialRows }: { initialRows: CartRow[] }) {
++  // committed = what updateTotal() saw (qty is committed on the input's "change", not per keystroke)
++  const [rows, setRows] = useState(initialRows);
++  const [drafts, setDrafts] = useState<Record<string, string>>({});
++  const [fading, setFading] = useState<Record<string, boolean>>({});
++  const [updates, setUpdates] = useState(0);
++
++  const total = rows.reduce((t, r) => t + r.price * +r.qty, 0);
++
++  // Legacy jQuery listeners (analytics.js) still consume 'cart:updated'.
++  // Skip the first run: originally the initial event fired before analytics.js was bound.
++  const first = useRef(true);
++  useEffect(() => {
++    if (first.current) {
++      first.current = false;
++      return;
++    }
++    window.jQuery(document).trigger('cart:updated', [total]);
++  }, [updates]); // eslint-disable-line react-hooks/exhaustive-deps
++
++  const commitQty = (id: string) => {
++    const draft = drafts[id];
++    if (draft === undefined) return;
++    setDrafts(({ [id]: _, ...rest }) => rest);
++    const row = rows.find((r) => r.id === id);
++    if (!row || row.qty === draft) return;
++    setRows((rs) => rs.map((r) => (r.id === id ? { ...r, qty: draft } : r)));
++    setUpdates((n) => n + 1);
++  };
++
++  const remove = (e: React.MouseEvent, id: string) => {
++    e.preventDefault();
++    postRemove(id)
++      .then((ok) => {
++        if (!ok) return;
++        setFading((f) => ({ ...f, [id]: true }));
++        setTimeout(() => {
++          setRows((rs) => rs.filter((r) => r.id !== id));
++          setUpdates((n) => n + 1);
++        }, FADE_MS);
++      })
++      .catch(() => {});
++  };
++
++  return (
++    <>
++      <table className="cart">
++        <tbody>
++          {rows.map((r) => (
++            <tr
++              key={r.id}
++              data-id={r.id}
++              data-price={r.price}
++              style={fading[r.id] ? { opacity: 0, transition: `opacity ${FADE_MS}ms linear` } : undefined}
++            >
++              <td>{r.name}</td>
++              <td>
++                <input
++                  className="qty"
++                  value={drafts[r.id] ?? r.qty}
++                  onChange={(e) => setDrafts((d) => ({ ...d, [r.id]: e.target.value }))}
++                  onBlur={() => commitQty(r.id)}
++                  onKeyDown={(e) => e.key === 'Enter' && commitQty(r.id)}
++                />
++              </td>
++              <td>
++                <a href="#" className="remove" onClick={(e) => remove(e, r.id)}>
++                  Remove
++                </a>
++              </td>
++            </tr>
++          ))}
++        </tbody>
++      </table>
++      <p>
++        Total: <span id="total">{total.toFixed(2)}</span>
++      </p>
++      <button id="checkout" disabled={total === 0}>
++        Checkout
++      </button>
++    </>
++  );
++}
+diff --git a/src/cart-main.tsx b/src/cart-main.tsx
+new file mode 100644
+index 0000000..158104d
+--- /dev/null
++++ b/src/cart-main.tsx
+@@ -0,0 +1,14 @@
++import { createRoot } from 'react-dom/client';
++import { Cart, CartRow } from './Cart';
++
++const root = document.getElementById('cart-root');
++if (root) {
++  // Rows are server-rendered into the page; read them before React replaces the markup.
++  const initialRows: CartRow[] = Array.from(root.querySelectorAll<HTMLElement>('.cart tr')).map((tr) => ({
++    id: tr.dataset.id ?? '',
++    name: tr.querySelector('td')?.textContent ?? '',
++    price: Number(tr.dataset.price),
++    qty: tr.querySelector<HTMLInputElement>('.qty')?.value ?? '',
++  }));
++  createRoot(root).render(<Cart initialRows={initialRows} />);
++}
+diff --git a/tsconfig.json b/tsconfig.json
+new file mode 100644
+index 0000000..5f586a5
+--- /dev/null
++++ b/tsconfig.json
+@@ -0,0 +1,13 @@
++{
++  "compilerOptions": {
++    "target": "ES2020",
++    "lib": ["ES2020", "DOM"],
++    "module": "ESNext",
++    "moduleResolution": "bundler",
++    "jsx": "react-jsx",
++    "strict": true,
++    "noEmit": true,
++    "skipLibCheck": true
++  },
++  "include": ["src", "vite.config.ts"]
++}
+diff --git a/vite.config.ts b/vite.config.ts
+new file mode 100644
+index 0000000..3003473
+--- /dev/null
++++ b/vite.config.ts
+@@ -0,0 +1,11 @@
++import { defineConfig } from 'vite';
++
++// Builds src/cart-main.tsx into a single script the jQuery page loads with a <script> tag.
++export default defineConfig({
++  define: { 'process.env.NODE_ENV': '"production"' },
++  build: {
++    outDir: 'public/js',
++    emptyOutDir: false,
++    lib: { entry: 'src/cart-main.tsx', formats: ['iife'], name: 'CartApp', fileName: () => 'cart.bundle.js' },
++  },
++});

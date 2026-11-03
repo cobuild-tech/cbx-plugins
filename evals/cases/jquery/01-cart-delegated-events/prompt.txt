@@ -1,0 +1,1 @@
+Convert the cart (public/js/cart.js and its markup) to a React component in TypeScript under src/. The rest of the site stays on jQuery for now. Make the changes in the repo and give me a short summary.

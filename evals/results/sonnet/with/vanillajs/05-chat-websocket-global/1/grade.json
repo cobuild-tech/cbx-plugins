@@ -1,0 +1,26 @@
+{
+ "global-api": {
+  "pass": false,
+  "why": "window.Chat is only assigned inside a useEffect after React mounts, so a macro click before mount throws, and the summary never flags this timing/load-order change."
+ },
+ "single-socket": {
+  "pass": true,
+  "why": "The effect creates one socket, StrictMode isn't used, and cleanup sets a per-effect `disposed` flag, clears the timer and closes the socket, so onclose skips reconnecting."
+ },
+ "backoff": {
+  "pass": true,
+  "why": "useChatSocket keeps `Math.min(30000, 1000 * Math.pow(2, retry++))` and resets `retry = 0` in onopen."
+ },
+ "queue": {
+  "pass": true,
+  "why": "send pushes to queueRef when the socket isn't OPEN, and onopen flushes it with `splice(0).forEach` in order."
+ },
+ "render": {
+  "pass": true,
+  "why": "Messages render as `<li>{m.user + ': ' + m.text}</li>` appended in order, and a useEffect on messages sets scrollTop to scrollHeight."
+ },
+ "no-silent-changes": {
+  "pass": true,
+  "why": "The summary calls out the new close-on-unmount, the window.Chat bridge, the empty-message behaviour and the index keys, and no other unflagged behaviour changes are evident."
+ }
+}

@@ -1,0 +1,140 @@
+diff --git a/package.json b/package.json
+index 6546857..6d28529 100644
+--- a/package.json
++++ b/package.json
+@@ -1 +1,15 @@
+-{ "name": "app", "private": true, "dependencies": { "react": "^18.3.1", "react-dom": "^18.3.1" } }
++{
++  "name": "app",
++  "private": true,
++  "scripts": {
++    "build": "esbuild src/notifications/index.tsx --bundle --minify --define:process.env.NODE_ENV=\\\"production\\\" --outfile=public/js/notifications.bundle.js",
++    "typecheck": "tsc"
++  },
++  "dependencies": { "react": "^18.3.1", "react-dom": "^18.3.1" },
++  "devDependencies": {
++    "@types/react": "^18.3.0",
++    "@types/react-dom": "^18.3.0",
++    "esbuild": "^0.24.0",
++    "typescript": "^5.6.0"
++  }
++}
+diff --git a/src/notifications/Notifications.tsx b/src/notifications/Notifications.tsx
+new file mode 100644
+index 0000000..1e5dd24
+--- /dev/null
++++ b/src/notifications/Notifications.tsx
+@@ -0,0 +1,71 @@
++import { useCallback, useEffect, useRef, useState } from 'react';
++
++interface ServerNotification {
++  id: number;
++  html: string;
++}
++
++interface Notification extends ServerNotification {
++  read: boolean;
++}
++
++// Network calls deliberately go through the global jQuery instance so the
++// behaviour set up in public/js/global.js (CSRF header, cache busting, spinner,
++// 401 -> /login redirect) keeps applying.
++interface JQueryStatic {
++  getJSON(
++    url: string,
++    data: Record<string, unknown>,
++    success: (items: ServerNotification[]) => void,
++  ): unknown;
++  post(url: string): unknown;
++}
++declare const $: JQueryStatic;
++
++const POLL_INTERVAL_MS = 15000;
++
++export function Notifications() {
++  const [items, setItems] = useState<Notification[]>([]);
++  const lastSeen = useRef(0);
++
++  const poll = useCallback(() => {
++    $.getJSON('/notifications', { since: lastSeen.current }, (incoming) => {
++      if (incoming.length === 0) return;
++      for (const n of incoming) lastSeen.current = Math.max(lastSeen.current, n.id);
++      // The original prepended each item in turn, so the last one ends up on top.
++      const fresh = incoming.map((n) => ({ ...n, read: false })).reverse();
++      setItems((prev) => [...fresh, ...prev]);
++    });
++  }, []);
++
++  useEffect(() => {
++    poll();
++    const timer = setInterval(poll, POLL_INTERVAL_MS);
++    return () => clearInterval(timer);
++  }, [poll]);
++
++  const markRead = (id: number) => {
++    $.post('/notifications/' + id + '/read');
++    setItems((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)));
++  };
++
++  return (
++    <>
++      <span id="notif-count" style={{ display: items.length > 0 ? undefined : 'none' }}>
++        {items.length}
++      </span>
++      <ul id="notif-list">
++        {items.map((n) => (
++          <li
++            key={n.id}
++            data-id={n.id}
++            className={n.read ? 'read' : undefined}
++            onClick={() => markRead(n.id)}
++            // Server-provided HTML, same trust model as the old string concatenation.
++            dangerouslySetInnerHTML={{ __html: n.html }}
++          />
++        ))}
++      </ul>
++    </>
++  );
++}
+diff --git a/src/notifications/index.tsx b/src/notifications/index.tsx
+new file mode 100644
+index 0000000..d8917c4
+--- /dev/null
++++ b/src/notifications/index.tsx
+@@ -0,0 +1,5 @@
++import { createRoot } from 'react-dom/client';
++import { Notifications } from './Notifications';
++
++const root = document.getElementById('notif-root');
++if (root) createRoot(root).render(<Notifications />);
+diff --git a/tsconfig.json b/tsconfig.json
+new file mode 100644
+index 0000000..189447a
+--- /dev/null
++++ b/tsconfig.json
+@@ -0,0 +1,12 @@
++{
++  "compilerOptions": {
++    "target": "ES2020",
++    "module": "ESNext",
++    "moduleResolution": "Bundler",
++    "jsx": "react-jsx",
++    "strict": true,
++    "noEmit": true,
++    "skipLibCheck": true
++  },
++  "include": ["src"]
++}
+diff --git a/views/layout.html b/views/layout.html
+index 04926a5..af1a6df 100644
+--- a/views/layout.html
++++ b/views/layout.html
+@@ -1,6 +1,6 @@
+ <meta name="csrf-token" content="{{csrf}}">
+ <div id="spinner" style="display:none">Loading…</div>
+-<span id="notif-count"></span><ul id="notif-list"></ul>
++<div id="notif-root"></div>
+ <script src="https://code.jquery.com/jquery-1.12.4.min.js"></script>
+ <script src="/js/global.js"></script>
+-<script src="/js/notifications.js"></script>
++<script src="/js/notifications.bundle.js"></script>

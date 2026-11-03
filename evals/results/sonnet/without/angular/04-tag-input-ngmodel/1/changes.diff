@@ -1,0 +1,131 @@
+diff --git a/package.json b/package.json
+index 3c5ac9f..53b0de0 100644
+--- a/package.json
++++ b/package.json
+@@ -1 +1 @@
+-{ "name": "app", "private": true, "dependencies": { "angular": "1.8.3", "react2angular": "^4.0.6", "react": "^18.3.1", "react-dom": "^18.3.1" } }
++{ "name": "app", "private": true, "dependencies": { "angular": "1.8.3", "react2angular": "^4.0.6", "react": "^18.3.1", "react-dom": "^18.3.1" }, "devDependencies": { "typescript": "^5.4.0", "@types/angular": "^1.8.9", "@types/react": "^18.3.0", "@types/react-dom": "^18.3.0" } }
+diff --git a/src/react/TagInput.tsx b/src/react/TagInput.tsx
+new file mode 100644
+index 0000000..656303d
+--- /dev/null
++++ b/src/react/TagInput.tsx
+@@ -0,0 +1,31 @@
++import React, { useState } from 'react';
++
++export interface TagInputProps {
++  value: string[];
++  onChange: (tags: string[]) => void;
++}
++
++export function TagInput({ value, onChange }: TagInputProps) {
++  const [draft, setDraft] = useState('');
++
++  const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
++    const text = draft.trim();
++    if (e.key === 'Enter' && text) {
++      e.preventDefault();
++      setDraft('');
++      onChange([...value, text]);
++    }
++  };
++
++  return (
++    <>
++      {value.map((t, i) => (
++        <span className="tag" key={`${t}-${i}`}>
++          {t}{' '}
++          <a onClick={() => onChange(value.filter((_, j) => j !== i))}>×</a>
++        </span>
++      ))}
++      <input value={draft} onChange={(e) => setDraft(e.target.value)} onKeyDown={onKeyDown} />
++    </>
++  );
++}
+diff --git a/src/react/tag-input.directive.tsx b/src/react/tag-input.directive.tsx
+new file mode 100644
+index 0000000..b6468ae
+--- /dev/null
++++ b/src/react/tag-input.directive.tsx
+@@ -0,0 +1,40 @@
++import React from 'react';
++import { createRoot } from 'react-dom/client';
++import { TagInput } from './TagInput';
++
++/**
++ * Thin AngularJS bridge: keeps <tag-input ng-model max required> working in
++ * contact-form.html (validators, $touched, $error) while rendering React.
++ */
++angular.module('crm').directive('tagInput', function () {
++  return {
++    require: 'ngModel',
++    restrict: 'E',
++    scope: { max: '<' },
++    link(scope: any, el: any, _attrs: any, ngModel: any) {
++      const root = createRoot(el[0]);
++
++      const render = () =>
++        root.render(
++          <TagInput
++            value={ngModel.$viewValue || []}
++            onChange={(tags) =>
++              scope.$apply(() => {
++                ngModel.$setViewValue(tags);
++                ngModel.$setTouched();
++                render();
++              })
++            }
++          />
++        );
++
++      ngModel.$render = render;
++      ngModel.$validators.maxTags = (v: string[] | undefined) => !v || v.length <= (scope.max || 5);
++      ngModel.$isEmpty = (v: string[] | undefined) => !v || v.length === 0;
++
++      scope.$watch('max', () => ngModel.$validate());
++      scope.$on('$destroy', () => root.unmount());
++      render();
++    },
++  };
++});
+diff --git a/src/tag-input.directive.js b/src/tag-input.directive.js
+index c1c2fef..95aea00 100644
+--- a/src/tag-input.directive.js
++++ b/src/tag-input.directive.js
+@@ -1,16 +1 @@
+-angular.module('crm').directive('tagInput', function () {
+-  return {
+-    require: 'ngModel', restrict: 'E', scope: { max: '<' },
+-    template: '<span class="tag" ng-repeat="t in tags">{{t}} <a ng-click="remove($index)">×</a></span><input ng-keydown="key($event)">',
+-    link: function (scope, el, attrs, ngModel) {
+-      ngModel.$render = function () { scope.tags = (ngModel.$viewValue || []).slice(); };
+-      ngModel.$validators.maxTags = function (v) { return !v || v.length <= (scope.max || 5); };
+-      ngModel.$isEmpty = function (v) { return !v || v.length === 0; };
+-      function commit() { ngModel.$setViewValue(scope.tags.slice()); ngModel.$setTouched(); }
+-      scope.key = function (e) {
+-        if (e.key === 'Enter' && e.target.value.trim()) { e.preventDefault(); scope.tags.push(e.target.value.trim()); e.target.value = ''; commit(); }
+-      };
+-      scope.remove = function (i) { scope.tags.splice(i, 1); commit(); };
+-    }
+-  };
+-});
++// Superseded by src/react/tag-input.directive.tsx (React implementation). Safe to delete.
+diff --git a/tsconfig.json b/tsconfig.json
+new file mode 100644
+index 0000000..09f9983
+--- /dev/null
++++ b/tsconfig.json
+@@ -0,0 +1,13 @@
++{
++  "compilerOptions": {
++    "target": "ES2020",
++    "module": "ESNext",
++    "moduleResolution": "Bundler",
++    "jsx": "react-jsx",
++    "strict": true,
++    "noEmit": true,
++    "esModuleInterop": true,
++    "skipLibCheck": true
++  },
++  "include": ["src/react"]
++}

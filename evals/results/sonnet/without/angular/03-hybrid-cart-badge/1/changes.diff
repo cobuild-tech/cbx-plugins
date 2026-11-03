@@ -1,0 +1,110 @@
+diff --git a/src/app/app.module.ts b/src/app/app.module.ts
+index 4fec7e7..4145a5f 100644
+--- a/src/app/app.module.ts
++++ b/src/app/app.module.ts
+@@ -1,11 +1,10 @@
+ import { NgModule } from '@angular/core';
+ import { BrowserModule } from '@angular/platform-browser';
+-import { UpgradeModule, downgradeComponent, downgradeInjectable } from '@angular/upgrade/static';
+-import { CartBadgeComponent } from './cart-badge.component';
++import { UpgradeModule, downgradeInjectable } from '@angular/upgrade/static';
+ import { CartService } from './cart.service';
++import '../react/cart-badge.directive';
+ declare const angular: any;
+ angular.module('shop')
+-  .directive('cartBadge', downgradeComponent({ component: CartBadgeComponent }))
+   .factory('cartService', downgradeInjectable(CartService));
+-@NgModule({ imports: [BrowserModule, UpgradeModule], declarations: [CartBadgeComponent] })
++@NgModule({ imports: [BrowserModule, UpgradeModule] })
+ export class AppModule { constructor(private upgrade: UpgradeModule) {} ngDoBootstrap() { this.upgrade.bootstrap(document.body, ['shop']); } }
+diff --git a/src/app/cart-badge.component.ts b/src/app/cart-badge.component.ts
+index ec102be..e69de29 100644
+--- a/src/app/cart-badge.component.ts
++++ b/src/app/cart-badge.component.ts
+@@ -1,13 +0,0 @@
+-import { Component, OnDestroy, OnInit } from '@angular/core';
+-import { Subscription } from 'rxjs';
+-import { CartService } from './cart.service';
+-@Component({
+-  selector: 'cart-badge',
+-  template: `<a href="/cart" class="badge" [class.empty]="count === 0">{{ count }}</a>`
+-})
+-export class CartBadgeComponent implements OnInit, OnDestroy {
+-  count = 0; private sub?: Subscription;
+-  constructor(private cart: CartService) {}
+-  ngOnInit() { this.sub = this.cart.count$.subscribe(c => (this.count = c)); }
+-  ngOnDestroy() { this.sub?.unsubscribe(); }
+-}
+diff --git a/src/app/cart.service.ts b/src/app/cart.service.ts
+index 3a0ac66..d93588a 100644
+--- a/src/app/cart.service.ts
++++ b/src/app/cart.service.ts
+@@ -1,9 +1,11 @@
+ import { Injectable } from '@angular/core';
+-import { BehaviorSubject } from 'rxjs';
++import { BehaviorSubject, map } from 'rxjs';
+ @Injectable({ providedIn: 'root' })
+ export class CartService {
+   private items$ = new BehaviorSubject<{ sku: string; qty: number }[]>([]);
+-  readonly count$ = this.items$.pipe(/* map to total qty */);
++  readonly count$ = this.items$.pipe(
++    map(items => items.reduce((n, i) => n + i.qty, 0))
++  );
+   add(sku: string) { const cur = this.items$.value; this.items$.next([...cur, { sku, qty: 1 }]); }
+   snapshot() { return this.items$.value; }
+ }
+diff --git a/src/react/CartBadge.tsx b/src/react/CartBadge.tsx
+new file mode 100644
+index 0000000..0b103a2
+--- /dev/null
++++ b/src/react/CartBadge.tsx
+@@ -0,0 +1,21 @@
++import React, { useEffect, useState } from 'react';
++import type { Observable } from 'rxjs';
++
++export interface CartBadgeProps {
++  count$: Observable<number>;
++}
++
++export function CartBadge({ count$ }: CartBadgeProps) {
++  const [count, setCount] = useState(0);
++
++  useEffect(() => {
++    const sub = count$.subscribe(setCount);
++    return () => sub.unsubscribe();
++  }, [count$]);
++
++  return (
++    <a href="/cart" className={count === 0 ? 'badge empty' : 'badge'}>
++      {count}
++    </a>
++  );
++}
+diff --git a/src/react/cart-badge.directive.tsx b/src/react/cart-badge.directive.tsx
+new file mode 100644
+index 0000000..d428601
+--- /dev/null
++++ b/src/react/cart-badge.directive.tsx
+@@ -0,0 +1,22 @@
++import React from 'react';
++import { createRoot } from 'react-dom/client';
++import type { CartService } from '../app/cart.service';
++import { CartBadge } from './CartBadge';
++
++declare const angular: any;
++
++/**
++ * AngularJS directive that hosts the React CartBadge, so the existing
++ * `<cart-badge></cart-badge>` markup in the legacy header keeps working.
++ */
++angular.module('shop').directive('cartBadge', [
++  'cartService',
++  (cartService: CartService) => ({
++    restrict: 'E',
++    link(_scope: unknown, element: any) {
++      const root = createRoot(element[0]);
++      root.render(<CartBadge count$={cartService.count$} />);
++      element.on('$destroy', () => root.unmount());
++    },
++  }),
++]);

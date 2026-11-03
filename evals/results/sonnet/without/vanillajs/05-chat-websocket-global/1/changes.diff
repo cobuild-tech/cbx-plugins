@@ -1,0 +1,171 @@
+diff --git a/index.html b/index.html
+index 5f29fb6..10914cb 100644
+--- a/index.html
++++ b/index.html
+@@ -1,3 +1,3 @@
+-<ul id="chat-log"></ul><form id="chat-form"><input name="msg"><button>Send</button></form>
++<div id="chat-root"></div>
+ <button data-macro="Can you share a screenshot?">Ask for screenshot</button>
+-<script src="chat.js"></script><script src="support-macros.js"></script>
++<script type="module" src="/src/main.tsx"></script><script src="support-macros.js"></script>
+diff --git a/package.json b/package.json
+index 4315403..e23f07b 100644
+--- a/package.json
++++ b/package.json
+@@ -1 +1,12 @@
+-{ "name": "app", "private": true, "dependencies": { "vite": "^5.2.0", "react": "^18.3.1", "react-dom": "^18.3.1" } }
++{
++  "name": "app",
++  "private": true,
++  "scripts": { "dev": "vite", "build": "tsc --noEmit && vite build" },
++  "dependencies": { "vite": "^5.2.0", "react": "^18.3.1", "react-dom": "^18.3.1" },
++  "devDependencies": {
++    "@types/react": "^18.3.3",
++    "@types/react-dom": "^18.3.0",
++    "@vitejs/plugin-react": "^4.3.0",
++    "typescript": "^5.4.0"
++  }
++}
+diff --git a/src/Chat.tsx b/src/Chat.tsx
+new file mode 100644
+index 0000000..352e709
+--- /dev/null
++++ b/src/Chat.tsx
+@@ -0,0 +1,92 @@
++import { FormEvent, useCallback, useEffect, useRef, useState } from 'react';
++
++interface ChatMessage {
++  user: string;
++  text: string;
++}
++
++declare global {
++  interface Window {
++    Chat?: { send: (text: string) => void };
++  }
++}
++
++const MAX_RETRY_DELAY_MS = 30000;
++
++export function Chat() {
++  const [messages, setMessages] = useState<ChatMessage[]>([]);
++  const [draft, setDraft] = useState('');
++  const logRef = useRef<HTMLUListElement>(null);
++  const wsRef = useRef<WebSocket | null>(null);
++  const queueRef = useRef<string[]>([]);
++
++  const send = useCallback((text: string) => {
++    const payload = JSON.stringify({ text });
++    const ws = wsRef.current;
++    if (ws && ws.readyState === WebSocket.OPEN) ws.send(payload);
++    else queueRef.current.push(payload);
++  }, []);
++
++  useEffect(() => {
++    let retry = 0;
++    let timer: ReturnType<typeof setTimeout> | undefined;
++    let disposed = false;
++
++    function connect() {
++      const ws = new WebSocket(`wss://${location.host}/chat`);
++      wsRef.current = ws;
++      ws.onopen = () => {
++        retry = 0;
++        queueRef.current.splice(0).forEach((m) => ws.send(m));
++      };
++      ws.onmessage = (e) => {
++        const m = JSON.parse(e.data) as ChatMessage;
++        setMessages((prev) => [...prev, { user: m.user, text: m.text }]);
++      };
++      ws.onclose = () => {
++        if (disposed) return;
++        timer = setTimeout(connect, Math.min(MAX_RETRY_DELAY_MS, 1000 * 2 ** retry++));
++      };
++    }
++
++    connect();
++    // Used by support-macros.js
++    window.Chat = { send };
++
++    return () => {
++      disposed = true;
++      clearTimeout(timer);
++      wsRef.current?.close();
++      wsRef.current = null;
++      delete window.Chat;
++    };
++  }, [send]);
++
++  // Keep the log scrolled to the newest message.
++  useEffect(() => {
++    const log = logRef.current;
++    if (log) log.scrollTop = log.scrollHeight;
++  }, [messages]);
++
++  function onSubmit(e: FormEvent<HTMLFormElement>) {
++    e.preventDefault();
++    send(draft);
++    setDraft('');
++  }
++
++  return (
++    <>
++      <ul id="chat-log" ref={logRef}>
++        {messages.map((m, i) => (
++          <li key={i}>
++            {m.user}: {m.text}
++          </li>
++        ))}
++      </ul>
++      <form id="chat-form" onSubmit={onSubmit}>
++        <input name="msg" value={draft} onChange={(e) => setDraft(e.target.value)} />
++        <button>Send</button>
++      </form>
++    </>
++  );
++}
+diff --git a/src/main.tsx b/src/main.tsx
+new file mode 100644
+index 0000000..7af88d9
+--- /dev/null
++++ b/src/main.tsx
+@@ -0,0 +1,9 @@
++import { StrictMode } from 'react';
++import { createRoot } from 'react-dom/client';
++import { Chat } from './Chat';
++
++createRoot(document.getElementById('chat-root')!).render(
++  <StrictMode>
++    <Chat />
++  </StrictMode>,
++);
+diff --git a/tsconfig.json b/tsconfig.json
+new file mode 100644
+index 0000000..2eeb3dd
+--- /dev/null
++++ b/tsconfig.json
+@@ -0,0 +1,14 @@
++{
++  "compilerOptions": {
++    "target": "ES2020",
++    "lib": ["ES2020", "DOM", "DOM.Iterable"],
++    "module": "ESNext",
++    "moduleResolution": "bundler",
++    "jsx": "react-jsx",
++    "strict": true,
++    "noEmit": true,
++    "skipLibCheck": true,
++    "isolatedModules": true
++  },
++  "include": ["src", "vite.config.ts"]
++}
+diff --git a/vite.config.ts b/vite.config.ts
+new file mode 100644
+index 0000000..56f7628
+--- /dev/null
++++ b/vite.config.ts
+@@ -0,0 +1,4 @@
++import { defineConfig } from 'vite';
++import react from '@vitejs/plugin-react';
++
++export default defineConfig({ plugins: [react()] });

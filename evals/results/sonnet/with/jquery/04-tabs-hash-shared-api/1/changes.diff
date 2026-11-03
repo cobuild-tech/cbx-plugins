@@ -1,0 +1,224 @@
+diff --git a/package.json b/package.json
+index a30bb5e..074cca2 100644
+--- a/package.json
++++ b/package.json
+@@ -1 +1,15 @@
+-{ "name": "account", "private": true, "dependencies": { "react": "^18.3.1", "react-dom": "^18.3.1" } }
++{
++  "name": "account",
++  "private": true,
++  "scripts": {
++    "build": "esbuild src/accountTabs.tsx --bundle --minify --define:process.env.NODE_ENV=\\\"production\\\" --outfile=public/js/dist/account-tabs.js",
++    "typecheck": "tsc"
++  },
++  "dependencies": { "react": "^18.3.1", "react-dom": "^18.3.1" },
++  "devDependencies": {
++    "@types/react": "^18.3.0",
++    "@types/react-dom": "^18.3.0",
++    "esbuild": "^0.25.0",
++    "typescript": "^5.6.0"
++  }
++}
+diff --git a/public/js/help-widget.js b/public/js/help-widget.js
+index 585f180..339e4ae 100644
+--- a/public/js/help-widget.js
++++ b/public/js/help-widget.js
+@@ -1,2 +1,3 @@
+ // Third-party help widget: asks which tab is open to pick an article.
+-window.HelpWidget = { context: function () { return ['profile', 'billing', 'security'][$('#tabs').tabs('option', 'active')]; } };
++// Tabs are now React-rendered; the active <li> carries .ui-tabs-active (was: $('#tabs').tabs('option', 'active')).
++window.HelpWidget = { context: function () { return ['profile', 'billing', 'security'][$('#tabs > ul > .ui-tabs-active').index()]; } };
+diff --git a/src/Tabs.tsx b/src/Tabs.tsx
+new file mode 100644
+index 0000000..378652f
+--- /dev/null
++++ b/src/Tabs.tsx
+@@ -0,0 +1,119 @@
++import { useLayoutEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react';
++import { flushSync } from 'react-dom';
++
++export interface TabDef {
++  id: string;
++  label: string;
++}
++
++interface Props {
++  tabs: TabDef[];
++  /** Value of location.hash at load time; selects the initial tab. */
++  initialHash: string;
++}
++
++declare global {
++  interface Window {
++    jQuery?: (target: Document) => { trigger(event: string, args: unknown[]): void };
++  }
++}
++
++/**
++ * Renders the tab <li> items only. The panels (#profile, #billing, ...) stay
++ * server-rendered and jQuery-owned (billing.js does `$('#billing').load(...)`),
++ * so this component only toggles their visibility/ARIA attributes and never
++ * renders into them.
++ */
++export function Tabs({ tabs, initialHash }: Props) {
++  const [active, setActive] = useState(() =>
++    Math.max(0, tabs.findIndex((t) => '#' + t.id === initialHash)),
++  );
++  const items = useRef<(HTMLLIElement | null)[]>([]);
++
++  // Show the active panel, hide the rest (what jQuery UI did synchronously).
++  useLayoutEffect(() => {
++    tabs.forEach((tab, i) => {
++      const panel = document.getElementById(tab.id);
++      if (!panel) return;
++      const on = i === active;
++      panel.classList.add('ui-tabs-panel');
++      panel.setAttribute('role', 'tabpanel');
++      panel.setAttribute('aria-labelledby', 'tab-' + tab.id);
++      panel.setAttribute('aria-hidden', String(!on));
++      panel.style.display = on ? '' : 'none';
++    });
++  }, [active, tabs]);
++
++  function activate(next: number, focus: boolean) {
++    if (focus) items.current[next]?.focus();
++    if (next === active) return; // jQuery UI fires no `activate` for the current tab
++    flushSync(() => setActive(next)); // panels are switched before listeners run
++    history.replaceState(null, '', '#' + tabs[next].id);
++    window.jQuery?.(document).trigger('account:tab', [tabs[next].id]);
++  }
++
++  function onKeyDown(e: KeyboardEvent, i: number) {
++    const last = tabs.length - 1;
++    let next: number;
++    switch (e.key) {
++      case 'ArrowRight':
++      case 'ArrowDown':
++        next = i === last ? 0 : i + 1;
++        break;
++      case 'ArrowLeft':
++      case 'ArrowUp':
++        next = i === 0 ? last : i - 1;
++        break;
++      case 'Home':
++        next = 0;
++        break;
++      case 'End':
++        next = last;
++        break;
++      case 'Enter':
++      case ' ':
++        next = i;
++        break;
++      default:
++        return;
++    }
++    e.preventDefault();
++    activate(next, true);
++  }
++
++  return (
++    <>
++      {tabs.map((tab, i) => {
++        const on = i === active;
++        return (
++          <li
++            key={tab.id}
++            ref={(el) => {
++              items.current[i] = el;
++            }}
++            className={'ui-tabs-tab' + (on ? ' ui-tabs-active' : '')}
++            role="tab"
++            tabIndex={on ? 0 : -1}
++            aria-controls={tab.id}
++            aria-selected={on}
++            onKeyDown={(e) => onKeyDown(e, i)}
++          >
++            <a
++              id={'tab-' + tab.id}
++              className="ui-tabs-anchor"
++              href={'#' + tab.id}
++              role="presentation"
++              tabIndex={-1}
++              onClick={(e: MouseEvent) => {
++                e.preventDefault();
++                activate(i, false);
++              }}
++            >
++              {tab.label}
++            </a>
++          </li>
++        );
++      })}
++    </>
++  );
++}
+diff --git a/src/accountTabs.tsx b/src/accountTabs.tsx
+new file mode 100644
+index 0000000..be993d4
+--- /dev/null
++++ b/src/accountTabs.tsx
+@@ -0,0 +1,31 @@
++import { StrictMode } from 'react';
++import { flushSync } from 'react-dom';
++import { createRoot } from 'react-dom/client';
++import { Tabs, type TabDef } from './Tabs';
++
++// Entry point for the account page. Replaces public/js/tabs.js.
++const wrapper = document.getElementById('tabs');
++const nav = wrapper?.querySelector(':scope > ul');
++
++if (wrapper && nav) {
++  // The server-rendered <ul><li><a href="#id"> list is the source of truth.
++  const tabs: TabDef[] = Array.from(nav.querySelectorAll('a')).map((a) => ({
++    id: (a.getAttribute('href') ?? '').slice(1),
++    label: a.textContent ?? '',
++  }));
++
++  wrapper.classList.add('ui-tabs');
++  nav.classList.add('ui-tabs-nav');
++  nav.setAttribute('role', 'tablist');
++
++  // Mount on the existing <ul> so markup/CSS stay unchanged. Render
++  // synchronously so there is no flash of all panels before the first paint.
++  const root = createRoot(nav);
++  flushSync(() =>
++    root.render(
++      <StrictMode>
++        <Tabs tabs={tabs} initialHash={location.hash} />
++      </StrictMode>,
++    ),
++  );
++}
+diff --git a/tsconfig.json b/tsconfig.json
+new file mode 100644
+index 0000000..1477cd0
+--- /dev/null
++++ b/tsconfig.json
+@@ -0,0 +1,13 @@
++{
++  "compilerOptions": {
++    "target": "ES2020",
++    "module": "ESNext",
++    "moduleResolution": "Bundler",
++    "jsx": "react-jsx",
++    "strict": true,
++    "noEmit": true,
++    "skipLibCheck": true,
++    "lib": ["ES2020", "DOM", "DOM.Iterable"]
++  },
++  "include": ["src"]
++}
+diff --git a/views/account.html b/views/account.html
+index 7853cf5..ad4fe2c 100644
+--- a/views/account.html
++++ b/views/account.html
+@@ -3,7 +3,6 @@
+   <div id="profile">…</div><div id="billing">…</div><div id="security">…</div>
+ </div>
+ <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+-<script src="https://code.jquery.com/ui/1.13.2/jquery-ui.min.js"></script>
+-<script src="/js/tabs.js"></script>
++<script src="/js/dist/account-tabs.js"></script>
+ <script src="/js/billing.js"></script>
+ <script src="/js/help-widget.js"></script>

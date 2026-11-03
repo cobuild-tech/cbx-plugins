@@ -1,0 +1,8 @@
+{ "checks": [
+ {"id":"app-queue","must":"The inline App.q queue and App.checkout.prefill public API keep working (queued calls run after mount, later pushes run immediately), or the breakage is explicitly flagged and the inline script updated."},
+ {"id":"prefill-semantics","must":"prefill only fills empty fields and draft restore happens before queued prefill as before (or ordering difference flagged)."},
+ {"id":"no-card-draft","must":"The draft saved to sessionStorage still excludes the card number."},
+ {"id":"double-submit","must":"Pay button disabled while submitting; re-enabled on failure; draft cleared on success."},
+ {"id":"tracking-event","must":"'checkout:submit' document event is still dispatched for tracking.js."},
+ {"id":"no-silent-changes","must":"No unrequested behaviour changes without calling them out."}
+]}

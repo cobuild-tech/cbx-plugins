@@ -1,0 +1,118 @@
+diff --git a/src/react/NewItemForm.tsx b/src/react/NewItemForm.tsx
+new file mode 100644
+index 0000000..4d085a9
+--- /dev/null
++++ b/src/react/NewItemForm.tsx
+@@ -0,0 +1,38 @@
++import { useState, type FormEvent } from 'react';
++import type { Collection, Model } from 'backbone';
++
++export interface NewItemFormProps {
++  /** The shared app.items instance (not copied; saved to via create). */
++  collection: Collection<Model>;
++  /** Called after a successful, server-confirmed create. */
++  onSaved: (model: Model) => void;
++}
++
++/** Same markup as the old Backbone template: form.new-item > input, input, button, p.err */
++export function NewItemForm({ collection, onSaved }: NewItemFormProps) {
++  const [name, setName] = useState('');
++  const [qty, setQty] = useState('1');
++  const [err, setErr] = useState('');
++
++  const onSubmit = (e: FormEvent<HTMLFormElement>) => {
++    e.preventDefault();
++    collection.create(
++      { name, qty: +qty },
++      {
++        wait: true,
++        success: (m: Model) => onSaved(m),
++        error: (_m: Model, xhr: JQuery.jqXHR) =>
++          setErr(((xhr.responseJSON && xhr.responseJSON.errors) || []).join(', ')),
++      },
++    );
++  };
++
++  return (
++    <form className="new-item" onSubmit={onSubmit}>
++      <input name="name" value={name} onChange={(e) => setName(e.target.value)} />
++      <input name="qty" type="number" value={qty} onChange={(e) => setQty(e.target.value)} />
++      <button>Add</button>
++      <p className="err">{err}</p>
++    </form>
++  );
++}
+diff --git a/src/react/NewItemView.tsx b/src/react/NewItemView.tsx
+new file mode 100644
+index 0000000..465590b
+--- /dev/null
++++ b/src/react/NewItemView.tsx
+@@ -0,0 +1,36 @@
++import Backbone from 'backbone';
++import { createRoot, type Root } from 'react-dom/client';
++import { NewItemForm } from './NewItemForm';
++
++declare const app: { NewItemView: unknown };
++
++/**
++ * Temporary Backbone shell so ItemsPage keeps working unchanged:
++ * same constructor options, render() returning this, 'saved' event, remove().
++ * Delete once ItemsPage is React.
++ */
++export class NewItemView extends Backbone.View {
++  private root: Root | null = null;
++
++  render() {
++    this.root ??= createRoot(this.el);
++    this.root.render(
++      <NewItemForm
++        collection={this.collection}
++        onSaved={(m) => {
++          this.trigger('saved', m);
++          Backbone.history.navigate('items/' + m.id, { trigger: true });
++        }}
++      />,
++    );
++    return this;
++  }
++
++  remove() {
++    this.root?.unmount();
++    this.root = null;
++    return super.remove();
++  }
++}
++
++app.NewItemView = NewItemView;
+diff --git a/src/views/items-page.js b/src/views/items-page.js
+index b529257..8062487 100644
+--- a/src/views/items-page.js
++++ b/src/views/items-page.js
+@@ -1,4 +1,5 @@
+ app.ItemsPage = Backbone.View.extend({
++  // NewItemView now lives in src/react/NewItemView.tsx (same API).
+   initialize: function () {
+     this.form = new app.NewItemView({ collection: app.items });
+     this.listenTo(this.form, 'saved', function (m) { app.toast('Added ' + m.get('name')); app.stats.increment('items'); });
+diff --git a/src/views/new-item.js b/src/views/new-item.js
+index 788bc83..9ab3644 100644
+--- a/src/views/new-item.js
++++ b/src/views/new-item.js
+@@ -1,15 +1,2 @@
+-app.NewItemView = Backbone.View.extend({
+-  tagName: 'form', className: 'new-item',
+-  template: _.template('<input name="name"><input name="qty" type="number" value="1"><button>Add</button><p class="err"></p>'),
+-  events: { submit: 'onSubmit' },
+-  render: function () { this.$el.html(this.template()); return this; },
+-  onSubmit: function (e) {
+-    e.preventDefault();
+-    var self = this;
+-    this.collection.create({ name: this.$('[name=name]').val(), qty: +this.$('[name=qty]').val() }, {
+-      wait: true,
+-      success: function (m) { self.trigger('saved', m); Backbone.history.navigate('items/' + m.id, { trigger: true }); },
+-      error: function (m, xhr) { self.$('.err').text((xhr.responseJSON && xhr.responseJSON.errors || []).join(', ')); }
+-    });
+-  }
+-});
++// NewItemView moved to src/react/NewItemView.tsx (React form + thin Backbone shell).
++// Rollback: `git checkout 33d402f -- src/views/new-item.js` and drop src/react/NewItem*.

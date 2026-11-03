@@ -1,6 +1,6 @@
 {
   "name": "angular-to-react",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "description": "Convert Angular / AngularJS code to React. Paste an Angular component in any Claude app and get the React version, or plan and run a full incremental migration of your repo in Claude Code.",
   "author": {
     "name": "CobuildX",

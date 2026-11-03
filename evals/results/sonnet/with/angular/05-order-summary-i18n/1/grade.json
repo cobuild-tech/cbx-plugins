@@ -1,0 +1,26 @@
+{
+ "translations": {
+  "pass": true,
+  "why": "The wrapper passes `(key, params) => this.translate.instant(key, params)` into React, so the same ngx-translate keys and de.json are used with no hard-coded strings."
+ },
+ "lang-change": {
+  "pass": true,
+  "why": "The wrapper merges onLangChange, onTranslationChange and onDefaultLangChange into a subscription that re-renders, and ngOnDestroy unsubscribes it."
+ },
+ "locale-format": {
+  "pass": true,
+  "why": "React formats with Intl using the LOCALE_ID passed from the wrapper (de-DE), and the summary flags that output wasn't compared to Angular's pipes and that unusual currencies and date formats need checking."
+ },
+ "input-updates": {
+  "pass": true,
+  "why": "ngOnChanges calls render() to push new order values, and OrderSummary returns null when order is null, handling the initial async null."
+ },
+ "teardown": {
+  "pass": true,
+  "why": "ngOnDestroy calls this.root?.unmount() and sets root to null."
+ },
+ "no-silent-changes": {
+  "pass": true,
+  "why": "The summary calls out the null-order handling, the Intl-for-pipes swap, the local-date parsing, the change-detection/zone behaviour, the added @types devDependencies and the JSX build requirement."
+ }
+}

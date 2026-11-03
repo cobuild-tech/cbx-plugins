@@ -1,0 +1,1 @@
+Rebuild the checkout form (checkout.js) as a React + TypeScript component in src/. Edit the repo and summarise.

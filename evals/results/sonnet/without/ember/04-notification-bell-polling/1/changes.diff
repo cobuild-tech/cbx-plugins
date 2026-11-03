@@ -1,0 +1,135 @@
+diff --git a/app/components/notification-bell.js b/app/components/notification-bell.js
+index b43558d..d7bf75d 100644
+--- a/app/components/notification-bell.js
++++ b/app/components/notification-bell.js
+@@ -1,19 +1,45 @@
+ import Component from '@ember/component';
+ import { inject as service } from '@ember/service';
+-import { task, timeout } from 'ember-concurrency';
+ import Ember from 'ember';
++import React from 'react';
++import { createRoot } from 'react-dom/client';
++import NotificationBell from '../react/NotificationBell';
++
++// Thin Ember wrapper that mounts the React NotificationBell.
+ export default Component.extend({
+-  tagName: 'span', classNames: ['bell'], classNameBindings: ['hasUnread:bell--unread'],
+-  session: service(), store: service(),
+-  unread: 0,
+-  hasUnread: Ember.computed.gt('unread', 0),
+-  didInsertElement() { this._super(...arguments); this.poll.perform(); },
+-  poll: task(function* () {
+-    do {
+-      const r = yield this.store.query('notification', { user: this.get('session.currentUser.id'), unread: true });
+-      this.set('unread', r.get('length'));
+-      yield timeout(20000);
+-    } while (!Ember.testing); // tests run one iteration only, or settled() would never resolve
+-  }).drop(),
+-  actions: { markAllRead() { this.onRead(this.unread); this.set('unread', 0); } }
++  tagName: 'span',
++  session: service(),
++  store: service(),
++
++  didInsertElement() {
++    this._super(...arguments);
++    this._root = createRoot(this.element);
++    this._render();
++  },
++
++  didUpdateAttrs() {
++    this._super(...arguments);
++    this._render();
++  },
++
++  willDestroyElement() {
++    this._super(...arguments);
++    const root = this._root;
++    this._root = null;
++    // defer: unmounting synchronously during Ember's render cycle warns in React
++    if (root) setTimeout(() => root.unmount(), 0);
++  },
++
++  _render() {
++    if (!this._root) return;
++    this._root.render(
++      React.createElement(NotificationBell, {
++        userId: this.get('session.currentUser.id'),
++        fetchUnreadCount: (user) =>
++          this.store.query('notification', { user, unread: true }).then((r) => r.get('length')),
++        onRead: (count) => this.onRead(count),
++        once: Ember.testing,
++      })
++    );
++  },
+ });
+diff --git a/app/react/NotificationBell.tsx b/app/react/NotificationBell.tsx
+new file mode 100644
+index 0000000..854ae95
+--- /dev/null
++++ b/app/react/NotificationBell.tsx
+@@ -0,0 +1,59 @@
++import React, { useCallback, useEffect, useRef, useState } from 'react';
++
++export interface NotificationBellProps {
++  userId: string | null | undefined;
++  /** Resolves to the number of unread notifications for the user. */
++  fetchUnreadCount: (userId: string | null | undefined) => Promise<number>;
++  /** Called with the unread count when the user marks all as read. */
++  onRead: (count: number) => void;
++  pollIntervalMs?: number;
++  /** Poll once only (tests: otherwise settled() would never resolve). */
++  once?: boolean;
++}
++
++export default function NotificationBell({
++  userId,
++  fetchUnreadCount,
++  onRead,
++  pollIntervalMs = 20000,
++  once = false,
++}: NotificationBellProps) {
++  const [unread, setUnread] = useState(0);
++  const fetchRef = useRef(fetchUnreadCount);
++  fetchRef.current = fetchUnreadCount;
++
++  useEffect(() => {
++    let cancelled = false;
++    let timer: ReturnType<typeof setTimeout> | undefined;
++
++    const tick = async () => {
++      try {
++        const count = await fetchRef.current(userId);
++        if (cancelled) return;
++        setUnread(count);
++      } catch {
++        // keep the previous count and retry on the next tick
++      }
++      if (!cancelled && !once) timer = setTimeout(tick, pollIntervalMs);
++    };
++    tick();
++
++    return () => {
++      cancelled = true;
++      if (timer) clearTimeout(timer);
++    };
++  }, [userId, pollIntervalMs, once]);
++
++  const markAllRead = useCallback(() => {
++    onRead(unread);
++    setUnread(0);
++  }, [onRead, unread]);
++
++  return (
++    <span className={unread > 0 ? 'bell bell--unread' : 'bell'}>
++      <button onClick={markAllRead}>
++        🔔 {unread > 0 && <b>{unread}</b>}
++      </button>
++    </span>
++  );
++}
+diff --git a/app/templates/components/notification-bell.hbs b/app/templates/components/notification-bell.hbs
+index 1266a97..e69de29 100644
+--- a/app/templates/components/notification-bell.hbs
++++ b/app/templates/components/notification-bell.hbs
+@@ -1 +0,0 @@
+-<button {{action "markAllRead"}}>🔔 {{#if hasUnread}}<b>{{unread}}</b>{{/if}}</button>

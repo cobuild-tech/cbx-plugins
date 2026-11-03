@@ -1,0 +1,82 @@
+diff --git a/src/react/InvoiceList.tsx b/src/react/InvoiceList.tsx
+new file mode 100644
+index 0000000..4e70637
+--- /dev/null
++++ b/src/react/InvoiceList.tsx
+@@ -0,0 +1,60 @@
++import React, { useEffect, useState } from 'react';
++import type { IHttpService } from 'angular';
++
++export interface Invoice {
++  number: string;
++  issuedAt: string;
++  balance: number;
++}
++
++export interface InvoiceListProps {
++  customerId: string;
++  // Injected from AngularJS so requests go through authInterceptor
++  // (Authorization/X-Tenant headers and 401 refresh-and-retry).
++  $http: IHttpService;
++}
++
++const dateFmt = new Intl.DateTimeFormat('en-US', { dateStyle: 'medium' });
++const currencyFmt = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
++
++const time = (s: string) => new Date(s).getTime();
++
++export function InvoiceList({ customerId, $http }: InvoiceListProps) {
++  const [invoices, setInvoices] = useState<Invoice[]>([]);
++  const [loading, setLoading] = useState(false);
++
++  useEffect(() => {
++    let stale = false;
++    setLoading(true);
++    $http
++      .get<Invoice[]>('/api/customers/' + customerId + '/invoices')
++      .then((r) => {
++        if (!stale) setInvoices(r.data);
++      })
++      .finally(() => {
++        if (!stale) setLoading(false);
++      });
++    return () => {
++      stale = true; // ignore out-of-order responses when customerId changes
++    };
++  }, [customerId, $http]);
++
++  const sorted = [...invoices].sort((a, b) => time(b.issuedAt) - time(a.issuedAt));
++
++  return (
++    <>
++      {loading && <p>Loading…</p>}
++      <table>
++        <tbody>
++          {sorted.map((i) => (
++            <tr key={i.number}>
++              <td>{i.number}</td>
++              <td>{dateFmt.format(new Date(i.issuedAt))}</td>
++              <td>{currencyFmt.format(i.balance)}</td>
++            </tr>
++          ))}
++        </tbody>
++      </table>
++    </>
++  );
++}
+diff --git a/src/react/invoice-list.angular.ts b/src/react/invoice-list.angular.ts
+new file mode 100644
+index 0000000..2942adf
+--- /dev/null
++++ b/src/react/invoice-list.angular.ts
+@@ -0,0 +1,10 @@
++import angular from 'angular';
++import { react2angular } from 'react2angular';
++import { InvoiceList } from './InvoiceList';
++
++// Same name and binding as before, so customer-page.html is unchanged:
++//   <invoice-list customer-id="vm.customerId"></invoice-list>
++// '$http' is injected as a prop so the AngularJS authInterceptor still applies.
++angular
++  .module('billing')
++  .component('invoiceList', react2angular(InvoiceList, ['customerId'], ['$http']));

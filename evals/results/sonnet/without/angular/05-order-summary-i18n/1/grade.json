@@ -1,0 +1,26 @@
+{
+ "translations": {
+  "pass": true,
+  "why": "The host passes a `t` function calling `this.translate.instant(key, params)` with the same keys ('order.summary', 'order.placed', etc.), so texts still come from the ngx-translate files."
+ },
+ "lang-change": {
+  "pass": true,
+  "why": "The host subscribes to `translate.onLangChange` to re-render and unsubscribes in ngOnDestroy via `langSub?.unsubscribe()`."
+ },
+ "locale-format": {
+  "pass": true,
+  "why": "The host passes Angular's LOCALE_ID (de-DE) into Intl.DateTimeFormat/NumberFormat, and the message flags that output may differ slightly from Angular's longDate and currency pipes."
+ },
+ "input-updates": {
+  "pass": true,
+  "why": "ngOnChanges calls render() to pass new order values to React, and OrderSummary returns null when order is null/undefined, handling the initial async null."
+ },
+ "teardown": {
+  "pass": true,
+  "why": "ngOnDestroy calls `this.root?.unmount()`."
+ },
+ "no-silent-changes": {
+  "pass": true,
+  "why": "The final message calls out the null-order behaviour change, the Intl vs Angular pipe formatting differences, the retained Angular host wrapper, and the missing tsconfig/types setup."
+ }
+}

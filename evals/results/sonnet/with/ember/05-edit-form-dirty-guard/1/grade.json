@@ -1,0 +1,26 @@
+{
+ "dirty-guard": {
+  "pass": true,
+  "why": "The React inputs call onNameChange/onDescriptionChange, which the controller's setName/setDescription write to this.model, so hasDirtyAttributes becomes true and the route guard (left untouched) still works; the final message explains this."
+ },
+ "save-via-model": {
+  "pass": true,
+  "why": "The controller's save() still calls await this.model.save() and keeps the swallowed-catch comment about 422 errors."
+ },
+ "server-errors": {
+  "pass": true,
+  "why": "formProps maps model.errors?.name to nameErrors and ProjectEditForm renders each as <p className=\"err\">; the message flags that tracking of errors is assumed and unverified."
+ },
+ "cancel-rollback": {
+  "pass": true,
+  "why": "cancel() still calls this.model.rollbackAttributes() and then this.router.transitionTo('projects') via the Ember router service."
+ },
+ "saving-disabled": {
+  "pass": true,
+  "why": "The Save button has disabled={props.isSaving} fed from model.isSaving, and on success save() calls this.router.transitionTo('projects.show', this.model)."
+ },
+ "no-silent-changes": {
+  "pass": true,
+  "why": "The final message calls out the transitionToRoute to router.transitionTo swap, the wrapper div, plain controlled inputs replacing Ember Input/Textarea, local input state not reflecting external record changes, and the missing build config."
+ }
+}

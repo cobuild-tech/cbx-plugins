@@ -1,0 +1,1 @@
+Rewrite notes.js as a React + TypeScript app (src/). Keep it working on the same page. Edit the repo and summarise.

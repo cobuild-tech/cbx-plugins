@@ -1,0 +1,26 @@
+{
+ "identity-map": {
+  "pass": true,
+  "why": "The Ember shell still calls `this.store.query('product', ...)` and the message explains this keeps records visible to CompareTray's peekAll."
+ },
+ "debounce-restart": {
+  "pass": true,
+  "why": "ProductSearch.tsx uses a 250ms default setTimeout, and the effect cleanup clears the timer and sets `cancelled`, so the latest query wins like restartableTask."
+ },
+ "wrapper-css": {
+  "pass": true,
+  "why": "The message says the component is 'now nested one div deeper, so check that it still applies', which flags the wrapper problem even though it wrongly claims the selector 'still matches'."
+ },
+ "json-api": {
+  "pass": true,
+  "why": "N/A: the Ember Data store is kept, so attribute mapping is unchanged."
+ },
+ "unmount": {
+  "pass": true,
+  "why": "The react-product-search modifier returns a teardown that calls `handle.unmount()`, and the message says it unmounts on teardown."
+ },
+ "no-silent-changes": {
+  "pass": true,
+  "why": "The main changes (ProductRow placeholder, plain-object results, build setup, nested wrapper) are called out in the message; the only unflagged change is a small try/catch that logs search errors."
+ }
+}

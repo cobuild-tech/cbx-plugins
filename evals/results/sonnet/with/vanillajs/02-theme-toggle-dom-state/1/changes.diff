@@ -1,0 +1,52 @@
+diff --git a/src/ThemeToggle.tsx b/src/ThemeToggle.tsx
+new file mode 100644
+index 0000000..9351607
+--- /dev/null
++++ b/src/ThemeToggle.tsx
+@@ -0,0 +1,36 @@
++import { useCallback, useSyncExternalStore } from 'react';
++
++type Theme = 'light' | 'dark';
++
++const root = document.documentElement;
++
++// The DOM attribute is the source of truth: theme-boot.js and chart.js
++// (e.g. hc=1 high-contrast mode) also write data-theme outside React.
++function subscribe(onChange: () => void): () => void {
++  const observer = new MutationObserver(onChange);
++  observer.observe(root, { attributes: true, attributeFilter: ['data-theme'] });
++  return () => observer.disconnect();
++}
++
++function getTheme(): Theme {
++  return root.dataset.theme === 'dark' ? 'dark' : 'light';
++}
++
++export function ThemeToggle() {
++  const theme = useSyncExternalStore(subscribe, getTheme, () => 'light' as Theme);
++  const dark = theme === 'dark';
++
++  const toggle = useCallback(() => {
++    const next: Theme = getTheme() === 'dark' ? 'light' : 'dark';
++    root.dataset.theme = next;
++    localStorage.setItem('theme', next);
++    // chart.js listens for this event to redraw its palette.
++    document.dispatchEvent(new CustomEvent<Theme>('themechange', { detail: next }));
++  }, []);
++
++  return (
++    <button id="theme-toggle" type="button" aria-pressed={dark} onClick={toggle}>
++      {dark ? 'Light mode' : 'Dark mode'}
++    </button>
++  );
++}
+diff --git a/src/main.tsx b/src/main.tsx
+new file mode 100644
+index 0000000..74977d1
+--- /dev/null
++++ b/src/main.tsx
+@@ -0,0 +1,4 @@
++import { createRoot } from 'react-dom/client';
++import { ThemeToggle } from './ThemeToggle';
++
++createRoot(document.getElementById('theme-toggle-root')!).render(<ThemeToggle />);

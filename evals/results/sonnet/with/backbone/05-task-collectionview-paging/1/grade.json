@@ -1,0 +1,26 @@
+{
+ "collection-source": {
+  "pass": true,
+  "why": "TasksView subscribes to the shared `collection` via `collection.on('add remove reset sort')` and TaskRow to `change:priority` on the model, with no copied array; it ignores `sync`/generic `change`, which the original didn't use either."
+ },
+ "paging": {
+  "pass": true,
+  "why": "The effect calls `collection.fetch({remove:false, data:{page:++page}})` on the same collection, with a 250ms throttle and a 200px threshold, and removes the scroll listener and cancels the throttle on cleanup."
+ },
+ "filter-sort": {
+  "pass": false,
+  "why": "Archived rows are filtered and sorted by descending priority, but the list is deliberately not re-sorted when a model's priority changes (only on collection add/remove/reset/sort), and the criterion requires re-sorting on priority change."
+ },
+ "empty": {
+  "pass": true,
+  "why": "When the filtered `models` list is empty it renders `<li class=\"empty\">No open tasks</li>`, so the empty state accounts for the archived filter."
+ },
+ "tooltip": {
+  "pass": true,
+  "why": "The `useTooltip` layout effect initialises `$.fn.tooltip({placement:'top'})` on `[title]` targets per row on each render and calls `tooltip('dispose')` in cleanup."
+ },
+ "no-silent-changes": {
+  "pass": true,
+  "why": "React escapes title and owner by default, and the summary's 'Behavior differences' section flags the scroll attach timing, trailing-throttle cancel, tooltip dispose, and View-vs-CollectionView API change."
+ }
+}

@@ -1,0 +1,180 @@
+diff --git a/index.html b/index.html
+index f699b76..37c18d7 100644
+--- a/index.html
++++ b/index.html
+@@ -1,4 +1,4 @@
+-<ul id="notes"></ul><form id="add"><input name="t"><button>Add</button></form>
++<div id="root"></div>
+ <button id="export">Export</button>
+-<script src="notes.js"></script>
++<script type="module" src="/src/main.tsx"></script>
+ <script src="export.js"></script>
+diff --git a/package.json b/package.json
+index f74b0be..d2f5404 100644
+--- a/package.json
++++ b/package.json
+@@ -1 +1,13 @@
+-{ "name": "notes", "private": true, "dependencies": { "react": "^18.3.1", "react-dom": "^18.3.1" }, "devDependencies": { "vite": "^5.2.0", "typescript": "^5.4.0" } }
++{
++  "name": "notes",
++  "private": true,
++  "scripts": { "dev": "vite", "build": "tsc && vite build" },
++  "dependencies": { "react": "^18.3.1", "react-dom": "^18.3.1" },
++  "devDependencies": {
++    "@types/react": "^18.3.0",
++    "@types/react-dom": "^18.3.0",
++    "@vitejs/plugin-react": "^4.2.0",
++    "typescript": "^5.4.0",
++    "vite": "^5.2.0"
++  }
++}
+diff --git a/src/App.tsx b/src/App.tsx
+new file mode 100644
+index 0000000..ab0bf06
+--- /dev/null
++++ b/src/App.tsx
+@@ -0,0 +1,33 @@
++import { FormEvent, useSyncExternalStore } from 'react';
++import { addNote, getNotes, getVersion, removeNote, subscribe } from './notesStore';
++
++export function App() {
++  useSyncExternalStore(subscribe, getVersion);
++  const notes = getNotes();
++
++  function onSubmit(e: FormEvent<HTMLFormElement>) {
++    e.preventDefault();
++    const form = e.currentTarget;
++    const input = form.elements.namedItem('t') as HTMLInputElement;
++    const t = input.value.trim();
++    if (!t) return;
++    addNote(t);
++    form.reset();
++  }
++
++  return (
++    <>
++      <ul id="notes">
++        {notes.map((n, i) => (
++          <li key={i} onDoubleClick={() => removeNote(i)}>
++            {n.text}
++          </li>
++        ))}
++      </ul>
++      <form id="add" onSubmit={onSubmit}>
++        <input name="t" />
++        <button>Add</button>
++      </form>
++    </>
++  );
++}
+diff --git a/src/main.tsx b/src/main.tsx
+new file mode 100644
+index 0000000..468361b
+--- /dev/null
++++ b/src/main.tsx
+@@ -0,0 +1,5 @@
++import { createRoot } from 'react-dom/client';
++import { App } from './App';
++import './notesStore';
++
++createRoot(document.getElementById('root')!).render(<App />);
+diff --git a/src/notesStore.ts b/src/notesStore.ts
+new file mode 100644
+index 0000000..7e7214f
+--- /dev/null
++++ b/src/notesStore.ts
+@@ -0,0 +1,64 @@
++export interface Note {
++  text: string;
++  at: number;
++}
++
++let notes: Note[] = JSON.parse(localStorage.getItem('notes') || '[]');
++let version = 0;
++const listeners = new Set<() => void>();
++
++export const getNotes = (): Note[] => notes;
++export const getVersion = (): number => version;
++
++export function subscribe(l: () => void): () => void {
++  listeners.add(l);
++  return () => listeners.delete(l);
++}
++
++export function save(): void {
++  localStorage.setItem('notes', JSON.stringify(notes));
++}
++
++// Notifies React that `notes` changed (also used by legacy callers that mutate in place).
++export function render(): void {
++  version++;
++  listeners.forEach((l) => l());
++}
++
++export function addNote(text: string): void {
++  notes.push({ text, at: Date.now() });
++  save();
++  render();
++}
++
++export function removeNote(i: number): void {
++  notes.splice(i, 1);
++  save();
++  render();
++}
++
++window.addEventListener('storage', (e) => {
++  if (e.key === 'notes') {
++    notes = JSON.parse(e.newValue || '[]');
++    render();
++  }
++});
++
++// Bridge for export.js (other team, unchanged): it reads the global `notes`
++// and calls the globals `save()` and `render()` from window.importNotes.
++declare global {
++  interface Window {
++    notes: Note[];
++    save: () => void;
++    render: () => void;
++  }
++}
++Object.defineProperty(window, 'notes', {
++  get: () => notes,
++  set: (v: Note[]) => {
++    notes = v;
++  },
++  configurable: true,
++});
++window.save = save;
++window.render = render;
+diff --git a/tsconfig.json b/tsconfig.json
+new file mode 100644
+index 0000000..279f592
+--- /dev/null
++++ b/tsconfig.json
+@@ -0,0 +1,14 @@
++{
++  "compilerOptions": {
++    "target": "ES2020",
++    "lib": ["ES2020", "DOM", "DOM.Iterable"],
++    "module": "ESNext",
++    "moduleResolution": "bundler",
++    "jsx": "react-jsx",
++    "strict": true,
++    "noEmit": true,
++    "skipLibCheck": true,
++    "isolatedModules": true
++  },
++  "include": ["src"]
++}
+diff --git a/vite.config.ts b/vite.config.ts
+new file mode 100644
+index 0000000..56f7628
+--- /dev/null
++++ b/vite.config.ts
+@@ -0,0 +1,4 @@
++import { defineConfig } from 'vite';
++import react from '@vitejs/plugin-react';
++
++export default defineConfig({ plugins: [react()] });

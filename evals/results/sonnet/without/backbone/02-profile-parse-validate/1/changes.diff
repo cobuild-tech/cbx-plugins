@@ -1,0 +1,81 @@
+diff --git a/src/react/ProfileForm.tsx b/src/react/ProfileForm.tsx
+new file mode 100644
+index 0000000..89121b1
+--- /dev/null
++++ b/src/react/ProfileForm.tsx
+@@ -0,0 +1,75 @@
++import React, { useEffect, useRef, useState } from 'react';
++
++/**
++ * Minimal structural type for the existing Backbone `app.Profile` model.
++ * The model is left untouched; this component only depends on this surface.
++ */
++export interface ProfileModel {
++  get(attr: 'displayName' | 'website'): string | undefined;
++  save(attrs: { displayName: string; website: string }): unknown;
++  on(events: string, cb: (...args: any[]) => void, ctx?: unknown): unknown;
++  off(events?: string | null, cb?: ((...args: any[]) => void) | null, ctx?: unknown): unknown;
++}
++
++export interface ProfileFormProps {
++  model: ProfileModel;
++  /** Selector of the header element whose text mirrors the display name. */
++  headerSelector?: string;
++}
++
++const SAVED_VISIBLE_MS = 1500;
++
++export function ProfileForm({ model, headerSelector = '#header .name' }: ProfileFormProps) {
++  const [displayName, setDisplayName] = useState(model.get('displayName') ?? '');
++  const [website, setWebsite] = useState(model.get('website') ?? '');
++  const [error, setError] = useState('');
++  const [saved, setSaved] = useState(false);
++  const savedTimer = useRef<number | undefined>(undefined);
++
++  useEffect(() => {
++    const onInvalid = (_m: unknown, err: string) => setError(err);
++    const onSync = () => {
++      setError('');
++      setSaved(true);
++      window.clearTimeout(savedTimer.current);
++      savedTimer.current = window.setTimeout(() => setSaved(false), SAVED_VISIBLE_MS);
++    };
++    const onNameChange = () => {
++      const el = document.querySelector(headerSelector);
++      if (el) el.textContent = model.get('displayName') ?? '';
++    };
++
++    model.on('invalid', onInvalid);
++    model.on('sync', onSync);
++    model.on('change:displayName', onNameChange);
++    return () => {
++      model.off('invalid', onInvalid);
++      model.off('sync', onSync);
++      model.off('change:displayName', onNameChange);
++      window.clearTimeout(savedTimer.current);
++    };
++  }, [model, headerSelector]);
++
++  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
++    e.preventDefault();
++    model.save({ displayName, website });
++  };
++
++  return (
++    <div id="profile">
++      <form onSubmit={handleSubmit}>
++        <input
++          name="displayName"
++          value={displayName}
++          onChange={(e) => setDisplayName(e.target.value)}
++        />
++        <input name="website" value={website} onChange={(e) => setWebsite(e.target.value)} />
++        <button type="submit">Save</button>
++      </form>
++      <span className="error" role="alert">{error}</span>
++      <span className="saved" style={{ display: saved ? undefined : 'none' }}>Saved</span>
++    </div>
++  );
++}
++
++export default ProfileForm;

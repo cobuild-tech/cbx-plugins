@@ -1,0 +1,26 @@
+{
+ "hash-sync": {
+  "pass": true,
+  "why": "Tabs.tsx initialises active from `initialHash` (location.hash) and `activate` calls `history.replaceState(null,'','#'+id)`, not pushState."
+ },
+ "tab-event": {
+  "pass": true,
+  "why": "`activate` calls `window.jQuery?.(document).trigger('account:tab',[tabs[next].id])` after flushSync, which matches what billing.js listens for."
+ },
+ "billing-dom": {
+  "pass": true,
+  "why": "React mounts only on the `<ul>` and renders `<li>` items; panels stay server-rendered and only get attributes/display toggled, so content loaded by billing.js is not wiped."
+ },
+ "help-widget": {
+  "pass": true,
+  "why": "help-widget.js was changed to read `$('#tabs > ul > .ui-tabs-active').index()`, which React keeps current, and the change is explained in the summary."
+ },
+ "a11y": {
+  "pass": true,
+  "why": "The component adds role=tablist/tab/tabpanel, roving tabindex, arrow/Home/End/Enter/Space keys, and the summary flags the missing Ctrl+PageUp/PageDown and the unreproduced jQuery UI attributes."
+ },
+ "no-silent-changes": {
+  "pass": true,
+  "why": "The summary calls out the jquery-ui script removal, the help-widget edit, the keyboard and markup differences, the untouched tabs.js and the fact that nothing was built or run."
+ }
+}

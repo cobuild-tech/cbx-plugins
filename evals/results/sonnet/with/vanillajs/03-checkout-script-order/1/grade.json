@@ -1,0 +1,26 @@
+{
+ "app-queue": {
+  "pass": true,
+  "why": "The layout effect sets window.App.checkout and flushes the Array App.q, then swaps it for a run-immediately push, as the message describes, and the inline script is left unchanged."
+ },
+ "prefill-semantics": {
+  "pass": true,
+  "why": "prefill still only fills fields where `!el.value`, the draft restore runs before the queued flush in the same effect, and the namedItem vs form[k] difference is flagged."
+ },
+ "no-card-draft": {
+  "pass": true,
+  "why": "onBeforeUnload saves only email and country to sessionStorage, with the comment 'never the card number'."
+ },
+ "double-submit": {
+  "pass": true,
+  "why": "Button is disabled via submitting state, setSubmitting(false) on a non-ok response, and sessionStorage.removeItem(DRAFT) on success; the async-state timing difference is flagged."
+ },
+ "tracking-event": {
+  "pass": true,
+  "why": "onSubmit still calls document.dispatchEvent(new Event('checkout:submit')) and tracking.js is left in place."
+ },
+ "no-silent-changes": {
+  "pass": true,
+  "why": "The summary calls out the changed mounting, state-based button disabling, namedItem lookup, Strict Mode guard, the Vite build requirement, and the preserved quirks."
+ }
+}

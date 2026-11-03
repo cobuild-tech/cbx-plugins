@@ -1,0 +1,7 @@
+<form name="contactForm" ng-submit="vm.save()" novalidate>
+  <input name="email" ng-model="vm.contact.email" type="email" required>
+  <tag-input name="tags" ng-model="vm.contact.tags" max="3" required></tag-input>
+  <p ng-show="contactForm.tags.$error.maxTags">At most 3 tags</p>
+  <p ng-show="contactForm.tags.$touched && contactForm.tags.$error.required">Add a tag</p>
+  <button ng-disabled="contactForm.$invalid">Save</button>
+</form>

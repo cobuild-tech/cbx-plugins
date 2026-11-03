@@ -1,0 +1,4 @@
+<div class="product-search">
+  <input {{on "input" (perform this.search value="target.value")}} />
+  {{#each this.results as |p|}}<ProductRow @product={{p}} />{{/each}}
+</div>

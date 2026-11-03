@@ -1,0 +1,8 @@
+{ "checks": [
+ {"id":"global-api","must":"window.Chat.send keeps working for support-macros.js, including before React has mounted/connected (load order) or the timing issue is handled/flagged."},
+ {"id":"single-socket","must":"Only one WebSocket is open (no duplicates from Strict Mode double effects or re-renders) and it is closed on unmount without triggering the reconnect loop."},
+ {"id":"backoff","must":"Reconnect uses exponential backoff from 1 s capped at 30 s, reset on open."},
+ {"id":"queue","must":"Messages sent while disconnected are queued and flushed on open, in order."},
+ {"id":"render","must":"Messages render as text 'user: text', appended in order, with auto-scroll to bottom."},
+ {"id":"no-silent-changes","must":"No unrequested behaviour changes without calling them out."}
+]}

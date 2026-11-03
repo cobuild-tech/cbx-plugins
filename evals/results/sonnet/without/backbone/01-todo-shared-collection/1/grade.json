@@ -1,0 +1,26 @@
+{
+ "single-source": {
+  "pass": true,
+  "why": "The component takes window.app.todos as a prop, subscribes with todos.on(EVENTS, forceRender), and reads and writes through the models (t.get, t.save, t.destroy) without copying todos into React state."
+ },
+ "event-cleanup": {
+  "pass": true,
+  "why": "The useEffect cleanup calls todos.off(EVENTS, forceRender) on unmount."
+ },
+ "patch-save": {
+  "pass": true,
+  "why": "onChange calls t.save({ done: e.target.checked }, { patch: true }), the same as the original."
+ },
+ "order": {
+  "pass": true,
+  "why": "It renders with todos.map(...) over the collection, which is already sorted by the 'order' comparator, and re-renders on the 'sort' event."
+ },
+ "escape": {
+  "pass": true,
+  "why": "Titles render as {t.get('title')} JSX text with no dangerouslySetInnerHTML, and the summary notes React escapes them."
+ },
+ "no-silent-changes": {
+  "pass": true,
+  "why": "The diff adds no rollback or optimistic-UI logic, and the summary flags the real caveats: nothing was compiled or run, the old file is still present, and a bundler is needed."
+ }
+}

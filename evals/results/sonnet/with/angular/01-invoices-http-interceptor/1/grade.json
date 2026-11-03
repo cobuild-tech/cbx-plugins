@@ -1,0 +1,26 @@
+{
+ "interceptor": {
+  "pass": true,
+  "why": "The wrapper injects AngularJS `$http` and passes `$http.get(url)` to the React component, so authInterceptor (Bearer, X-Tenant, 401 retry) stays in the request path, as the summary states."
+ },
+ "currency-format": {
+  "pass": false,
+  "why": "It uses Intl.NumberFormat en-US USD, which gives '-$1.00' for negatives like AngularJS 1.8, and the summary only says 'unusual currency format' may differ without explicitly flagging specific Intl vs AngularJS differences; it also claims fixed en-US/USD without listing real differences, so it is not a faithful or clearly flagged match."
+ },
+ "order": {
+  "pass": true,
+  "why": "`byIssuedAtDesc` sorts a copy of the invoices by issuedAt descending, matching `orderBy:'-issuedAt'`."
+ },
+ "mount": {
+  "pass": true,
+  "why": "The wrapper registers an AngularJS component with `customerId: '<'`, creates a React root in `$postLink`, and re-renders in `$onChanges`, so customerId changes trigger a refetch via the useEffect dependency."
+ },
+ "no-silent-changes": {
+  "pass": true,
+  "why": "The summary explicitly lists the kept quirks (no error handling, no stale cancellation, undefined id request, old list visible during reload) and the other behavior differences."
+ },
+ "tests": {
+  "pass": false,
+  "why": "No tests were added and the summary does not recommend any tests to pin behavior before or after the swap."
+ }
+}

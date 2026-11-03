@@ -1,0 +1,26 @@
+{
+ "identity-map": {
+  "pass": true,
+  "why": "The React component receives the Ember store via the modifier and calls store.query('product', ...), so records land in the store and the message explains CompareTray's peekAll still sees them."
+ },
+ "debounce-restart": {
+  "pass": true,
+  "why": "ProductSearch.tsx uses a 250ms setTimeout (DEBOUNCE_MS) and cancelPrevious (clearTimeout and cancelled flag) so the latest search wins, matching restartableTask."
+ },
+ "wrapper-css": {
+  "pass": true,
+  "why": "The modifier mounts React directly into the existing `.product-search` div, so `.sidebar > .product-search` still matches, and the message states this."
+ },
+ "json-api": {
+  "pass": true,
+  "why": "The Ember store is kept via store.query, so there is no fetch mapping and the criterion is N/A."
+ },
+ "unmount": {
+  "pass": true,
+  "why": "The modifier returns a teardown function calling root.unmount(), and the component's effect cleanup cancels pending searches."
+ },
+ "no-silent-changes": {
+  "pass": true,
+  "why": "The final message flags the placeholder ProductRow, missing build setup, uncancellable stale queries, key-by-id difference, and the uncontrolled input; the added waiter and dependencies are also disclosed."
+ }
+}

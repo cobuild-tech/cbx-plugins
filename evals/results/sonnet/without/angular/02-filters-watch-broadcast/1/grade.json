@@ -1,0 +1,26 @@
+{
+ "broadcast": {
+  "pass": true,
+  "why": "reactFilters.tsx calls $rootScope.$broadcast('filters:changed', { ...f, brands: [...f.brands] }), so ResultsCtrl still receives a copy of the filter object."
+ },
+ "digest": {
+  "pass": true,
+  "why": "The debounced setTimeout callback wraps both $location.search and $broadcast in $rootScope.$evalAsync, and the summary says this is because the change fires outside a digest."
+ },
+ "debounce": {
+  "pass": true,
+  "why": "The useEffect in FiltersPanel.tsx sets a 300ms setTimeout and clears it in the cleanup on each filters change, which is cancel-and-restart."
+ },
+ "url-sync": {
+  "pass": true,
+  "why": "Initial state comes from normalizeFilters($location.search()), and changes are written back with $location.search(f) inside $evalAsync, so AngularJS sees the URL change."
+ },
+ "initial-skip": {
+  "pass": true,
+  "why": "The effect returns early when filters === initialRef.current, so nothing is broadcast on mount, and the summary says this mirrors the old nv === ov skip."
+ },
+ "no-silent-changes": {
+  "pass": true,
+  "why": "The summary calls out the main changes: the string-to-type coercion in normalizeFilters, the replacement of checklist-model, the leftover filters.controller.js, the missing bundler, and that nothing was compiled or tested."
+ }
+}

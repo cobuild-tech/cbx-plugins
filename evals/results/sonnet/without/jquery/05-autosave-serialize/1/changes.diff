@@ -1,0 +1,172 @@
+diff --git a/package.json b/package.json
+index 9dc93bc..789231f 100644
+--- a/package.json
++++ b/package.json
+@@ -1 +1,15 @@
+-{ "name": "cms", "private": true, "dependencies": { "react": "^18.3.1", "react-dom": "^18.3.1" } }
++{
++  "name": "cms",
++  "private": true,
++  "scripts": {
++    "build": "esbuild src/index.tsx --bundle --minify --outfile=public/js/editor.js",
++    "typecheck": "tsc --noEmit"
++  },
++  "dependencies": { "react": "^18.3.1", "react-dom": "^18.3.1" },
++  "devDependencies": {
++    "@types/react": "^18.3.0",
++    "@types/react-dom": "^18.3.0",
++    "esbuild": "^0.24.0",
++    "typescript": "^5.6.0"
++  }
++}
+diff --git a/src/PostEditor.tsx b/src/PostEditor.tsx
+new file mode 100644
+index 0000000..6a5faf6
+--- /dev/null
++++ b/src/PostEditor.tsx
+@@ -0,0 +1,97 @@
++import { useCallback, useEffect, useRef, useState, type ChangeEvent } from 'react';
++
++type SaveStatus = '' | 'Saved' | 'Not saved';
++
++interface PostFields {
++  title: string;
++  body: string;
++  tags: string[];
++}
++
++interface PostEditorProps {
++  postId: number | string;
++  initial?: Partial<PostFields>;
++  debounceMs?: number;
++}
++
++const TAG_OPTIONS = [
++  { value: 'news', label: 'News' },
++  { value: 'tips', label: 'Tips' },
++];
++
++// Same Rails-style nested params the old $.serialize() produced.
++function serialize(f: PostFields): string {
++  const p = new URLSearchParams();
++  p.append('post[title]', f.title);
++  p.append('post[body]', f.body);
++  f.tags.forEach((t) => p.append('post[tags][]', t));
++  return p.toString();
++}
++
++export function PostEditor({ postId, initial, debounceMs = 1000 }: PostEditorProps) {
++  const [fields, setFields] = useState<PostFields>({
++    title: initial?.title ?? '',
++    body: initial?.body ?? '',
++    tags: initial?.tags ?? [],
++  });
++  const [dirty, setDirty] = useState(false);
++  const [status, setStatus] = useState<SaveStatus>('');
++  const version = useRef(0); // bumped on every edit; lets a save know if newer edits arrived
++
++  const update = useCallback((patch: Partial<PostFields>) => {
++    version.current += 1;
++    setFields((prev) => ({ ...prev, ...patch }));
++    setDirty(true);
++  }, []);
++
++  useEffect(() => {
++    if (!dirty) return;
++    const savedVersion = version.current;
++    const controller = new AbortController();
++    const timer = setTimeout(async () => {
++      try {
++        const res = await fetch(`/posts/${postId}/autosave`, {
++          method: 'PATCH',
++          headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
++          body: serialize(fields),
++          credentials: 'same-origin',
++          signal: controller.signal,
++        });
++        if (!res.ok) throw new Error(String(res.status));
++        setStatus('Saved');
++        // Only clear dirty if nothing changed while the request was in flight.
++        if (version.current === savedVersion) setDirty(false);
++      } catch (e) {
++        if ((e as Error).name !== 'AbortError') setStatus('Not saved');
++      }
++    }, debounceMs);
++    return () => {
++      clearTimeout(timer);
++      controller.abort();
++    };
++  }, [fields, dirty, postId, debounceMs]);
++
++  const toggleTag = (tag: string) => (e: ChangeEvent<HTMLInputElement>) =>
++    update({ tags: e.target.checked ? [...fields.tags, tag] : fields.tags.filter((t) => t !== tag) });
++
++  return (
++    // The "dirty" class is read by the shared jQuery leave-guard.js.
++    <form id="post-form" action={`/posts/${postId}`} method="post" className={dirty ? 'dirty' : undefined}>
++      <input name="post[title]" value={fields.title} onChange={(e) => update({ title: e.target.value })} />
++      <textarea name="post[body]" value={fields.body} onChange={(e) => update({ body: e.target.value })} />
++      {TAG_OPTIONS.map(({ value, label }) => (
++        <label key={value}>
++          <input
++            type="checkbox"
++            name="post[tags][]"
++            value={value}
++            checked={fields.tags.includes(value)}
++            onChange={toggleTag(value)}
++          />
++          {label}
++        </label>
++      ))}
++      <span className="save-status">{status}</span>
++    </form>
++  );
++}
+diff --git a/src/index.tsx b/src/index.tsx
+new file mode 100644
+index 0000000..84675c6
+--- /dev/null
++++ b/src/index.tsx
+@@ -0,0 +1,7 @@
++import { createRoot } from 'react-dom/client';
++import { PostEditor } from './PostEditor';
++
++const el = document.getElementById('post-editor-root');
++if (el) {
++  createRoot(el).render(<PostEditor postId={el.dataset.postId ?? ''} />);
++}
+diff --git a/tsconfig.json b/tsconfig.json
+new file mode 100644
+index 0000000..ce9282d
+--- /dev/null
++++ b/tsconfig.json
+@@ -0,0 +1,13 @@
++{
++  "compilerOptions": {
++    "target": "ES2020",
++    "lib": ["ES2020", "DOM"],
++    "module": "ESNext",
++    "moduleResolution": "Bundler",
++    "jsx": "react-jsx",
++    "strict": true,
++    "noEmit": true,
++    "skipLibCheck": true
++  },
++  "include": ["src"]
++}
+diff --git a/views/edit_post.html b/views/edit_post.html
+index f330976..f0700cd 100644
+--- a/views/edit_post.html
++++ b/views/edit_post.html
+@@ -1,9 +1,4 @@
+-<form id="post-form" action="/posts/42" method="post">
+-  <input name="post[title]"><textarea name="post[body]"></textarea>
+-  <label><input type="checkbox" name="post[tags][]" value="news">News</label>
+-  <label><input type="checkbox" name="post[tags][]" value="tips">Tips</label>
+-  <span class="save-status"></span>
+-</form>
++<div id="post-editor-root" data-post-id="42"></div>
+ <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+-<script src="/js/autosave.js"></script>
++<script src="/js/editor.js"></script>
+ <script src="/js/leave-guard.js"></script>

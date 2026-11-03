@@ -1,0 +1,1 @@
+Move the notifications dropdown (public/js/notifications.js) to React + TypeScript under src/. Everything else stays jQuery for now. Make the edits and tell me what changed.

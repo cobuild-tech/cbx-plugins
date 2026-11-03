@@ -1,0 +1,108 @@
+diff --git a/src/app/order-summary.component.ts b/src/app/order-summary.component.ts
+index 49f566f..23d3732 100644
+--- a/src/app/order-summary.component.ts
++++ b/src/app/order-summary.component.ts
+@@ -1,11 +1,54 @@
+-import { ChangeDetectionStrategy, Component, Input } from '@angular/core';
++import { ChangeDetectionStrategy, Component, ElementRef, Inject, Input, LOCALE_ID, OnChanges, OnDestroy, OnInit } from '@angular/core';
++import { TranslateService } from '@ngx-translate/core';
++import { Subscription } from 'rxjs';
++import { createElement } from 'react';
++import { createRoot, Root } from 'react-dom/client';
++import { Order, OrderSummary } from '../react/OrderSummary';
++
++/**
++ * Thin Angular host for the React <OrderSummary>. Keeps the `app-order-summary`
++ * selector so checkout.component.html is unchanged; bridges inputs, locale and
++ * runtime language switches into React.
++ */
+ @Component({
+-  selector: 'app-order-summary', changeDetection: ChangeDetectionStrategy.OnPush,
+-  template: `
+-    <h3>{{ 'order.summary' | translate }}</h3>
+-    <p>{{ 'order.placed' | translate: { date: (order.placedAt | date: 'longDate') } }}</p>
+-    <p class="total">{{ order.total | currency: order.currency }}</p>
+-    <p *ngIf="order.items.length === 1">{{ 'order.oneItem' | translate }}</p>
+-    <p *ngIf="order.items.length !== 1">{{ 'order.nItems' | translate: { n: order.items.length } }}</p>`
++  selector: 'app-order-summary',
++  changeDetection: ChangeDetectionStrategy.OnPush,
++  template: ''
+ })
+-export class OrderSummaryComponent { @Input() order!: { placedAt: string; total: number; currency: string; items: unknown[] }; }
++export class OrderSummaryComponent implements OnInit, OnChanges, OnDestroy {
++  @Input() order: Order | null | undefined;
++
++  private root?: Root;
++  private langSub?: Subscription;
++
++  constructor(
++    private host: ElementRef<HTMLElement>,
++    private translate: TranslateService,
++    @Inject(LOCALE_ID) private locale: string
++  ) {}
++
++  ngOnInit(): void {
++    this.root = createRoot(this.host.nativeElement);
++    this.render();
++    this.langSub = this.translate.onLangChange.subscribe(() => this.render());
++  }
++
++  ngOnChanges(): void {
++    this.render();
++  }
++
++  ngOnDestroy(): void {
++    this.langSub?.unsubscribe();
++    this.root?.unmount();
++  }
++
++  private render(): void {
++    this.root?.render(
++      createElement(OrderSummary, {
++        order: this.order,
++        locale: this.locale,
++        t: (key, params) => this.translate.instant(key, params)
++      })
++    );
++  }
++}
+diff --git a/src/react/OrderSummary.tsx b/src/react/OrderSummary.tsx
+new file mode 100644
+index 0000000..e499abf
+--- /dev/null
++++ b/src/react/OrderSummary.tsx
+@@ -0,0 +1,34 @@
++import React from 'react';
++
++export interface Order {
++  placedAt: string;
++  total: number;
++  currency: string;
++  items: unknown[];
++}
++
++export interface OrderSummaryProps {
++  order: Order | null | undefined;
++  /** BCP-47 locale used for date/currency formatting (Angular LOCALE_ID). */
++  locale: string;
++  /** Translation function bridged from ngx-translate; re-rendered on language change. */
++  t: (key: string, params?: Record<string, unknown>) => string;
++}
++
++export function OrderSummary({ order, locale, t }: OrderSummaryProps) {
++  // The Angular parent passes `order$ | async`, which is null until the order loads.
++  if (!order) return null;
++
++  const date = new Intl.DateTimeFormat(locale, { dateStyle: 'long' }).format(new Date(order.placedAt));
++  const total = new Intl.NumberFormat(locale, { style: 'currency', currency: order.currency }).format(order.total);
++  const count = order.items.length;
++
++  return (
++    <>
++      <h3>{t('order.summary')}</h3>
++      <p>{t('order.placed', { date })}</p>
++      <p className="total">{total}</p>
++      <p>{count === 1 ? t('order.oneItem') : t('order.nItems', { n: count })}</p>
++    </>
++  );
++}

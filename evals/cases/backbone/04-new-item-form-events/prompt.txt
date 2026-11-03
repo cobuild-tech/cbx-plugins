@@ -1,0 +1,1 @@
+Convert NewItemView into a React + TypeScript form component (src/react/). ItemsPage and the router stay Backbone for now. Edit the repo and summarise.
