@@ -1,0 +1,50 @@
+{
+ "ordering-fifo": {
+  "pass": true,
+  "why": "SNS FIFO topic and SQS FIFO queue are used, with MessageGroupId=str(customer_id) in api.py."
+ },
+ "dlq-5": {
+  "pass": true,
+  "why": "orders_worker has a redrive_policy to the DLQ with maxReceiveCount = 5."
+ },
+ "visibility-timeout": {
+  "pass": true,
+  "why": "visibility_timeout_seconds = 540 matches the Lambda timeout of 540."
+ },
+ "run-timeout-900": {
+  "pass": true,
+  "why": "The API runs on ECS Fargate behind an ALB with idle_timeout = 900."
+ },
+ "presign-expiry": {
+  "pass": true,
+  "why": "The summary and a code comment flag that presigned URLs signed with role credentials die when the credentials expire."
+ },
+ "rds-iam-auth": {
+  "pass": true,
+  "why": "aws_db_instance has Postgres 15, iam_database_authentication_enabled = true, multi_az = true, and backup_retention_period = 7."
+ },
+ "worker-event-shape": {
+  "pass": true,
+  "why": "worker.py reads event['Records'][].body, and raw_message_delivery = true on the SNS subscription means no SNS envelope needs unwrapping."
+ },
+ "sql-dialect": {
+  "pass": true,
+  "why": "The SQL uses TRY_CAST, a ROW_NUMBER subquery in place of QUALIFY, o.dt in place of _PARTITIONDATE, and slice(array_agg(... ORDER BY),1,3) in place of ARRAY_AGG LIMIT."
+ },
+ "scheduler-tz": {
+  "pass": true,
+  "why": "aws_scheduler_schedule uses schedule_expression_timezone = \"America/New_York\" with cron(0 2 * * ? *)."
+ },
+ "lifecycle": {
+  "pass": true,
+  "why": "Lifecycle config has a 30-day transition to STANDARD_IA, 365-day expiration, and versioning enabled."
+ },
+ "multi-region-flag": {
+  "pass": false,
+  "why": "The buckets and Athena are single-region in us-east-1, and neither the summary nor the diff mentions the loss of US multi-region durability/availability and no replication is added."
+ },
+ "no-silent-changes": {
+  "pass": false,
+  "why": "The DB master user is changed to a Secrets Manager-managed password and the Fargate desired_count/scaling is approximated; also the cron Lambda needs VPC access to reach the ALB, and the DLQ and retry semantics changed (the Pub/Sub retry policy became SQS redrive) without being flagged. Notably the ALB is public over HTTP and the Lambda cron is unflagged in VPC terms, though most other changes were called out."
+ }
+}

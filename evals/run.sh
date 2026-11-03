@@ -18,7 +18,8 @@ one() { # case model arm rep
   local args=(-p "$(cat "$EV/cases/$c/prompt.txt")" --model "$m" --setting-sources project --strict-mcp-config
               --permission-mode acceptEdits --allowedTools "Read Edit Write Glob Grep Skill"
               --disallowedTools "Bash WebFetch WebSearch Agent" --output-format stream-json --verbose)
-  [ "$a" = with ] && args+=(--plugin-dir "$ROOT/$fw-to-react")
+  local pd="$ROOT/$fw"; [ -d "$pd/.claude-plugin" ] || pd="$ROOT/$fw-to-react"   # gcp-to-aws/ or <fw>-to-react/
+  [ "$a" = with ] && args+=(--plugin-dir "$pd")
   ( cd "$w" && claude "${args[@]}" > "$out/transcript.jsonl" 2> "$out/stderr.txt" ) || echo "FAIL $out"
   ( cd "$w" && git add -A && git diff --cached > "$out/changes.diff" )
   node -e '
@@ -28,6 +29,7 @@ one() { # case model arm rep
     fs.writeFileSync(process.argv[2]+"/final.md",res.result||"");
     fs.writeFileSync(process.argv[2]+"/meta.json",JSON.stringify({model:init.model,cli:init.claude_code_version,skillInvoked:skill,cost:res.total_cost_usd,turns:res.num_turns,error:res.is_error},null,1));
   ' "$out/transcript.jsonl" "$out"
+  [ -x "$EV/tfvalidate.sh" ] && "$EV/tfvalidate.sh" "$w" "$out"
   rm -rf "$w"; echo "done $out"
 }
 export -f one; export EV ROOT

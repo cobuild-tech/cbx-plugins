@@ -1,0 +1,602 @@
+diff --git a/app/api.py b/app/api.py
+index c8f6ea8..d144e8a 100644
+--- a/app/api.py
++++ b/app/api.py
+@@ -1,23 +1,49 @@
+-import datetime, json, os
+-from google.cloud import storage, pubsub_v1, bigquery
++import json, os, time, uuid
++import boto3
+ from flask import Flask, request
+ app = Flask(__name__)
+-gcs = storage.Client(); pub = pubsub_v1.PublisherClient(publisher_options=pubsub_v1.types.PublisherOptions(enable_message_ordering=True))
+-TOPIC = pub.topic_path(os.environ["GOOGLE_CLOUD_PROJECT"], "orders")
++s3 = boto3.client("s3", config=boto3.session.Config(signature_version="s3v4"))
++sns = boto3.client("sns")
++athena = boto3.client("athena")
++TOPIC_ARN = os.environ["TOPIC_ARN"]
+ 
+ @app.post("/upload-url")
+ def upload_url():
+-    blob = gcs.bucket(os.environ["BUCKET"]).blob(request.json["name"])
+-    return {"url": blob.generate_signed_url(version="v4", expiration=datetime.timedelta(days=7), method="PUT")}
++    url = s3.generate_presigned_url(
++        "put_object",
++        Params={"Bucket": os.environ["BUCKET"], "Key": request.json["name"]},
++        ExpiresIn=7 * 24 * 3600,  # NOTE: effectively capped by task-role credential lifetime
++        HttpMethod="PUT",
++    )
++    return {"url": url}
+ 
+ @app.post("/orders")
+ def create_order():
+     o = request.json
+-    pub.publish(TOPIC, json.dumps(o).encode(), ordering_key=o["customer_id"]).result()
++    sns.publish(
++        TopicArn=TOPIC_ARN,
++        Message=json.dumps(o),
++        MessageGroupId=str(o["customer_id"]),  # per-customer ordering
++        MessageDeduplicationId=str(uuid.uuid4()),
++    )
+     return {"ok": True}
+ 
++def _run_athena(sql):
++    qid = athena.start_query_execution(
++        QueryString=sql, WorkGroup=os.environ["ATHENA_WORKGROUP"]
++    )["QueryExecutionId"]
++    while True:
++        st = athena.get_query_execution(QueryExecutionId=qid)["QueryExecution"]["Status"]
++        if st["State"] == "SUCCEEDED":
++            return
++        if st["State"] in ("FAILED", "CANCELLED"):
++            raise RuntimeError(st.get("StateChangeReason", st["State"]))
++        time.sleep(2)
++
+ @app.post("/jobs/rollup")
+ def rollup():
+-    sql = open("sql/rollup.sql").read()
+-    bigquery.Client().query(sql).result()
++    # Athena runs one statement per query; the file holds several separated by ';'
++    for stmt in open("sql/rollup.sql").read().split(";"):
++        if stmt.strip():
++            _run_athena(stmt)
+     return {"ok": True}
+diff --git a/app/worker.py b/app/worker.py
+index 762334b..5c4046c 100644
+--- a/app/worker.py
++++ b/app/worker.py
+@@ -1,5 +1,10 @@
+-import base64, json, functions_framework
+-@functions_framework.cloud_event
+-def handle(event):
+-    order = json.loads(base64.b64decode(event.data["message"]["data"]))
+-    print("processing", order["id"])
++import json
++
++
++def handle(event, context):
++    # SQS (FIFO) event source mapping, batch_size=1; SNS raw message delivery
++    # means the body is the order JSON itself. Raising fails the message so it
++    # is redelivered, and moved to the DLQ after 5 receives.
++    for record in event["Records"]:
++        order = json.loads(record["body"])
++        print("processing", order["id"])
+diff --git a/aws/main.tf b/aws/main.tf
+new file mode 100644
+index 0000000..927f54e
+--- /dev/null
++++ b/aws/main.tf
+@@ -0,0 +1,474 @@
++terraform {
++  required_providers {
++    aws     = { source = "hashicorp/aws", version = ">= 5.0" }
++    archive = { source = "hashicorp/archive", version = ">= 2.0" }
++  }
++}
++
++provider "aws" { region = var.region }
++
++variable "project" { type = string } # kept for bucket naming parity
++variable "region" {
++  type    = string
++  default = "us-east-2" # nearest to us-central1
++}
++variable "rollup_api_key" {
++  type      = string
++  sensitive = true
++  # EventBridge API destinations require an auth method; the GCP scheduler job had none.
++}
++variable "api_ingress_cidrs" {
++  type    = list(string)
++  default = ["0.0.0.0/0"]
++}
++
++data "aws_caller_identity" "me" {}
++data "aws_vpc" "default" { default = true }
++data "aws_subnets" "default" {
++  filter {
++    name   = "vpc-id"
++    values = [data.aws_vpc.default.id]
++  }
++}
++
++# ---------- Storage (GCS uploads -> S3) ----------
++resource "aws_s3_bucket" "uploads" { bucket = "${var.project}-uploads" }
++
++resource "aws_s3_bucket_ownership_controls" "uploads" {
++  bucket = aws_s3_bucket.uploads.id
++  rule { object_ownership = "BucketOwnerEnforced" }
++}
++resource "aws_s3_bucket_public_access_block" "uploads" {
++  bucket                  = aws_s3_bucket.uploads.id
++  block_public_acls       = true
++  block_public_policy     = true
++  ignore_public_acls      = true
++  restrict_public_buckets = true
++}
++resource "aws_s3_bucket_versioning" "uploads" {
++  bucket = aws_s3_bucket.uploads.id
++  versioning_configuration { status = "Enabled" }
++}
++resource "aws_s3_bucket_lifecycle_configuration" "uploads" {
++  bucket     = aws_s3_bucket.uploads.id
++  depends_on = [aws_s3_bucket_versioning.uploads]
++  rule {
++    id     = "nearline-30d"
++    status = "Enabled"
++    filter {}
++    transition {
++      days          = 30
++      storage_class = "STANDARD_IA"
++    }
++  }
++  rule {
++    id     = "delete-365d"
++    status = "Enabled"
++    filter {}
++    expiration { days = 365 }
++  }
++}
++
++# ---------- Messaging (Pub/Sub -> SNS FIFO + SQS FIFO) ----------
++resource "aws_sns_topic" "orders" {
++  name                        = "orders.fifo"
++  fifo_topic                  = true
++  content_based_deduplication = false
++}
++
++resource "aws_sqs_queue" "orders_dlq" {
++  name                      = "orders-dlq.fifo"
++  fifo_queue                = true
++  message_retention_seconds = 604800
++}
++
++resource "aws_sqs_queue" "orders_worker" {
++  name                       = "orders-worker.fifo"
++  fifo_queue                 = true
++  visibility_timeout_seconds = 540 # must be >= Lambda timeout (ack deadline was 60s)
++  message_retention_seconds  = 604800
++  redrive_policy = jsonencode({
++    deadLetterTargetArn = aws_sqs_queue.orders_dlq.arn
++    maxReceiveCount     = 5
++  })
++}
++
++resource "aws_sqs_queue_policy" "orders_worker" {
++  queue_url = aws_sqs_queue.orders_worker.id
++  policy = jsonencode({
++    Version = "2012-10-17"
++    Statement = [{
++      Effect    = "Allow"
++      Principal = { Service = "sns.amazonaws.com" }
++      Action    = "sqs:SendMessage"
++      Resource  = aws_sqs_queue.orders_worker.arn
++      Condition = { ArnEquals = { "aws:SourceArn" = aws_sns_topic.orders.arn } }
++    }]
++  })
++}
++
++resource "aws_sns_topic_subscription" "orders_worker" {
++  topic_arn            = aws_sns_topic.orders.arn
++  protocol             = "sqs"
++  endpoint             = aws_sqs_queue.orders_worker.arn
++  raw_message_delivery = true
++}
++
++# ---------- Database (Cloud SQL -> RDS) ----------
++resource "aws_security_group" "db" {
++  name   = "app-db"
++  vpc_id = data.aws_vpc.default.id
++  ingress {
++    from_port       = 5432
++    to_port         = 5432
++    protocol        = "tcp"
++    security_groups = [aws_security_group.api_tasks.id]
++  }
++}
++resource "aws_db_subnet_group" "db" {
++  name       = "app-db"
++  subnet_ids = data.aws_subnets.default.ids
++}
++resource "aws_db_instance" "db" {
++  identifier                          = "app-db"
++  engine                              = "postgres"
++  engine_version                      = "15"
++  instance_class                      = "db.m6g.large" # 2 vCPU / 8 GiB ~ db-custom-2-7680
++  allocated_storage                   = 20
++  max_allocated_storage               = 500
++  storage_type                        = "gp3"
++  multi_az                            = true
++  username                            = "postgres"
++  manage_master_user_password         = true
++  iam_database_authentication_enabled = true
++  backup_retention_period             = 7 # enables point-in-time recovery
++  db_subnet_group_name                = aws_db_subnet_group.db.name
++  vpc_security_group_ids              = [aws_security_group.db.id]
++  publicly_accessible                 = false
++  storage_encrypted                   = true
++  skip_final_snapshot                 = false
++  final_snapshot_identifier           = "app-db-final"
++}
++
++# ---------- IAM (api-sa -> task role) ----------
++data "aws_iam_policy_document" "ecs_assume" {
++  statement {
++    actions = ["sts:AssumeRole"]
++    principals {
++      type        = "Service"
++      identifiers = ["ecs-tasks.amazonaws.com"]
++    }
++  }
++}
++resource "aws_iam_role" "api" {
++  name               = "api-sa"
++  assume_role_policy = data.aws_iam_policy_document.ecs_assume.json
++}
++# Mirrors roles/storage.objectAdmin on the bucket (and nothing else, as in GCP).
++resource "aws_iam_role_policy" "api_obj" {
++  role = aws_iam_role.api.id
++  policy = jsonencode({
++    Version = "2012-10-17"
++    Statement = [
++      {
++        Effect   = "Allow"
++        Action   = ["s3:GetObject", "s3:GetObjectVersion", "s3:PutObject", "s3:DeleteObject", "s3:DeleteObjectVersion", "s3:AbortMultipartUpload", "s3:ListMultipartUploadParts"]
++        Resource = "${aws_s3_bucket.uploads.arn}/*"
++      },
++      {
++        Effect   = "Allow"
++        Action   = ["s3:ListBucket", "s3:ListBucketVersions", "s3:GetBucketLocation"]
++        Resource = aws_s3_bucket.uploads.arn
++      }
++    ]
++  })
++}
++resource "aws_iam_role" "api_exec" {
++  name               = "api-exec"
++  assume_role_policy = data.aws_iam_policy_document.ecs_assume.json
++}
++resource "aws_iam_role_policy_attachment" "api_exec" {
++  role       = aws_iam_role.api_exec.name
++  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
++}
++
++# ---------- API (Cloud Run -> ECS Fargate + ALB) ----------
++resource "aws_ecr_repository" "api" { name = "app/api" }
++resource "aws_cloudwatch_log_group" "api" {
++  name              = "/ecs/api"
++  retention_in_days = 30
++}
++
++resource "aws_security_group" "alb" {
++  name   = "api-alb"
++  vpc_id = data.aws_vpc.default.id
++  ingress {
++    from_port   = 80
++    to_port     = 80
++    protocol    = "tcp"
++    cidr_blocks = var.api_ingress_cidrs
++  }
++  egress {
++    from_port   = 0
++    to_port     = 0
++    protocol    = "-1"
++    cidr_blocks = ["0.0.0.0/0"]
++  }
++}
++resource "aws_security_group" "api_tasks" {
++  name   = "api-tasks"
++  vpc_id = data.aws_vpc.default.id
++  ingress {
++    from_port       = 8080
++    to_port         = 8080
++    protocol        = "tcp"
++    security_groups = [aws_security_group.alb.id]
++  }
++  egress {
++    from_port   = 0
++    to_port     = 0
++    protocol    = "-1"
++    cidr_blocks = ["0.0.0.0/0"]
++  }
++}
++
++resource "aws_lb" "api" {
++  name               = "api"
++  load_balancer_type = "application"
++  security_groups    = [aws_security_group.alb.id]
++  subnets            = data.aws_subnets.default.ids
++  idle_timeout       = 900 # Cloud Run request timeout
++}
++resource "aws_lb_target_group" "api" {
++  name        = "api"
++  port        = 8080
++  protocol    = "HTTP"
++  target_type = "ip"
++  vpc_id      = data.aws_vpc.default.id
++  health_check {
++    path    = "/"
++    matcher = "200-499" # app has no health route; any HTTP response = alive
++  }
++}
++resource "aws_lb_listener" "api" {
++  load_balancer_arn = aws_lb.api.arn
++  port              = 80
++  protocol          = "HTTP"
++  default_action {
++    type             = "forward"
++    target_group_arn = aws_lb_target_group.api.arn
++  }
++}
++
++resource "aws_ecs_cluster" "main" { name = "app" }
++
++resource "aws_ecs_task_definition" "api" {
++  family                   = "api"
++  requires_compatibilities = ["FARGATE"]
++  network_mode             = "awsvpc"
++  cpu                      = "2048"
++  memory                   = "4096" # Fargate minimum for 2 vCPU (Cloud Run: 1Gi)
++  execution_role_arn       = aws_iam_role.api_exec.arn
++  task_role_arn            = aws_iam_role.api.arn
++  container_definitions = jsonencode([{
++    name         = "api"
++    image        = "${aws_ecr_repository.api.repository_url}:latest"
++    essential    = true
++    portMappings = [{ containerPort = 8080 }]
++    environment = [
++      { name = "BUCKET", value = aws_s3_bucket.uploads.bucket },
++      { name = "TOPIC_ARN", value = aws_sns_topic.orders.arn },
++      { name = "ATHENA_WORKGROUP", value = aws_athena_workgroup.analytics.name },
++      { name = "AWS_REGION", value = var.region },
++      { name = "DB_HOST", value = aws_db_instance.db.address },
++    ]
++    logConfiguration = {
++      logDriver = "awslogs"
++      options = {
++        awslogs-group         = aws_cloudwatch_log_group.api.name
++        awslogs-region        = var.region
++        awslogs-stream-prefix = "api"
++      }
++    }
++  }])
++}
++
++resource "aws_ecs_service" "api" {
++  name            = "api"
++  cluster         = aws_ecs_cluster.main.id
++  task_definition = aws_ecs_task_definition.api.arn
++  desired_count   = 1
++  launch_type     = "FARGATE"
++  network_configuration {
++    subnets          = data.aws_subnets.default.ids
++    security_groups  = [aws_security_group.api_tasks.id]
++    assign_public_ip = true # default VPC, no NAT
++  }
++  load_balancer {
++    target_group_arn = aws_lb_target_group.api.arn
++    container_name   = "api"
++    container_port   = 8080
++  }
++  lifecycle { ignore_changes = [desired_count] }
++  depends_on = [aws_lb_listener.api]
++}
++
++resource "aws_appautoscaling_target" "api" {
++  service_namespace  = "ecs"
++  resource_id        = "service/${aws_ecs_cluster.main.name}/${aws_ecs_service.api.name}"
++  scalable_dimension = "ecs:service:DesiredCount"
++  min_capacity       = 1
++  max_capacity       = 20
++}
++resource "aws_appautoscaling_policy" "api" {
++  name               = "api-requests"
++  policy_type        = "TargetTrackingScaling"
++  service_namespace  = aws_appautoscaling_target.api.service_namespace
++  resource_id        = aws_appautoscaling_target.api.resource_id
++  scalable_dimension = aws_appautoscaling_target.api.scalable_dimension
++  target_tracking_scaling_policy_configuration {
++    target_value = 80 # concurrency per instance, approximated as requests/target/min
++    predefined_metric_specification {
++      predefined_metric_type = "ALBRequestCountPerTarget"
++      resource_label         = "${aws_lb.api.arn_suffix}/${aws_lb_target_group.api.arn_suffix}"
++    }
++  }
++}
++
++# ---------- Worker (Cloud Function -> Lambda on SQS) ----------
++data "archive_file" "worker" {
++  type        = "zip"
++  source_file = "${path.module}/../app/worker.py"
++  output_path = "${path.module}/worker.zip"
++}
++resource "aws_iam_role" "worker" {
++  name = "orders-worker"
++  assume_role_policy = jsonencode({
++    Version = "2012-10-17"
++    Statement = [{
++      Effect    = "Allow"
++      Principal = { Service = "lambda.amazonaws.com" }
++      Action    = "sts:AssumeRole"
++    }]
++  })
++}
++resource "aws_iam_role_policy_attachment" "worker" {
++  role       = aws_iam_role.worker.name
++  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaSQSQueueExecutionRole"
++}
++resource "aws_lambda_function" "worker" {
++  function_name    = "orders-worker"
++  role             = aws_iam_role.worker.arn
++  runtime          = "python3.12"
++  handler          = "worker.handle"
++  filename         = data.archive_file.worker.output_path
++  source_code_hash = data.archive_file.worker.output_base64sha256
++  timeout          = 540
++  memory_size      = 512
++}
++resource "aws_lambda_event_source_mapping" "worker" {
++  event_source_arn = aws_sqs_queue.orders_worker.arn
++  function_name    = aws_lambda_function.worker.arn
++  batch_size       = 1 # one message per invocation, like the Pub/Sub trigger
++}
++
++# ---------- Analytics (BigQuery -> Athena + Glue) ----------
++resource "aws_s3_bucket" "athena_results" { bucket = "${var.project}-athena-results" }
++resource "aws_s3_bucket_public_access_block" "athena_results" {
++  bucket                  = aws_s3_bucket.athena_results.id
++  block_public_acls       = true
++  block_public_policy     = true
++  ignore_public_acls      = true
++  restrict_public_buckets = true
++}
++resource "aws_glue_catalog_database" "analytics" { name = "analytics" }
++resource "aws_athena_workgroup" "analytics" {
++  name = "analytics"
++  configuration {
++    enforce_workgroup_configuration = true
++    result_configuration {
++      output_location = "s3://${aws_s3_bucket.athena_results.bucket}/results/"
++    }
++  }
++}
++
++# ---------- Scheduler (Cloud Scheduler -> EventBridge Scheduler + API destination) ----------
++data "aws_cloudwatch_event_bus" "default" { name = "default" }
++
++resource "aws_cloudwatch_event_connection" "api" {
++  name               = "api-rollup"
++  authorization_type = "API_KEY"
++  auth_parameters {
++    api_key {
++      key   = "x-api-key"
++      value = var.rollup_api_key
++    }
++  }
++}
++resource "aws_cloudwatch_event_api_destination" "rollup" {
++  name                = "nightly-rollup"
++  connection_arn      = aws_cloudwatch_event_connection.api.arn
++  invocation_endpoint = "http://${aws_lb.api.dns_name}/jobs/rollup"
++  http_method         = "POST"
++}
++resource "aws_iam_role" "events_invoke" {
++  name = "nightly-rollup-events"
++  assume_role_policy = jsonencode({
++    Version = "2012-10-17"
++    Statement = [{
++      Effect    = "Allow"
++      Principal = { Service = "events.amazonaws.com" }
++      Action    = "sts:AssumeRole"
++    }]
++  })
++}
++resource "aws_iam_role_policy" "events_invoke" {
++  role = aws_iam_role.events_invoke.id
++  policy = jsonencode({
++    Version   = "2012-10-17"
++    Statement = [{ Effect = "Allow", Action = "events:InvokeApiDestination", Resource = aws_cloudwatch_event_api_destination.rollup.arn }]
++  })
++}
++resource "aws_cloudwatch_event_rule" "nightly" {
++  name           = "nightly-rollup"
++  event_bus_name = data.aws_cloudwatch_event_bus.default.name
++  event_pattern  = jsonencode({ source = ["nightly-rollup"] })
++}
++resource "aws_cloudwatch_event_target" "nightly" {
++  rule     = aws_cloudwatch_event_rule.nightly.name
++  arn      = aws_cloudwatch_event_api_destination.rollup.arn
++  role_arn = aws_iam_role.events_invoke.arn
++}
++resource "aws_iam_role" "scheduler" {
++  name = "nightly-rollup-scheduler"
++  assume_role_policy = jsonencode({
++    Version = "2012-10-17"
++    Statement = [{
++      Effect    = "Allow"
++      Principal = { Service = "scheduler.amazonaws.com" }
++      Action    = "sts:AssumeRole"
++    }]
++  })
++}
++resource "aws_iam_role_policy" "scheduler" {
++  role = aws_iam_role.scheduler.id
++  policy = jsonencode({
++    Version   = "2012-10-17"
++    Statement = [{ Effect = "Allow", Action = "events:PutEvents", Resource = data.aws_cloudwatch_event_bus.default.arn }]
++  })
++}
++resource "aws_scheduler_schedule" "nightly" {
++  name                         = "nightly-rollup"
++  schedule_expression          = "cron(0 2 * * ? *)"
++  schedule_expression_timezone = "America/New_York"
++  flexible_time_window { mode = "OFF" }
++  target {
++    arn      = data.aws_cloudwatch_event_bus.default.arn
++    role_arn = aws_iam_role.scheduler.arn
++    input    = jsonencode({})
++    eventbridge_parameters {
++      detail_type = "nightly-rollup"
++      source      = "nightly-rollup"
++    }
++  }
++}
+diff --git a/sql/rollup.sql b/sql/rollup.sql
+index b79db8d..819073d 100644
+--- a/sql/rollup.sql
++++ b/sql/rollup.sql
+@@ -1,10 +1,24 @@
+-CREATE OR REPLACE TABLE analytics.daily AS
+-SELECT DATE(TIMESTAMP_TRUNC(created_at, DAY)) AS day,
+-       customer_id,
+-       SUM(SAFE_CAST(amount AS NUMERIC)) AS amount,
+-       ARRAY_AGG(STRUCT(sku, qty) ORDER BY qty DESC LIMIT 3) AS top_items,
+-       APPROX_COUNT_DISTINCT(session_id) AS sessions
+-FROM `analytics.orders`, UNNEST(items)
+-WHERE _PARTITIONDATE >= DATE_SUB(CURRENT_DATE(), INTERVAL 1 DAY)
+-GROUP BY 1, 2
+-QUALIFY ROW_NUMBER() OVER (PARTITION BY customer_id ORDER BY amount DESC) <= 100;
++-- Athena (Trino). Run as separate statements (see app/api.py). Not atomic, unlike BigQuery CREATE OR REPLACE.
++-- ASSUMPTIONS to verify against the real analytics.orders table:
++--   * partition column is `partition_date` (BigQuery _PARTITIONDATE)
++--   * `items` is array(row(sku, qty)) with exactly those two fields
++DROP TABLE IF EXISTS analytics.daily;
++
++CREATE TABLE analytics.daily WITH (format = 'PARQUET') AS
++SELECT day, customer_id, amount, top_items, sessions
++FROM (
++  SELECT day, customer_id, amount, top_items, sessions,
++         ROW_NUMBER() OVER (PARTITION BY customer_id ORDER BY amount DESC) AS rn
++  FROM (
++    SELECT DATE(DATE_TRUNC('day', created_at)) AS day,
++           customer_id,
++           SUM(TRY_CAST(amount AS DECIMAL(38, 9))) AS amount,
++           SLICE(ARRAY_AGG(ROW(sku, qty) ORDER BY qty DESC), 1, 3) AS top_items,
++           APPROX_DISTINCT(session_id) AS sessions
++    FROM analytics.orders
++    CROSS JOIN UNNEST(items) AS i(sku, qty)
++    WHERE partition_date >= CURRENT_DATE - INTERVAL '1' DAY
++    GROUP BY 1, 2
++  )
++)
++WHERE rn <= 100

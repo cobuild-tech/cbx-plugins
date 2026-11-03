@@ -1,0 +1,50 @@
+{
+ "ordering-fifo": {
+  "pass": true,
+  "why": "SNS FIFO topic and SQS FIFO queue are used, and api.py sets MessageGroupId=str(o[\"customer_id\"])."
+ },
+ "dlq-5": {
+  "pass": true,
+  "why": "orders_worker has a redrive_policy to the FIFO orders_dlq with maxReceiveCount = 5."
+ },
+ "visibility-timeout": {
+  "pass": true,
+  "why": "visibility_timeout_seconds = 540 equals the Lambda timeout of 540."
+ },
+ "run-timeout-900": {
+  "pass": true,
+  "why": "The API runs on ECS Fargate behind an ALB with idle_timeout = 900."
+ },
+ "presign-expiry": {
+  "pass": true,
+  "why": "The summary flags that 7-day presigned URLs will expire within hours under task-role credentials."
+ },
+ "rds-iam-auth": {
+  "pass": true,
+  "why": "aws_db_instance sets engine_version 15, iam_database_authentication_enabled = true, multi_az = true and backup_retention_period = 7."
+ },
+ "worker-event-shape": {
+  "pass": true,
+  "why": "worker.py reads event[\"Records\"][].body, and the SNS subscription uses raw_message_delivery = true so the body is the order JSON."
+ },
+ "sql-dialect": {
+  "pass": true,
+  "why": "The SQL uses TRY_CAST, a ROW_NUMBER subquery instead of QUALIFY, partition_date (flagged as an assumption) and SLICE(ARRAY_AGG(ROW(...) ORDER BY ...),1,3)."
+ },
+ "scheduler-tz": {
+  "pass": true,
+  "why": "aws_scheduler_schedule uses cron(0 2 * * ? *) with schedule_expression_timezone = \"America/New_York\"."
+ },
+ "lifecycle": {
+  "pass": true,
+  "why": "Versioning is enabled, with a 30-day transition to STANDARD_IA and expiration at 365 days."
+ },
+ "multi-region-flag": {
+  "pass": false,
+  "why": "Everything is mapped to the single region us-east-2, but neither the code nor the summary flags the loss of US multi-region durability/availability for GCS or BigQuery."
+ },
+ "no-silent-changes": {
+  "pass": false,
+  "why": "Some changes are not called out: the lifecycle noncurrent-version handling, the autoscaling policy (80 requests per target is not the same as concurrency 80), the desired_count ignore_changes, SNS dedup via uuid, and the added API key and 0.0.0.0/0 ingress; the summary covers many other changes but not all of these."
+ }
+}
