@@ -2,7 +2,7 @@
 name: cobuildx-ai-gcp-to-aws-migration
 description: "Use when the user asks to convert or translate Google Cloud (GCP) code or configuration to AWS — Terraform with google_* resources, gcloud commands, app.yaml, Cloud Run or Cloud Functions code, Pub/Sub handlers, BigQuery SQL, Dataproc or Dataflow jobs, Composer DAGs, or google-cloud SDK calls, or \"what would this look like on AWS\" — or to migrate, move, or re-platform GCP workloads to AWS: Compute Engine, GKE, GPUs/TPUs, Cloud Run, Cloud Functions, App Engine, Eventarc, Cloud Tasks, Cloud Scheduler, Workflows, BigQuery, Dataproc, Dataflow, Pub/Sub, Composer, Cloud Storage, Persistent Disk, or Filestore. Also use to continue, resume, or check the status of a GCP-to-AWS migration already in progress (e.g. \"continue the migration\", \"what's left to move\", \"why isn't the orders bucket migrated yet\"), and for planning, scoping, sizing, or estimating the cost of a move off GCP."
 metadata:
-  version: "1.0.0"
+  version: "1.1.0"
 ---
 
 # GCP → AWS Migration
@@ -28,8 +28,17 @@ only when a condition below says to, and open only that file.
   `.migration/` or run the inventory agent. End with one line: "For a
   whole-project migration, open the repo in Claude Code and run
   `/gcp-to-aws:plan`."
-- **Project mode.** Use this for a whole project, an area of it, or an
-  existing `.migration/`. Follow Steps 0–4. Before starting Step 1 on a
+- **Direct mode.** Use this when there is a repo and the user asks you to
+  convert it (or part of it) now, in this session ("migrate this repo to
+  AWS", "port the infra/ folder"), with no `.migration/` and no request
+  for a plan. Read every GCP file in scope. Read `references/mappings.md`
+  and the area file for every service family present (not just the
+  first). Write the AWS code in the repo, walk the **Coupling checklist**
+  below against every resource, and end with the **Behavior changes**
+  table. Don't create `.migration/`. Show, never run, commands that
+  change cloud state.
+- **Project mode.** Use this for a whole project, a multi-session move,
+  an explicit request for a plan, or an existing `.migration/`. Follow Steps 0–4. Before starting Step 1 on a
   repo with no `.migration/`, tell the user in one sentence what happens
   next: an inventory and a plan for their approval, with nothing changed
   in either cloud.
@@ -117,6 +126,58 @@ When every unit is `done`, follow the decommission section of
 | sizes instances, buys commitments, raises quotas, or moves data out of GCP | `references/cost-limits.md` |
 | is the base unit or a cutover | `references/methodology/phases.md`, `references/methodology/cutover.md` |
 | hits a GCP service you haven't mapped | `references/mappings.md` |
+
+## Coupling checklist (Direct and Snippet mode; Step 4 of Project mode)
+
+Check every item that applies. Each one either keeps the GCP behavior in
+code or becomes a row in the Behavior changes table. Never drop one
+silently.
+
+- **Location.** GCS `US`/`EU`/dual-region buckets and BigQuery `US`/`EU`
+  datasets are multi-region; S3 buckets and Athena/Redshift live in one
+  region. Flag the durability and availability difference, and add S3
+  Replication (CRR) if the user needs it (`storage.md`).
+- **Ordering.** Pub/Sub `enable_message_ordering` / `ordering_key` →
+  SNS FIFO + SQS FIFO with `MessageGroupId` = the ordering key. Note the
+  dedup ID choice and that a failed message blocks its group.
+- **Retries and DLQ.** `max_delivery_attempts` → `maxReceiveCount` on
+  every queue that feeds a consumer, including queues you add. Function
+  `retry_policy` → Lambda event-source / async retry settings; say how
+  batch size and partial-batch failure change redelivery.
+- **Timeouts.** SQS visibility timeout ≥ consumer timeout (AWS guidance:
+  6×). Cloud Run timeout above 120 s rules out App Runner and above 29 s
+  rules out a default API Gateway; use ALB with `idle_timeout` ≥ the old
+  timeout.
+- **Scaling.** Cloud Run `max_instance_request_concurrency`, min and max
+  instances → ECS desired/min/max and the scaling metric. A
+  requests-per-target policy is not the same as per-instance
+  concurrency; say so.
+- **Identity.** Service accounts → IAM roles per workload; Cloud SQL IAM
+  auth → `iam_database_authentication_enabled`; key files → none.
+  Presigned S3 URLs signed with role credentials die when the session
+  does, so a 7-day V4 signed URL can't be kept as is.
+- **Event shape.** Rewrite handlers for the payload they now get (SQS
+  `Records[].body`, SNS envelope unless raw delivery, EventBridge
+  `detail`), not the Pub/Sub CloudEvent.
+- **Schedules.** Cloud Scheduler `time_zone` → EventBridge Scheduler
+  `schedule_expression_timezone`; EventBridge rules are UTC only.
+- **Storage features.** Versioning, lifecycle classes and ages (and
+  noncurrent versions), uniform access → Object Ownership/Block Public
+  Access, retention.
+- **Data and SQL.** BigQuery SQL → engine dialect (`big-data-sql.md`):
+  `SAFE_CAST`, `QUALIFY`, `_PARTITIONDATE`, `STRUCT`/`ARRAY_AGG`,
+  approximate functions, time zones. Say how data gets to the new tables.
+- **Defaults you introduced.** Instance classes, password management,
+  health-check matchers, `ignore_changes`, new queues or Lambdas added
+  as glue: anything with no GCP counterpart is a choice, so list it.
+
+## Behavior changes (end of every conversion)
+
+Finish with a table, one row per difference, including the ones you
+chose. If a row is empty, write "none".
+
+| GCP behavior | AWS now | Kept / changed / needs decision | Why |
+|---|---|---|---|
 
 ## Always
 
