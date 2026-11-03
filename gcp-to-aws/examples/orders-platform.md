@@ -2,7 +2,7 @@
 
 > This example shows the output format the skill's Direct mode produces:
 > the checklist it walks and the Behavior changes table it ends with. For
-> measured with/without results, see [`evals/RESULTS.md`](../../evals/RESULTS.md).
+> measured results, see [`evals/RESULTS-gcp-to-aws.md`](../../evals/RESULTS-gcp-to-aws.md).
 
 **Input:** the repo in
 [`evals/cases/gcp-to-aws/01-orders-platform/repo`](../../evals/cases/gcp-to-aws/01-orders-platform/repo):

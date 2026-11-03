@@ -4,5 +4,6 @@
  "skillInvoked": true,
  "cost": 0.2990658,
  "turns": 12,
- "error": false
+ "error": false,
+ "pluginVersion": "1.0.0"
 }

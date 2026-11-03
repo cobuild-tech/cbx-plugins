@@ -1,6 +1,6 @@
 # With/without-plugin evals
 
-Measures what each skill (the X-to-React plugins and gcp-to-aws) adds to a migration: the same model, the same repo, and the same prompt, with and without the plugin.
+Measures what each X-to-React skill adds to a migration: the same model, the same repo, and the same prompt, with and without the plugin.
 
 ## Layout
 
@@ -25,9 +25,9 @@ node evals/grade.mjs --judge sonnet        # grades new runs and writes evals/RE
 
 ## gcp-to-aws
 
-- `cases/gcp-to-aws/<NN-name>/repo/` is a small GCP app (Terraform, Python, BigQuery SQL). The `with` arm loads `gcp-to-aws/`.
+- `cases/gcp-to-aws/<NN-name>/repo/` is a small GCP app (Terraform, Python, BigQuery SQL). Runs load `gcp-to-aws/`: `bash evals/run.sh --case 'gcp-to-aws/*' --arms with`. Results are in [RESULTS-gcp-to-aws.md](RESULTS-gcp-to-aws.md).
 - No cloud account is needed. After each run, `tfvalidate.sh` runs `terraform init -backend=false && terraform validate` on the generated `aws/` folder, using a local `terraform` or the `hashicorp/terraform` Docker image, and writes `terraform.txt` (first line PASS, FAIL, or SKIP). This proves the Terraform is well-formed, not that it applies; a LocalStack `apply` would be the next step.
-- The plugin's bundled AWS Knowledge MCP is not loaded in either arm (`--strict-mcp-config`), so the comparison measures the skill and references only.
+- The plugin's bundled AWS Knowledge MCP is not loaded (`--strict-mcp-config`), so results reflect the skill and its references only.
 
 ## Scope
 

@@ -29,6 +29,7 @@ one() { # case model arm rep
     fs.writeFileSync(process.argv[2]+"/final.md",res.result||"");
     fs.writeFileSync(process.argv[2]+"/meta.json",JSON.stringify({model:init.model,cli:init.claude_code_version,skillInvoked:skill,cost:res.total_cost_usd,turns:res.num_turns,error:res.is_error},null,1));
   ' "$out/transcript.jsonl" "$out"
+  [ "$a" = with ] && node -e 'const fs=require("fs"),m=JSON.parse(fs.readFileSync(process.argv[1]));m.pluginVersion=JSON.parse(fs.readFileSync(process.argv[2])).version;fs.writeFileSync(process.argv[1],JSON.stringify(m,null,1))' "$out/meta.json" "$pd/.claude-plugin/plugin.json"
   [ -x "$EV/tfvalidate.sh" ] && "$EV/tfvalidate.sh" "$w" "$out"
   rm -rf "$w"; echo "done $out"
 }
