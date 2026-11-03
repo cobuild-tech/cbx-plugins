@@ -1,0 +1,8 @@
+{ "checks": [
+ {"id":"dirty-guard","must":"The routeWillChange 'Discard changes?' guard keeps working, which requires React edits to land on the Ember Data model (so hasDirtyAttributes is true) or an equivalent dirty signal wired to the route; local-only React state that the guard can't see fails unless flagged."},
+ {"id":"save-via-model","must":"Saving still goes through model.save() (JSON:API adapter), or the replacement is flagged."},
+ {"id":"server-errors","must":"422 validation errors for name are still shown (model.errors or equivalent)."},
+ {"id":"cancel-rollback","must":"Cancel still rolls back attributes and transitions to 'projects' via the Ember router."},
+ {"id":"saving-disabled","must":"Save button is disabled while saving; on success transitions to projects.show via the Ember router."},
+ {"id":"no-silent-changes","must":"No unrequested behaviour changes without calling them out."}
+]}

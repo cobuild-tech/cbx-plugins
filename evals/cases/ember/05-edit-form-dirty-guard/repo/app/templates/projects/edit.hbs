@@ -1,0 +1,7 @@
+<form {{on "submit" this.save}}>
+  <Input @value={{this.model.name}} />
+  {{#each this.model.errors.name as |e|}}<p class="err">{{e.message}}</p>{{/each}}
+  <Textarea @value={{this.model.description}} />
+  <button type="submit" disabled={{this.model.isSaving}}>Save</button>
+  <button type="button" {{on "click" this.cancel}}>Cancel</button>
+</form>

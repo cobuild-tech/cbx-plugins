@@ -1,0 +1,1 @@
+Rewrite OrderSummaryComponent as a React + TypeScript component (src/react/) used from checkout.component.html. The rest of the app stays Angular. Edit the repo and summarise.

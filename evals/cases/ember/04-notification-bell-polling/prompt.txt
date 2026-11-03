@@ -1,0 +1,1 @@
+Port the notification-bell component to React + TypeScript (app/react/). The app stays Ember otherwise. Edit the repo and summarise.
