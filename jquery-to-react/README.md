@@ -40,7 +40,7 @@ The `cobuildx-ai-jquery-to-react-migration` skill guides Claude through moving a
 Once the plugin is installed, ask Claude to migrate your app. For example:
 
 - "Migrate this jQuery app to React"
-- "Move our jQuery checkout page to React one section at a time"
+- "Move our jQuery settings page to React one section at a time"
 - "Wrap this jQuery UI datepicker in a React component"
 
 Claude loads the skill automatically when your request matches. To start with a plan, run:
@@ -107,6 +107,10 @@ CobuildX privacy policy: https://cobuildx.ai/privacy
 ## Open source, independent of CobuildX services
 
 This plugin is free, MIT-licensed open source, and complete on its own. It is not a trial, demo, or lead-in for any paid offering: it has no upsell, sign-up, license key, usage limit, or "contact us" step, and nothing in it collects contact details or calls CobuildX servers. CobuildX also offers migration consulting as a separate business, and this plugin does not reference or depend on it.
+
+## Limitations
+
+This plugin cannot guarantee a bug-free migration. The parity reviewer and the list of behavior differences reduce the risk of silent regressions. They do not replace your own review and testing. Treat every change it makes like a pull request from a new contributor: read the diff, run your test suite, and check the affected screens before you merge or delete the original code.
 
 ## Support
 

@@ -109,6 +109,10 @@ CobuildX privacy policy: https://cobuildx.ai/privacy
 
 This plugin is free, MIT-licensed open source, and complete on its own. It is not a trial, demo, or lead-in for any paid offering: it has no upsell, sign-up, license key, usage limit, or "contact us" step, and nothing in it collects contact details or calls CobuildX servers. CobuildX also offers migration consulting as a separate business, and this plugin does not reference or depend on it.
 
+## Limitations
+
+This plugin cannot guarantee a bug-free migration. The parity reviewer and the list of behavior differences reduce the risk of silent regressions. They do not replace your own review and testing. Treat every change it makes like a pull request from a new contributor: read the diff, run your test suite, and check the affected screens before you merge or delete the original code.
+
 ## Support
 
 Report problems or request features in [GitHub Issues](https://github.com/cobuild-tech/cbx-plugins/issues), or email hello@cobuildx.ai.
