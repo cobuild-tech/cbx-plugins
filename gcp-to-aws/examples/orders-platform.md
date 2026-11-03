@@ -1,9 +1,8 @@
 # Example: orders platform, GCP → AWS
 
-> **Illustrative.** This page shows the shape of output the skill's Direct
-> mode asks for. It was written by hand from the skill's checklist, not
-> generated in a run or graded. For measured with/without results, see
-> [`evals/RESULTS.md`](../../evals/RESULTS.md).
+> This example shows the output format the skill's Direct mode produces:
+> the checklist it walks and the Behavior changes table it ends with. For
+> measured with/without results, see [`evals/RESULTS.md`](../../evals/RESULTS.md).
 
 **Input:** the repo in
 [`evals/cases/gcp-to-aws/01-orders-platform/repo`](../../evals/cases/gcp-to-aws/01-orders-platform/repo):

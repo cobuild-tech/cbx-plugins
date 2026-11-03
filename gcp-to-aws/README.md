@@ -26,7 +26,7 @@ Try asking:
 
 The `cobuildx-ai-gcp-to-aws-migration` skill guides Claude through moving GCP workloads to AWS with no change in behavior. It picks an AWS target for each service with explicit decision rules, flags the differences that cause outages (requests per instance, timeouts, event formats, cold storage retrieval, SQL time zones, identity), plans the move in waves, and validates each unit before GCP is switched off.
 
-When you ask it to convert a repo in one session, it walks a coupling checklist (location, ordering, retries, timeouts, scaling, identity, event formats, schedules, storage features, SQL) against every resource and ends with a **Behavior changes** table, so every difference is either kept in code or stated. See an [illustrative example](examples/orders-platform.md).
+When you ask it to convert a repo in one session, it walks a coupling checklist (location, ordering, retries, timeouts, scaling, identity, event formats, schedules, storage features, SQL) against every resource and ends with a **Behavior changes** table, so every difference is either kept in code or stated. See an [example](examples/orders-platform.md).
 
 | Area | Covers |
 |---|---|
