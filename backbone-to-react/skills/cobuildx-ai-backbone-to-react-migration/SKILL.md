@@ -2,7 +2,7 @@
 name: cobuildx-ai-backbone-to-react-migration
 description: "Use when the user asks to convert or translate Backbone.js code to React — a single view, template, model, collection, router, or Marionette view, pasted Backbone code with a request for React, or \"what would this look like in React\" — or to migrate, port, rewrite, or modernize a Backbone.js app (including Marionette, jQuery, and Underscore/Handlebars templates) to React — full rewrites or incremental/strangler-fig migrations of any size — or to continue, resume, or check the status of a Backbone-to-React migration already in progress (e.g. \"continue the migration\", \"what's left to migrate\", \"why isn't Orders migrated yet\"). Also use for planning, scoping, or estimating a move off Backbone, and for requests to upgrade, modernize, or replace Backbone with React."
 metadata:
-  version: "2.1.0"
+  version: "2.2.0"
 ---
 
 # Backbone → React Migration
@@ -25,6 +25,21 @@ only when a condition below says to, and open only that file.
   Don't create `.migration/` or run the inventory agent. End with one line:
   "For a whole-app migration, open the repo in Claude Code and run
   `/backbone-to-react:plan`."
+- **Direct mode.** Use this when you are in a repo and the user asks you
+  to convert a specific view, region, or file now, rather than plan a migration. Don't
+  create `.migration/` and don't stop for approval. Do this, in order:
+  1. Read the files you are converting, then read **every** reference the
+     routing table below gives for what that code contains. This is not
+     optional; most of the parity rules live there.
+  2. Search the **rest of the repo** for code that touches the area or
+     that it relies on, using the coupling checklist under "Always". Read
+     each hit. Backbone code that stays behind is where migrations break.
+  3. Convert, mount React where the old code ran (have the old View or region mount the React root and unmount it on destroy), and change
+     the remaining Backbone code only as far as the handover needs.
+  4. Reply with what you changed and a **Behavior differences** list
+     covering every difference you introduced or could not rule out,
+     including request mechanics and timing. Say "none" only if you
+     checked.
 - **Project mode.** Use this for a whole app, an area of it, or an
   existing `.migration/`. Follow Steps 0–4. Before starting Step 1 on a
   repo with no `.migration/`, tell the user in one sentence what happens
@@ -112,6 +127,23 @@ When every unit is `done`, read `references/methodology/cutover.md`.
 
 ## Always
 
+- **Coupling checklist.** Before handing an area to React, check the
+  whole repo, not just the files you are converting, for:
+  - models and collections other views use; React must subscribe to the
+    same instances (`on`/`off`, or `listenTo` in a bridge), not copy them
+    into state and fetch again;
+  - the event bus (`vent`, Backbone.Radio, `trigger` on shared models) and
+    DOM events other views catch as they bubble; remove every listener
+    React adds when it unmounts;
+  - sync behavior: `parse`, `toJSON`, `url`/`urlRoot`, `validate`, and
+    `save` options (`patch`, `wait`); `save` without `wait` sets
+    attributes first and never rolls back;
+  - Marionette lifecycle: a region destroys its view on swap, so the React
+    root must unmount in `onDestroy`/`onBeforeDestroy`; `className` and
+    `attributes` functions run only once, when the element is created;
+  - the router and `Backbone.history`;
+  - escaping: `<%- %>` and `_.escape` escape, `<%= %>` does not.
+  Keep each one working, or list it under Behavior differences.
 - Change one thing at a time. Port styles and class names as they are, in
   the same pass as the logic.
 - Keep existing bugs and event-ordering oddities for parity, and list

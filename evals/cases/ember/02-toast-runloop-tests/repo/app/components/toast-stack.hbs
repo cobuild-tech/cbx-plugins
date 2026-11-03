@@ -1,0 +1,1 @@
+<ul class="toasts">{{#each this.toasts.items as |t|}}<li {{on "click" (fn this.toasts.dismiss t)}}>{{t.text}}</li>{{/each}}</ul>

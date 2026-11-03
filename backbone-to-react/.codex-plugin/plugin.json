@@ -1,6 +1,6 @@
 {
   "name": "backbone-to-react",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "description": "Convert Backbone.js code to React. Paste a Backbone view in any Claude app and get the React version, or plan and run a full incremental migration of your repo in Claude Code.",
   "author": {
     "name": "CobuildX",

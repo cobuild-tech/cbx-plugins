@@ -1,0 +1,1 @@
+Rewrite the filters panel (FiltersCtrl + filters.html) in React with TypeScript under src/react/. ResultsCtrl and the rest remain AngularJS. Make the edits and summarise.

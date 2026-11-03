@@ -1,0 +1,1 @@
+Rewrite the booking form (views/booking.html + public/js/booking.js) as a React + TypeScript component in src/. Other pages keep using jQuery and widgets.js. Edit the repo and summarise what you did.

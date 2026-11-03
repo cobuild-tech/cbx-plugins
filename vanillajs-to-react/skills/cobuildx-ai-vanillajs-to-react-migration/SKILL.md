@@ -2,7 +2,7 @@
 name: cobuildx-ai-vanillajs-to-react-migration
 description: "Use when the user asks to convert or translate vanilla JavaScript code to React — a single page, script, DOM-rendering function, or event handler, pasted vanilla JS code with a request for React, or \"what would this look like in React\" — or to migrate, port, rewrite, or modernize a vanilla (plain) JavaScript app or page — script-tag pages, IIFE modules, or ES-module apps that work on the DOM directly — to React, as a full rewrite or an incremental/strangler-fig migration of any size, or to continue, resume, or check the status of a vanilla-JS-to-React migration already in progress (e.g. \"continue the migration\", \"what's left to migrate\", \"why isn't Search migrated yet\"). Also use for planning, scoping, or estimating a move off vanilla JS, and for requests to upgrade, modernize, or replace vanilla JS with React."
 metadata:
-  version: "1.1.0"
+  version: "1.2.0"
 ---
 
 # Vanilla JS → React Migration
@@ -26,6 +26,21 @@ only when a condition below says to, and open only that file.
   Don't create `.migration/` or run the inventory agent. End with one line:
   "For a whole-app migration, open the repo in Claude Code and run
   `/vanillajs-to-react:plan`."
+- **Direct mode.** Use this when you are in a repo and the user asks you
+  to convert a specific page, widget, or file now, rather than plan a migration. Don't
+  create `.migration/` and don't stop for approval. Do this, in order:
+  1. Read the files you are converting, then read **every** reference the
+     routing table below gives for what that code contains. This is not
+     optional; most of the parity rules live there.
+  2. Search the **rest of the repo** for code that touches the area or
+     that it relies on, using the coupling checklist under "Always". Read
+     each hit. Old code that stays behind is where migrations break.
+  3. Convert, mount React where the old code ran (remove or scope the old script for that area), and change
+     the remaining old code only as far as the handover needs.
+  4. Reply with what you changed and a **Behavior differences** list
+     covering every difference you introduced or could not rule out,
+     including request mechanics and timing. Say "none" only if you
+     checked.
 - **Project mode.** Use this for a whole app, an area of it, or an
   existing `.migration/`. Follow Steps 0–4. Before starting Step 1 on a
   repo with no `.migration/`, tell the user in one sentence what happens
@@ -117,6 +132,24 @@ When every unit is `done`, read `references/methodology/cutover.md`.
 
 ## Always
 
+- **Coupling checklist.** Before handing an area to React, check the
+  whole repo, not just the files you are converting, for:
+  - globals other scripts read or call; top-level `var` and function
+    declarations in classic scripts are globals, and moving them into a
+    module removes them, so keep a small bridge on `window`;
+  - the DOM as shared state: attributes and classes other scripts set or
+    read (`data-*`, `classList`, attributes on `<html>` or `<body>`); read
+    them from the DOM or observe them instead of copying them into state;
+  - custom events and listeners on `document` or `window` that other
+    scripts dispatch or wait for;
+  - script order and timing: `defer`/`async`, `DOMContentLoaded`, inline
+    scripts in `<head>` that run before paint, and queued APIs that inline
+    scripts call before your code loads; React mounts later than all of
+    them;
+  - storage keys and shapes (`localStorage`, `sessionStorage`, cookies)
+    and the `storage` event;
+  - server code or other consumers of what the area submits.
+  Keep each one working, or list it under Behavior differences.
 - Change one thing at a time. Keep class names and ids as they are, so the
   CSS and the test selectors keep working.
 - Once React owns a container, no old script may touch anything inside

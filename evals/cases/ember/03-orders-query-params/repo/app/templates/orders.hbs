@@ -1,0 +1,4 @@
+<select {{on "change" (pick "target.value" (set this "status"))}}><option>open</option><option>shipped</option></select>
+<OrdersTable @orders={{this.sorted}} @onSort={{set this "sort"}} />
+<button {{on "click" (set this "page" (inc this.page))}}>Next</button>
+{{#if (is-loading)}}<Spinner/>{{/if}}

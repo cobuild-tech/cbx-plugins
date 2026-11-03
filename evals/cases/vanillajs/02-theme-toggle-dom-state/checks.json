@@ -1,0 +1,8 @@
+{ "checks": [
+ {"id":"dom-truth","must":"The toggle keeps <html data-theme> as the source of truth (reads it on click / observes it), so changes by other scripts such as chart.js's hc=1 mode are reflected; copying theme into React state that can drift fails unless flagged."},
+ {"id":"themechange-event","must":"The 'themechange' CustomEvent is still dispatched on toggle so chart.js redraws."},
+ {"id":"boot-script","must":"theme-boot.js stays in <head> (not moved into React), preserving no-flash initial theme."},
+ {"id":"a11y","must":"aria-pressed and the button label text behaviour are preserved."},
+ {"id":"persist","must":"localStorage 'theme' persistence is preserved."},
+ {"id":"no-silent-changes","must":"No unrequested behaviour changes without calling them out."}
+]}

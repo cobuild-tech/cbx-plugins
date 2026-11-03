@@ -1,0 +1,9 @@
+<form id="post-form" action="/posts/42" method="post">
+  <input name="post[title]"><textarea name="post[body]"></textarea>
+  <label><input type="checkbox" name="post[tags][]" value="news">News</label>
+  <label><input type="checkbox" name="post[tags][]" value="tips">Tips</label>
+  <span class="save-status"></span>
+</form>
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="/js/autosave.js"></script>
+<script src="/js/leave-guard.js"></script>

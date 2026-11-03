@@ -2,7 +2,7 @@
 name: cobuildx-ai-angular-to-react-migration
 description: "Use when the user asks to convert or translate Angular / AngularJS code to React — a single component, template, directive, service, pipe, module, or route, pasted Angular code with a request for React, or \"what would this look like in React\" — or to migrate, port, rewrite, or modernize an Angular (2+) or AngularJS (1.x) app to React — full rewrites or incremental/strangler-fig migrations of any size, including hybrid ngUpgrade apps — or to continue, resume, or check the status of an Angular-to-React migration already in progress (e.g. \"continue the migration\", \"what's left to migrate\", \"why isn't Orders migrated yet\"). Also use for planning, scoping, or estimating a move off Angular, and for requests to upgrade, modernize, or replace Angular with React."
 metadata:
-  version: "2.1.0"
+  version: "2.2.0"
 ---
 
 # Angular / AngularJS → React Migration
@@ -26,6 +26,21 @@ only when a condition below says to, and open only that file.
   Don't create `.migration/` or run the inventory agent. End with one line:
   "For a whole-app migration, open the repo in Claude Code and run
   `/angular-to-react:plan`."
+- **Direct mode.** Use this when you are in a repo and the user asks you
+  to convert a specific component, controller, directive, or file now, rather than plan a migration. Don't
+  create `.migration/` and don't stop for approval. Do this, in order:
+  1. Read the files you are converting, then read **every** reference the
+     routing table below gives for what that code contains. This is not
+     optional; most of the parity rules live there.
+  2. Search the **rest of the repo** for code that touches the area or
+     that it relies on, using the coupling checklist under "Always". Read
+     each hit. Angular code that stays behind is where migrations break.
+  3. Convert, mount React where the old code ran (register the React wrapper where the old component was used), and change
+     the remaining Angular code only as far as the handover needs.
+  4. Reply with what you changed and a **Behavior differences** list
+     covering every difference you introduced or could not rule out,
+     including request mechanics and timing. Say "none" only if you
+     checked.
 - **Project mode.** Use this for a whole app, an area of it, or an
   existing `.migration/`. Follow Steps 0–4. Before starting Step 1 on a
   repo with no `.migration/`, tell the user in one sentence what happens
@@ -114,6 +129,25 @@ When every unit is `done`, read `references/methodology/cutover.md`.
 
 ## Always
 
+- **Coupling checklist.** Before handing an area to React, check the
+  whole repo, not just the files you are converting, for:
+  - HTTP interceptors and defaults (`$httpProvider.interceptors`,
+    `HTTP_INTERCEPTORS`, XSRF settings): auth headers, token refresh on
+    401, tenant headers, and error toasts; `fetch` skips all of them, so
+    call through the injected `$http`/`HttpClient` or reproduce each one;
+  - change detection: anything React changes that Angular code reads must
+    run inside a digest in AngularJS (`$applyAsync`, `$evalAsync`) or
+    inside `NgZone` in Angular;
+  - events and shared state: `$rootScope.$broadcast`/`$emit`/`$on`,
+    services that hold state, RxJS subjects, and downgraded services in
+    hybrid apps; use the same instance through the injector, never a copy;
+  - the router while it still owns the URL: `$location`, ui-router
+    `$state` params, or the Angular Router;
+  - filters and pipes (`currency`, `date`, `number`, `orderBy`); match
+    their output exactly or list the differences;
+  - teardown: unsubscribe, deregister `$on` listeners, and unmount the
+    React root when the scope or component is destroyed.
+  Keep each one working, or list it under Behavior differences.
 - Change one thing at a time. Port styles and class names as they are, in
   the same pass as the logic.
 - Keep existing bugs and timing oddities for parity, and list them as

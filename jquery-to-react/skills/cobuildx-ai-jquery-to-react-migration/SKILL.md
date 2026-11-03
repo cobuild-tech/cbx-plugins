@@ -2,7 +2,7 @@
 name: cobuildx-ai-jquery-to-react-migration
 description: "Use when the user asks to convert or translate jQuery code to React — a single page, widget, plugin, event handler, or AJAX call, pasted jQuery code with a request for React, or \"what would this look like in React\" — or to migrate, port, rewrite, or modernize a jQuery app or page (including jQuery plugins, jQuery UI, and server-rendered pages enhanced with jQuery) to React — full rewrites or incremental/strangler-fig migrations of any size — or to continue, resume, or check the status of a jQuery-to-React migration already in progress (e.g. \"continue the migration\", \"what's left to migrate\", \"why isn't Checkout migrated yet\"). Also use for planning, scoping, or estimating a move off jQuery, and for requests to upgrade, modernize, or replace jQuery with React."
 metadata:
-  version: "1.1.0"
+  version: "1.2.0"
 ---
 
 # jQuery → React Migration
@@ -25,6 +25,24 @@ only when a condition below says to, and open only that file.
   Don't create `.migration/` or run the inventory agent. End with one line:
   "For a whole-app migration, open the repo in Claude Code and run
   `/jquery-to-react:plan`."
+- **Direct mode.** Use this when you are in a repo and the user asks you
+  to convert a specific page, widget, or file now, rather than plan a
+  migration. Don't create `.migration/` and don't stop for approval. Do
+  this, in order:
+  1. Read the files you are converting, then read **every** reference the
+     routing table below gives for what that code contains. This is not
+     optional; most of the parity rules live there.
+  2. Search the **rest of the repo** for code that touches the area or
+     that it relies on, using the coupling checklist under "Always". Read
+     each hit. jQuery code that stays behind is where migrations break.
+  3. Convert, mount React into the page, and change the remaining jQuery
+     code only as far as the handover needs (for example, delete or scope
+     a delegated handler, or exclude the React container from a page-wide
+     plugin initializer).
+  4. Reply with what you changed and a **Behavior differences** list
+     covering every difference you introduced or could not rule out,
+     including request mechanics and timing. Say "none" only if you
+     checked.
 - **Project mode.** Use this for a whole app, an area of it, or an
   existing `.migration/`. Follow Steps 0–4. Before starting Step 1 on a
   repo with no `.migration/`, tell the user in one sentence what happens
@@ -114,6 +132,23 @@ When every unit is `done`, read `references/methodology/cutover.md`.
 
 ## Always
 
+- **Coupling checklist.** Before handing an area to React, check the
+  whole repo, not just the files you are converting, for:
+  - delegated handlers (`$(document).on(`, `$('body').on(`) whose
+    selectors match the area's class names or ids; they also fire on
+    React's elements;
+  - page-wide setup that runs again later on broad selectors
+    (`initWidgets(document)`, `$(document).ajaxComplete(…)`, partial
+    reload hooks); it re-attaches plugins to elements React now owns;
+  - global AJAX setup and hooks (`$.ajaxSetup` headers or `cache`,
+    `ajaxSend`, `ajaxError`, `ajaxStart`/`ajaxStop`); `fetch` skips all of
+    them, and so does the default `X-Requested-With` header and form
+    encoding of `$.post`;
+  - custom events the area triggers or listens to, and globals other
+    scripts read;
+  - server code or other consumers of the values the area submits
+    (date, number, and field-name formats).
+  Keep each one working, or list it under Behavior differences.
 - Change one thing at a time. Keep class names and ids as they are, so the
   CSS and the test selectors keep working.
 - Once React owns an element, no jQuery code may touch anything inside it.

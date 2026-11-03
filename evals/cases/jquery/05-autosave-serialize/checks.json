@@ -1,0 +1,8 @@
+{ "checks": [
+ {"id":"wire-format","must":"Autosave still sends form-encoded Rails nested params (post[title], post[body], post[tags][]) as jQuery .serialize() did; switching to JSON without adapting/flagging the Rails controller fails."},
+ {"id":"empty-tags","must":"Matches .serialize() behaviour for unchecked checkboxes (no tags param sent when none checked) or flags the difference."},
+ {"id":"dirty-class","must":"The form still gets/loses the 'dirty' class (or an equivalent bridge) so leave-guard.js's beforeunload warning keeps working, or the breakage is flagged."},
+ {"id":"debounce","must":"1000 ms debounce after the last edit is preserved, with timer cleared on unmount."},
+ {"id":"status-text","must":"'Saved' / 'Not saved' status text and the dirty-stays-on-failure behaviour are preserved."},
+ {"id":"no-silent-changes","must":"No unrequested behaviour changes (method PATCH, X-Requested-With, etc.) without calling them out."}
+]}

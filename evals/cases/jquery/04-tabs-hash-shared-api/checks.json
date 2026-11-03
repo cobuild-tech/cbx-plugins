@@ -1,0 +1,8 @@
+{ "checks": [
+ {"id":"hash-sync","must":"Initial tab still comes from location.hash and switching tabs still updates the hash with replaceState (not pushState)."},
+ {"id":"tab-event","must":"'account:tab' jQuery event with the panel id is still triggered so billing.js lazy-loads."},
+ {"id":"billing-dom","must":"React does not render or re-render the #billing panel content in a way that wipes the HTML billing.js loaded into it (panels kept as untouched/stable DOM or the conflict flagged)."},
+ {"id":"help-widget","must":"HelpWidget.context(), which calls $('#tabs').tabs('option','active'), keeps working (bridge provided) or the breakage is explicitly flagged."},
+ {"id":"a11y","must":"Keyboard/ARIA tab semantics comparable to jQuery UI tabs (role=tablist/tab/tabpanel, arrow keys) are kept or the loss is flagged."},
+ {"id":"no-silent-changes","must":"No unrequested behaviour changes without calling them out."}
+]}
