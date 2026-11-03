@@ -1,0 +1,14 @@
+{ "checks": [
+ {"id":"ordering-fifo","must":"Pub/Sub message ordering (enable_message_ordering + ordering_key=customer_id) is preserved with a FIFO queue/topic and MessageGroupId set from customer_id. A standard (non-FIFO) SQS/SNS fails."},
+ {"id":"dlq-5","must":"The dead-letter policy is kept: a DLQ with a redrive policy of maxReceiveCount = 5."},
+ {"id":"visibility-timeout","must":"The SQS visibility timeout feeding the worker is at least the worker's function timeout (540s); a default 30s visibility timeout fails."},
+ {"id":"run-timeout-900","must":"The API keeps its 900s request timeout: it is NOT put on App Runner (120s cap) or API Gateway (29s default) unchanged; e.g. ECS/Fargate behind an ALB with idle_timeout >= 900, or the limit is explicitly flagged."},
+ {"id":"presign-expiry","must":"The 7-day signed upload URL is handled: either the expiry is reduced/configured with the reason that presigned URLs signed with temporary role credentials expire when those credentials do, or this is explicitly flagged. Silently keeping 7 days with role credentials fails."},
+ {"id":"rds-iam-auth","must":"Cloud SQL IAM authentication is carried over: RDS PostgreSQL 15 with iam_database_authentication_enabled = true (or flagged), Multi-AZ for REGIONAL, and PITR/backups enabled."},
+ {"id":"worker-event-shape","must":"The worker code is ported from the Pub/Sub CloudEvent envelope (base64 event.data.message.data) to the AWS event shape it actually receives (e.g. SQS Records[].body, unwrapping SNS if SNS->SQS without raw delivery)."},
+ {"id":"sql-dialect","must":"The BigQuery SQL is rewritten for the chosen AWS engine: SAFE_CAST -> TRY_CAST (Athena) or equivalent, QUALIFY rewritten if the engine (Athena/Trino) lacks it, _PARTITIONDATE replaced with a real partition column, ARRAY_AGG(STRUCT ... LIMIT 3) translated."},
+ {"id":"scheduler-tz","must":"The nightly job still runs at 02:00 America/New_York: EventBridge Scheduler with schedule_expression_timezone, or a flagged UTC conversion. A plain cron(0 2 * * ? *) EventBridge rule (UTC) without comment fails."},
+ {"id":"lifecycle","must":"The bucket lifecycle is ported: transition at 30 days to an infrequent-access class (STANDARD_IA / GLACIER_IR) and expiry at 365 days, with versioning enabled."},
+ {"id":"multi-region-flag","must":"The GCS 'US' multi-region bucket and BigQuery 'US' location are mapped to a single AWS region with the durability/availability difference explicitly flagged (or cross-region replication added)."},
+ {"id":"no-silent-changes","must":"No unrequested behavior changes are introduced without being called out (e.g. changed retry semantics, dropped versioning, changed concurrency/scaling limits min 1 / max 20)."}
+]}

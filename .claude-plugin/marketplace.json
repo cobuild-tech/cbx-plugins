@@ -32,6 +32,11 @@
       "name": "vanillajs-to-react",
       "source": "./vanillajs-to-react",
       "description": "Convert vanilla JavaScript code to React. Paste a vanilla JS widget in any Claude app and get the React version, or plan and run a full incremental migration of your repo in Claude Code."
+    },
+    {
+      "name": "gcp-to-aws",
+      "source": "./gcp-to-aws",
+      "description": "Convert Google Cloud (GCP) workloads to AWS. Paste GCP Terraform, config, or SDK code in any Claude app and get the AWS version, or plan and run a full migration of compute, serverless, big data, and storage in Claude Code."
     }
   ]
 }

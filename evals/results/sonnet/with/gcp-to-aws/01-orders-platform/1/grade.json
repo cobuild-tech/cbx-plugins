@@ -1,0 +1,50 @@
+{
+ "ordering-fifo": {
+  "pass": true,
+  "why": "SNS FIFO topic and SQS FIFO queue are used, and sns.publish sets MessageGroupId=str(o['customer_id']) in api.py."
+ },
+ "dlq-5": {
+  "pass": true,
+  "why": "orders_worker has a redrive_policy with maxReceiveCount = 5 targeting the FIFO DLQ orders-dlq.fifo."
+ },
+ "visibility-timeout": {
+  "pass": true,
+  "why": "visibility_timeout_seconds = 3240, which is greater than the Lambda timeout of 540s."
+ },
+ "run-timeout-900": {
+  "pass": true,
+  "why": "The API runs on ECS Fargate behind an ALB with idle_timeout = 900, and the summary notes App Runner was ruled out because of its 120s cap."
+ },
+ "presign-expiry": {
+  "pass": true,
+  "why": "The summary and a code comment explicitly flag that presigned URLs signed with task-role temporary credentials expire after hours, not 7 days."
+ },
+ "rds-iam-auth": {
+  "pass": true,
+  "why": "aws_db_instance has engine postgres 15, iam_database_authentication_enabled = true, multi_az = true and backup_retention_period = 7 (PITR)."
+ },
+ "worker-event-shape": {
+  "pass": true,
+  "why": "worker.py now iterates event['Records'] and parses record['body'] as JSON, with SNS raw_message_delivery = true so there is no envelope to unwrap."
+ },
+ "sql-dialect": {
+  "pass": true,
+  "why": "rollup.sql uses TRY_CAST, a ROW_NUMBER subquery instead of QUALIFY, partition_date in place of _PARTITIONDATE, and SLICE(ARRAY_AGG(CAST(ROW...) ORDER BY qty DESC),1,3) in place of ARRAY_AGG(STRUCT ... LIMIT 3)."
+ },
+ "scheduler-tz": {
+  "pass": true,
+  "why": "aws_scheduler_schedule uses schedule_expression_timezone = 'America/New_York' with cron(0 2 * * ? *)."
+ },
+ "lifecycle": {
+  "pass": true,
+  "why": "The lifecycle rule transitions to STANDARD_IA at 30 days and expires at 365 days, and versioning is Enabled."
+ },
+ "multi-region-flag": {
+  "pass": false,
+  "why": "The summary only says 'us-east-2' and does not flag the loss of US multi-region durability/availability for GCS or BigQuery, and no cross-region replication is added."
+ },
+ "no-silent-changes": {
+  "pass": false,
+  "why": "Several behavior changes are not called out: the Lambda invoker for the scheduler is mentioned, but the health-check matcher 200-499, desired_count ignore_changes, retry semantics (maxReceiveCount via SQS, the FIFO dedup ID per-message UUID), the DLQ being FIFO, the SQS visibility timeout change, and the DROP/delete of the table's S3 prefix are not all flagged, and the 5s scheduler/ALB-exposed-to-0.0.0.0/0 public API change is not clearly flagged."
+ }
+}

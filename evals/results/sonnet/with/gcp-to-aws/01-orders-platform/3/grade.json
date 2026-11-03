@@ -1,0 +1,50 @@
+{
+ "ordering-fifo": {
+  "pass": true,
+  "why": "SNS FIFO topic plus FIFO SQS queues, and api.py publishes with MessageGroupId=str(o[\"customer_id\"])."
+ },
+ "dlq-5": {
+  "pass": true,
+  "why": "orders_worker queue has a redrive_policy to a FIFO DLQ with maxReceiveCount = 5."
+ },
+ "visibility-timeout": {
+  "pass": true,
+  "why": "The queue feeding the Lambda (orders_trigger) has visibility_timeout_seconds = 540, equal to the Lambda timeout of 540."
+ },
+ "run-timeout-900": {
+  "pass": true,
+  "why": "API runs on ECS Fargate behind an ALB with idle_timeout = 900."
+ },
+ "presign-expiry": {
+  "pass": true,
+  "why": "The summary flags that a 7-day URL cannot be kept with role credentials because they expire after hours, and asks the user to decide."
+ },
+ "rds-iam-auth": {
+  "pass": true,
+  "why": "aws_db_instance uses Postgres 15, iam_database_authentication_enabled = true, multi_az = true, backup_retention_period = 7."
+ },
+ "worker-event-shape": {
+  "pass": true,
+  "why": "worker.py iterates event[\"Records\"] and parses record[\"body\"], with SNS raw_message_delivery = true on the subscriptions."
+ },
+ "sql-dialect": {
+  "pass": true,
+  "why": "The SQL uses TRY_CAST, a ranked CTE in place of QUALIFY, partition_date in place of _PARTITIONDATE, and slice(array_agg(ROW ... ORDER BY), 1, 3) for the top-3 array."
+ },
+ "scheduler-tz": {
+  "pass": true,
+  "why": "aws_scheduler_schedule sets schedule_expression_timezone = \"America/New_York\" with cron(0 2 * * ? *)."
+ },
+ "lifecycle": {
+  "pass": true,
+  "why": "S3 lifecycle transitions to STANDARD_IA at 30 days and expires at 365 days, with versioning enabled."
+ },
+ "multi-region-flag": {
+  "pass": false,
+  "why": "Everything is mapped to a single region (us-east-2), but the summary never flags the loss of multi-region durability/availability for the GCS 'US' bucket and BigQuery 'US' location, and no cross-region replication is added."
+ },
+ "no-silent-changes": {
+  "pass": false,
+  "why": "Several changes are not called out: the added orders-worker-trigger queue has no DLQ, and the Lambda mapping uses batch_size 10 with new partial-failure semantics; the desired_count lifecycle ignore, the ALB health check and the new analytics bucket are also not called out, although the summary does flag scaling approximation, the extra queue and the memory change."
+ }
+}
