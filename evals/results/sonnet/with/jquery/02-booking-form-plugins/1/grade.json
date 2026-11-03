@@ -1,0 +1,26 @@
+{
+ "date-format": {
+  "pass": true,
+  "why": "The datepicker keeps dateFormat 'dd/mm/yy' and the form posts natively, and the summary states the server still receives dd/mm/yyyy, which Date.strptime expects."
+ },
+ "date-rules": {
+  "pass": true,
+  "why": "The datepicker in BookingForm.tsx keeps minDate: 1 and beforeShowDay: $.datepicker.noWeekends, and the summary lists the same options as widgets.js."
+ },
+ "ajaxcomplete-conflict": {
+  "pass": true,
+  "why": "widgets.js initWidgets now uses .not('[data-react-root] *'), and the summary explains this stops the ajaxComplete hook from attaching a second datepicker to the React-owned #ship-date."
+ },
+ "validation-kept": {
+  "pass": true,
+  "why": "validateField requires name with min length 2 and ship_date required with the message 'Pick a weekday from tomorrow onward'."
+ },
+ "cleanup": {
+  "pass": true,
+  "why": "The useEffect cleanup calls $input.off('change') and $input.datepicker('destroy') on unmount."
+ },
+ "no-silent-changes": {
+  "pass": true,
+  "why": "The summary flags the validation timing differences, the kept quirks, the removed jquery-validate script tag, the widgets.js edit, and the unreferenced booking.js; the unflagged differences left are minor."
+ }
+}

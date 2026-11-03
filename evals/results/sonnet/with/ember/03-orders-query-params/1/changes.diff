@@ -1,0 +1,195 @@
+diff --git a/app/controllers/orders.js b/app/controllers/orders.js
+index 6ba72ce..177a4f0 100644
+--- a/app/controllers/orders.js
++++ b/app/controllers/orders.js
+@@ -1,7 +1,14 @@
+ import Controller from '@ember/controller';
+ import { tracked } from '@glimmer/tracking';
++import { action } from '@ember/object';
++
++// UI logic (sorting, rendering) now lives in app/react/OrdersPage.tsx. The
++// controller only owns the query params so the Ember router keeps the URL.
+ export default class OrdersController extends Controller {
+   queryParams = ['status', 'page', 'sort'];
+   @tracked status = 'open'; @tracked page = 1; @tracked sort = 'date';
+-  get sorted() { return [...this.model].sort((a, b) => (a[this.sort] > b[this.sort] ? -1 : 1)); }
++
++  @action setStatus(value) { this.status = value; }
++  @action setSort(value) { this.sort = value; }
++  @action setPage(value) { this.page = value; }
+ }
+diff --git a/app/modifiers/react-orders.js b/app/modifiers/react-orders.js
+new file mode 100644
+index 0000000..7668e32
+--- /dev/null
++++ b/app/modifiers/react-orders.js
+@@ -0,0 +1,32 @@
++import Modifier from 'ember-modifier';
++import { createRoot } from 'react-dom/client';
++import { createElement } from 'react';
++import { OrdersPage } from '../react/OrdersPage';
++
++// Mounts the React orders page. Root is created once, re-rendered whenever a
++// tracked arg read below changes, and unmounted on teardown.
++export default class ReactOrdersModifier extends Modifier {
++  root = null;
++
++  modify(element, _positional, props) {
++    if (!this.root) this.root = createRoot(element);
++    this.root.render(
++      createElement(OrdersPage, {
++        // Copy so autotracking reads array contents and React sees a new ref.
++        orders: [...props.orders],
++        status: props.status,
++        page: props.page,
++        sort: props.sort,
++        isLoading: props.isLoading,
++        onStatusChange: props.onStatusChange,
++        onSort: props.onSort,
++        onPageChange: props.onPageChange,
++      }),
++    );
++  }
++
++  willDestroy() {
++    this.root?.unmount();
++    this.root = null;
++  }
++}
+diff --git a/app/react/OrdersPage.tsx b/app/react/OrdersPage.tsx
+new file mode 100644
+index 0000000..22871d1
+--- /dev/null
++++ b/app/react/OrdersPage.tsx
+@@ -0,0 +1,33 @@
++import { useMemo } from 'react';
++import type { OrdersPageProps } from './types';
++import { OrdersTable } from './OrdersTable';
++import { Spinner } from './Spinner';
++
++export function OrdersPage({
++  orders,
++  sort,
++  page,
++  isLoading,
++  onStatusChange,
++  onSort,
++  onPageChange,
++}: OrdersPageProps) {
++  // Same comparator as the old controller's `sorted` getter (descending).
++  const sorted = useMemo(
++    () => [...orders].sort((a, b) => ((a[sort] as number) > (b[sort] as number) ? -1 : 1)),
++    [orders, sort],
++  );
++
++  return (
++    <>
++      {/* Uncontrolled on purpose: the Ember template never bound `value`. */}
++      <select onChange={(e) => onStatusChange(e.target.value)}>
++        <option>open</option>
++        <option>shipped</option>
++      </select>
++      <OrdersTable orders={sorted} onSort={onSort} />
++      <button onClick={() => onPageChange(page + 1)}>Next</button>
++      {isLoading && <Spinner />}
++    </>
++  );
++}
+diff --git a/app/react/OrdersTable.tsx b/app/react/OrdersTable.tsx
+new file mode 100644
+index 0000000..a7f676e
+--- /dev/null
++++ b/app/react/OrdersTable.tsx
+@@ -0,0 +1,28 @@
++import type { Order } from './types';
++
++// PLACEHOLDER: the Ember <OrdersTable> source is not in this repo, so its
++// markup/columns could not be ported. Replace with a faithful port.
++export function OrdersTable({
++  orders,
++  onSort,
++}: {
++  orders: Order[];
++  onSort: (sort: string) => void;
++}) {
++  return (
++    <table>
++      <thead>
++        <tr>
++          <th onClick={() => onSort('date')}>date</th>
++        </tr>
++      </thead>
++      <tbody>
++        {orders.map((o, i) => (
++          <tr key={o.id ?? i}>
++            <td>{String(o.date ?? '')}</td>
++          </tr>
++        ))}
++      </tbody>
++    </table>
++  );
++}
+diff --git a/app/react/Spinner.tsx b/app/react/Spinner.tsx
+new file mode 100644
+index 0000000..5b81911
+--- /dev/null
++++ b/app/react/Spinner.tsx
+@@ -0,0 +1,5 @@
++// PLACEHOLDER: the Ember <Spinner> source is not in this repo. Replace with
++// a faithful port (markup and class names) of the real component.
++export function Spinner() {
++  return <div className="spinner" role="status" />;
++}
+diff --git a/app/react/types.ts b/app/react/types.ts
+new file mode 100644
+index 0000000..8ee731c
+--- /dev/null
++++ b/app/react/types.ts
+@@ -0,0 +1,19 @@
++// Ember Data `order` records are passed through as-is (same objects the old
++// OrdersTable received), so attributes are read by name, as the controller did.
++export interface Order {
++  id?: string;
++  [attr: string]: unknown;
++}
++
++export interface OrdersPageProps {
++  orders: Order[];
++  status: string;
++  page: number;
++  sort: string;
++  isLoading: boolean;
++  // Callbacks write to the Ember controller's @tracked query params, so the
++  // Ember router still owns the URL and refreshModel behaviour.
++  onStatusChange: (status: string) => void;
++  onSort: (sort: string) => void;
++  onPageChange: (page: number) => void;
++}
+diff --git a/app/templates/orders.hbs b/app/templates/orders.hbs
+index 46ec4e5..dbd4d68 100644
+--- a/app/templates/orders.hbs
++++ b/app/templates/orders.hbs
+@@ -1,4 +1,12 @@
+-<select {{on "change" (pick "target.value" (set this "status"))}}><option>open</option><option>shipped</option></select>
+-<OrdersTable @orders={{this.sorted}} @onSort={{set this "sort"}} />
+-<button {{on "click" (set this "page" (inc this.page))}}>Next</button>
+-{{#if (is-loading)}}<Spinner/>{{/if}}
++<div
++  {{react-orders
++    orders=this.model
++    status=this.status
++    page=this.page
++    sort=this.sort
++    isLoading=(is-loading)
++    onStatusChange=this.setStatus
++    onSort=this.setSort
++    onPageChange=this.setPage
++  }}
++></div>
+diff --git a/package.json b/package.json
+index e930832..3229589 100644
+--- a/package.json
++++ b/package.json
+@@ -1 +1 @@
+-{ "name": "admin", "private": true, "dependencies": { "ember-source": "~5.4.0", "ember-data": "~5.3.0", "react": "^18.3.1", "react-dom": "^18.3.1" } }
++{ "name": "admin", "private": true, "dependencies": { "ember-source": "~5.4.0", "ember-data": "~5.3.0", "ember-modifier": "^4.1.0", "react": "^18.3.1", "react-dom": "^18.3.1" }, "devDependencies": { "typescript": "^5.4.0", "@types/react": "^18.3.0", "@types/react-dom": "^18.3.0" } }

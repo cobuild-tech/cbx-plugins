@@ -1,0 +1,26 @@
+{
+ "saved-event": {
+  "pass": true,
+  "why": "The shim's onSaved callback in new-item.js calls self.trigger('saved', m), so ItemsPage's listenTo handler still receives the model."
+ },
+ "wait-true": {
+  "pass": true,
+  "why": "NewItemForm calls collection.create(..., { wait: true }) on the collection passed in from the shim, which is the shared app.items."
+ },
+ "navigate": {
+  "pass": true,
+  "why": "The shim's onSaved callback calls Backbone.history.navigate('items/' + m.id, { trigger: true }) after triggering 'saved', as the original did."
+ },
+ "server-errors": {
+  "pass": true,
+  "why": "The error handler sets the message to responseJSON.errors.join(', ') when errors is an array, and shows it in <p className=\"err\">."
+ },
+ "unmount": {
+  "pass": true,
+  "why": "ItemsPage.remove calls form.remove(), and the shim's remove() calls this.mounted.unmount() before the Backbone remove."
+ },
+ "no-silent-changes": {
+  "pass": true,
+  "why": "The summary flags the extra wrapper div, the missing bundler setup, form values persisting after save and render() becoming a no-op, and the added dev dependencies. The qty coercion and error text are unchanged in effect."
+ }
+}

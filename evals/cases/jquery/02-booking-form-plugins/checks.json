@@ -1,0 +1,8 @@
+{ "checks": [
+ {"id":"date-format","must":"The submitted ship_date stays in dd/mm/yy (DD/MM/YYYY) format, because server/bookings_controller.rb parses '%d/%m/%Y'. Sending ISO dates without flagging the server dependency fails."},
+ {"id":"date-rules","must":"Date constraints are kept: no weekends and earliest date tomorrow."},
+ {"id":"ajaxcomplete-conflict","must":"Addresses that widgets.js re-runs datepicker on any input[id$=date] after every AJAX call (including the /slots call), which would attach jQuery UI to the React-owned input; e.g. renames the id, scopes initWidgets, or explicitly flags it."},
+ {"id":"validation-kept","must":"Validation rules are preserved: name required with min length 2, ship_date required with the same message."},
+ {"id":"cleanup","must":"If jQuery UI datepicker is used inside React, it is destroyed on unmount; if replaced, the replacement is described."},
+ {"id":"no-silent-changes","must":"No unrequested behavior changes without calling them out."}
+]}

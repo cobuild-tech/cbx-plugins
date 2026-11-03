@@ -1,0 +1,26 @@
+{
+ "wire-format": {
+  "pass": true,
+  "why": "fetch sends URLSearchParams(FormData) as urlencoded body with post[title], post[body], post[tags][] names intact, matching .serialize(), and the summary states this."
+ },
+ "empty-tags": {
+  "pass": true,
+  "why": "FormData omits unchecked checkboxes just like .serialize(), so no tags param is sent when none are checked; the summary also says output 'should be the same' (though unverified)."
+ },
+ "dirty-class": {
+  "pass": true,
+  "why": "The form gets className 'dirty' from React state and the comment and summary explain this keeps leave-guard.js's form.dirty check working."
+ },
+ "debounce": {
+  "pass": true,
+  "why": "DEBOUNCE_MS = 1000 with clearTimeout on each edit, and the effect cleanup calls window.clearTimeout(timer) on unmount."
+ },
+ "status-text": {
+  "pass": true,
+  "why": "Status is set to 'Saved' with dirty cleared on success and 'Not saved' on failure without clearing dirty, matching the original."
+ },
+ "no-silent-changes": {
+  "pass": true,
+  "why": "PATCH and X-Requested-With are preserved and called out, and the summary flags the unmount cleanup, 4xx/5xx handling, the esbuild choice, and that nothing was built or run."
+ }
+}

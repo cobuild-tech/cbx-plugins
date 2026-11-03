@@ -1,0 +1,8 @@
+{ "checks": [
+ {"id":"test-waiters","must":"Keeps the acceptance test's settled() working: uses Ember run-loop timers or registers a test waiter (@ember/test-waiters) for setTimeout, or explicitly flags that the test will break and updates it."},
+ {"id":"api-compat","must":"Ember callers can still call toasts.show(text, ms) with the same signature and 4000 ms default."},
+ {"id":"dismiss-cancel","must":"Clicking dismisses and cancels the timer (no late double-removal)."},
+ {"id":"render-sync","must":"The React stack re-renders when Ember code calls show() (subscription/useSyncExternalStore or tracked bridge)."},
+ {"id":"teardown","must":"Timers are cleared and React root unmounted on app/service teardown (important in tests)."},
+ {"id":"no-silent-changes","must":"No unrequested behaviour changes without calling them out."}
+]}

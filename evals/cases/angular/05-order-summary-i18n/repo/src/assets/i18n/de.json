@@ -1,0 +1,1 @@
+{ "order": { "summary": "Bestellübersicht", "placed": "Bestellt am {{date}}", "oneItem": "1 Artikel", "nItems": "{{n}} Artikel" } }

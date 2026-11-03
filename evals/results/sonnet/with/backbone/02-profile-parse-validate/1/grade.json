@@ -1,0 +1,26 @@
+{
+ "wire-format": {
+  "pass": true,
+  "why": "handleSubmit calls model.save({displayName, website}), so the model's toJSON envelope and parse are still used."
+ },
+ "validation": {
+  "pass": true,
+  "why": "Validation stays in app.Profile (unchanged) and the form only calls model.save, so Backbone's validate runs and blocks the request; the 'invalid' event populates the .error span."
+ },
+ "no-rollback": {
+  "pass": true,
+  "why": "It uses model.save without wait:true, so Backbone's default semantics (attributes set before the server responds, no rollback) are kept."
+ },
+ "header-sync": {
+  "pass": true,
+  "why": "A model.on('change:displayName') listener calls updateHeaderName, which sets #header .name text."
+ },
+ "saved-flash": {
+  "pass": true,
+  "why": "The sync handler sets saved=true and a timer clears it after 1500ms, rendering a 'Saved' span with an opacity transition."
+ },
+ "cleanup": {
+  "pass": true,
+  "why": "The useEffect cleanup calls model.off for invalid, sync and change:displayName and clears the timer."
+ }
+}

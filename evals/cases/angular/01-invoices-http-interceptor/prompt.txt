@@ -1,0 +1,1 @@
+Port the invoiceList AngularJS component to a React + TypeScript component (src/react/). The rest of the app stays AngularJS for now, so it has to work inside customer-page.html. Edit the repo and give me a short summary.

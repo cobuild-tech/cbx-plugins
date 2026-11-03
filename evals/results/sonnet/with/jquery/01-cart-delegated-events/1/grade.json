@@ -1,0 +1,26 @@
+{
+ "no-double-handler": {
+  "pass": true,
+  "why": "cart.html now loads cart.bundle.js instead of cart.js, so the delegated '.cart .remove' jQuery handler is never loaded; the message also notes cart.js is unused and can be removed."
+ },
+ "csrf-kept": {
+  "pass": true,
+  "why": "postRemove in Cart.tsx explicitly sets the 'X-CSRF-Token' header from the meta tag on the fetch request."
+ },
+ "event-kept": {
+  "pass": true,
+  "why": "Cart.tsx calls window.jQuery(document).trigger('cart:updated', [total]) after each update, and the message says analytics.js still depends on it."
+ },
+ "change-timing": {
+  "pass": true,
+  "why": "Quantity edits are held as drafts and committed on blur or Enter, approximating jQuery's 'change', and the message lists this under behavior differences."
+ },
+ "checkout-disabled": {
+  "pass": true,
+  "why": "The checkout button renders with disabled={total === 0}."
+ },
+ "no-silent-changes": {
+  "pass": true,
+  "why": "The message calls out the skipped initial event, blur/Enter timing, CSS fade instead of fadeOut, the lack of error handling and double-click guard, and the form-encoded request format being preserved."
+ }
+}

@@ -1,0 +1,170 @@
+diff --git a/package.json b/package.json
+index 6546857..21912bd 100644
+--- a/package.json
++++ b/package.json
+@@ -1 +1,16 @@
+-{ "name": "app", "private": true, "dependencies": { "react": "^18.3.1", "react-dom": "^18.3.1" } }
++{
++  "name": "app",
++  "private": true,
++  "scripts": {
++    "build": "esbuild src/notifications/index.tsx --bundle --minify --outfile=public/js/dist/notifications.js",
++    "typecheck": "tsc -p ."
++  },
++  "dependencies": { "react": "^18.3.1", "react-dom": "^18.3.1" },
++  "devDependencies": {
++    "@types/jquery": "^1.10.43",
++    "@types/react": "^18.3.0",
++    "@types/react-dom": "^18.3.0",
++    "esbuild": "^0.24.0",
++    "typescript": "^5.6.0"
++  }
++}
+diff --git a/src/notifications/Notifications.tsx b/src/notifications/Notifications.tsx
+new file mode 100644
+index 0000000..9f55411
+--- /dev/null
++++ b/src/notifications/Notifications.tsx
+@@ -0,0 +1,67 @@
++import { useEffect, useRef, useState } from 'react';
++import { fetchNotifications, markRead, type Notification } from './api';
++
++interface Item extends Notification {
++  key: number; // unique per received item; server ids could repeat
++  read: boolean;
++}
++
++const POLL_MS = 15000;
++
++export function Notifications() {
++  // Newest first, matching the original's prepend().
++  const [items, setItems] = useState<Item[]>([]);
++  // false until the first successful response (count span starts empty/visible).
++  const [loaded, setLoaded] = useState(false);
++  const lastSeen = useRef(0);
++  const nextKey = useRef(0);
++
++  useEffect(() => {
++    function poll() {
++      fetchNotifications(lastSeen.current).then(
++        (incoming) => {
++          const added: Item[] = [];
++          for (const n of incoming) {
++            added.unshift({ ...n, key: nextKey.current++, read: false });
++            lastSeen.current = Math.max(lastSeen.current, n.id);
++          }
++          setItems((prev) => [...added, ...prev]);
++          setLoaded(true);
++        },
++        () => {
++          /* original ignored failures (global ajaxError still runs) */
++        },
++      );
++    }
++    poll();
++    // Original: setInterval first, then an immediate poll. Overlapping polls
++    // are not cancelled there either.
++    const timer = setInterval(poll, POLL_MS);
++    return () => clearInterval(timer);
++  }, []);
++
++  function handleClick(key: number, id: number) {
++    markRead(id);
++    setItems((prev) => prev.map((i) => (i.key === key ? { ...i, read: true } : i)));
++  }
++
++  return (
++    <>
++      <span id="notif-count" style={{ display: loaded && items.length === 0 ? 'none' : undefined }}>
++        {loaded ? items.length : ''}
++      </span>
++      <ul id="notif-list">
++        {items.map((i) => (
++          <li
++            key={i.key}
++            data-id={i.id}
++            className={i.read ? 'read' : undefined}
++            onClick={() => handleClick(i.key, i.id)}
++            // n.html is server-provided HTML, injected raw as before.
++            dangerouslySetInnerHTML={{ __html: i.html }}
++          />
++        ))}
++      </ul>
++    </>
++  );
++}
+diff --git a/src/notifications/api.ts b/src/notifications/api.ts
+new file mode 100644
+index 0000000..9b3f350
+--- /dev/null
++++ b/src/notifications/api.ts
+@@ -0,0 +1,23 @@
++// Deliberately still goes through jQuery's $.getJSON/$.post (global, loaded by
++// a <script> tag). That keeps global.js's $.ajaxSetup (CSRF header, cache:false),
++// the #spinner ajaxStart/ajaxStop hooks, the 401 -> /login redirect, and the
++// X-Requested-With header working for these requests. Remove when global.js
++// is migrated.
++
++export interface Notification {
++  id: number;
++  html: string;
++}
++
++export function fetchNotifications(since: number): Promise<Notification[]> {
++  return new Promise((resolve, reject) => {
++    $.getJSON('/notifications', { since })
++      .done((items: Notification[]) => resolve(items))
++      .fail((_xhr, _status, err) => reject(err));
++  });
++}
++
++export function markRead(id: number): void {
++  // Fire-and-forget, like the original.
++  $.post('/notifications/' + id + '/read');
++}
+diff --git a/src/notifications/index.tsx b/src/notifications/index.tsx
+new file mode 100644
+index 0000000..fe09245
+--- /dev/null
++++ b/src/notifications/index.tsx
+@@ -0,0 +1,8 @@
++import { createRoot } from 'react-dom/client';
++import { Notifications } from './Notifications';
++
++// Not wrapped in StrictMode: its dev-only double effect would poll twice.
++const container = document.getElementById('notifications-root');
++if (container) {
++  createRoot(container).render(<Notifications />);
++}
+diff --git a/tsconfig.json b/tsconfig.json
+new file mode 100644
+index 0000000..ce9282d
+--- /dev/null
++++ b/tsconfig.json
+@@ -0,0 +1,13 @@
++{
++  "compilerOptions": {
++    "target": "ES2020",
++    "lib": ["ES2020", "DOM"],
++    "module": "ESNext",
++    "moduleResolution": "Bundler",
++    "jsx": "react-jsx",
++    "strict": true,
++    "noEmit": true,
++    "skipLibCheck": true
++  },
++  "include": ["src"]
++}
+diff --git a/views/layout.html b/views/layout.html
+index 04926a5..80ea261 100644
+--- a/views/layout.html
++++ b/views/layout.html
+@@ -1,6 +1,6 @@
+ <meta name="csrf-token" content="{{csrf}}">
+ <div id="spinner" style="display:none">Loading…</div>
+-<span id="notif-count"></span><ul id="notif-list"></ul>
++<div id="notifications-root"></div>
+ <script src="https://code.jquery.com/jquery-1.12.4.min.js"></script>
+ <script src="/js/global.js"></script>
+-<script src="/js/notifications.js"></script>
++<script src="/js/dist/notifications.js"></script>

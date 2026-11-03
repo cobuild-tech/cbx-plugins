@@ -1,0 +1,26 @@
+{
+ "csrf": {
+  "pass": true,
+  "why": "api.ts still uses $.post, so global.js's $.ajaxSetup CSRF header applies, and the message states the CSRF header is preserved."
+ },
+ "401-redirect": {
+  "pass": true,
+  "why": "Requests go through jQuery so the global ajaxError 401 handler still fires; the message says the 401 redirect to /login is preserved."
+ },
+ "spinner": {
+  "pass": true,
+  "why": "Requests use $.getJSON/$.post, so ajaxStart/ajaxStop still toggle #spinner; the message lists the spinner show/hide as preserved."
+ },
+ "cache-false": {
+  "pass": true,
+  "why": "GET still goes through $.getJSON, so $.ajaxSetup cache:false applies; the message lists cache:false as preserved."
+ },
+ "interval-cleanup": {
+  "pass": true,
+  "why": "useEffect returns () => clearInterval(timer), which clears the polling interval on unmount."
+ },
+ "html-injection": {
+  "pass": true,
+  "why": "Items render n.html via dangerouslySetInnerHTML, as before, and the message notes the raw-HTML injection and XSS risk is unchanged."
+ }
+}

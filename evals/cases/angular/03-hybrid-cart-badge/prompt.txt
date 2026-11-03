@@ -1,0 +1,1 @@
+This is a hybrid AngularJS/Angular app. Replace CartBadgeComponent with a React + TypeScript component (src/react/) and keep it in the header. Edit the repo and summarise.

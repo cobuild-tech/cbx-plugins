@@ -1,0 +1,1 @@
+Rewrite ProfileForm as a React + TypeScript form component in src/react/. Other parts of the app still use app.Profile. Edit the repo and summarise.

@@ -1,0 +1,140 @@
+diff --git a/src/CheckoutForm.tsx b/src/CheckoutForm.tsx
+new file mode 100644
+index 0000000..090f8b2
+--- /dev/null
++++ b/src/CheckoutForm.tsx
+@@ -0,0 +1,123 @@
++import { useEffect, useRef, useState, type FormEvent } from 'react';
++
++const DRAFT_KEY = 'checkout-draft';
++
++export interface CheckoutValues {
++  email: string;
++  card: string;
++  country: string;
++}
++
++type Prefill = Partial<CheckoutValues>;
++type QueuedFn = () => void;
++
++declare global {
++  interface Window {
++    App: {
++      q: QueuedFn[] | { push: (fn: QueuedFn) => void };
++      checkout?: { prefill: (values: Prefill) => void };
++      [key: string]: unknown;
++    };
++  }
++}
++
++function loadDraft(): Prefill {
++  try {
++    return JSON.parse(sessionStorage.getItem(DRAFT_KEY) || '{}') as Prefill;
++  } catch {
++    return {};
++  }
++}
++
++export interface CheckoutFormProps {
++  countries?: { value: string; label: string }[];
++}
++
++export function CheckoutForm({ countries = [] }: CheckoutFormProps) {
++  const [values, setValues] = useState<CheckoutValues>(() => ({
++    email: '',
++    card: '',
++    country: '',
++    ...loadDraft(),
++    // never restore the card number, even from a tampered draft
++    ...{ card: '' },
++  }));
++  const [submitting, setSubmitting] = useState(false);
++  const submittingRef = useRef(false); // synchronous guard against double charge
++  const latest = useRef(values);
++  latest.current = values;
++
++  // Persist draft on unload: email + country only, never the card number.
++  useEffect(() => {
++    const save = () =>
++      sessionStorage.setItem(
++        DRAFT_KEY,
++        JSON.stringify({ email: latest.current.email, country: latest.current.country }),
++      );
++    window.addEventListener('beforeunload', save);
++    return () => window.removeEventListener('beforeunload', save);
++  }, []);
++
++  // Public bridge: window.App.checkout.prefill + draining the App.q queue.
++  useEffect(() => {
++    const prefill = (incoming: Prefill) =>
++      setValues((cur) => {
++        const next = { ...cur };
++        (Object.keys(incoming) as (keyof CheckoutValues)[]).forEach((k) => {
++          if (!next[k] && incoming[k]) next[k] = incoming[k] as string;
++        });
++        return next;
++      });
++
++    const app = (window.App = window.App || { q: [] });
++    app.checkout = { prefill };
++    if (Array.isArray(app.q)) app.q.forEach((fn) => fn());
++    app.q = { push: (fn) => fn() };
++    return () => {
++      delete app.checkout;
++    };
++  }, []);
++
++  const set = (key: keyof CheckoutValues) => (e: { target: { value: string } }) =>
++    setValues((v) => ({ ...v, [key]: e.target.value }));
++
++  const onSubmit = (e: FormEvent<HTMLFormElement>) => {
++    e.preventDefault();
++    if (submittingRef.current) return;
++    submittingRef.current = true;
++    setSubmitting(true);
++
++    const release = () => {
++      submittingRef.current = false;
++      setSubmitting(false);
++    };
++
++    fetch('/pay', { method: 'POST', body: new FormData(e.currentTarget) })
++      .then((r) => {
++        if (r.ok) {
++          sessionStorage.removeItem(DRAFT_KEY);
++          window.location.href = '/thanks';
++        } else {
++          release();
++        }
++      })
++      .catch(release);
++
++    document.dispatchEvent(new Event('checkout:submit'));
++  };
++
++  return (
++    <form id="checkout" onSubmit={onSubmit}>
++      <input name="email" value={values.email} onChange={set('email')} />
++      <input name="card" value={values.card} onChange={set('card')} />
++      <select name="country" value={values.country} onChange={set('country')}>
++        {countries.map((c) => (
++          <option key={c.value} value={c.value}>
++            {c.label}
++          </option>
++        ))}
++      </select>
++      <button disabled={submitting}>Pay</button>
++    </form>
++  );
++}
+diff --git a/src/index.tsx b/src/index.tsx
+new file mode 100644
+index 0000000..f374881
+--- /dev/null
++++ b/src/index.tsx
+@@ -0,0 +1,5 @@
++import { createRoot } from 'react-dom/client';
++import { CheckoutForm } from './CheckoutForm';
++
++const container = document.getElementById('checkout-root');
++if (container) createRoot(container).render(<CheckoutForm />);

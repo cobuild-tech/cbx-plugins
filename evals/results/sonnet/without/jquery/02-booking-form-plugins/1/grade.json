@@ -1,0 +1,26 @@
+{
+ "date-format": {
+  "pass": true,
+  "why": "A hidden ship_date input submits toServerDate(shipDate) as dd/mm/yyyy, and the summary states the server still receives dd/mm/YYYY so the controller needs no change."
+ },
+ "date-rules": {
+  "pass": true,
+  "why": "validate() rejects dates before tomorrowIso() and Saturdays/Sundays (getDay 0 or 6), and the input has min set to tomorrow."
+ },
+ "ajaxcomplete-conflict": {
+  "pass": true,
+  "why": "booking.html no longer loads widgets.js or jQuery, and the React date input has no id ending in 'date', so the ajaxComplete datepicker re-init cannot attach to it on this page."
+ },
+ "validation-kept": {
+  "pass": true,
+  "why": "validate() requires name with minimum length 2 and requires ship_date, using the 'Pick a weekday from tomorrow onward' message for invalid dates."
+ },
+ "cleanup": {
+  "pass": true,
+  "why": "jQuery UI datepicker is replaced by a native input type=date, and the final message describes the replacement and its visual difference."
+ },
+ "no-silent-changes": {
+  "pass": false,
+  "why": "The summary omits unflagged behavior changes: the name 'required' check now trims whitespace, slots are fetched with the date sent as dd/mm/yyyy rather than the datepicker's value, the first slot is auto-selected, slots are not loaded for invalid dates, and widgets.js/jQuery were removed from the page (partials loaded into #partials no longer get datepickers), although the removal of the scripts was mentioned."
+ }
+}

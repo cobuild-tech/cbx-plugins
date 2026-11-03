@@ -1,0 +1,1 @@
+Replace the tagInput directive with a React + TypeScript component (src/react/). contact-form.html and the rest stay AngularJS. Edit the repo and summarise.

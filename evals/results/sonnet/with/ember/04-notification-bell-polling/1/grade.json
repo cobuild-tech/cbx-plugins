@@ -1,0 +1,26 @@
+{
+ "testing-guard": {
+  "pass": true,
+  "why": "The wrapper passes `singleIteration: Ember.testing` and the loop uses `while (!singleIteration)`, so tests run one iteration; the message also flags that the plain setTimeout is no longer tracked by settled()."
+ },
+ "stop-on-destroy": {
+  "pass": true,
+  "why": "The effect cleanup calls `controller.abort()` and `willDestroyElement` calls `this._bell?.unmount()`, which stops the loop."
+ },
+ "store-query": {
+  "pass": true,
+  "why": "`fetchUnreadCount` still calls `this.store.query('notification', { user: this.get('session.currentUser.id'), unread: true })` on each poll."
+ },
+ "on-read": {
+  "pass": true,
+  "why": "`markAllRead` calls `onRead(unread)` before `setUnread(0)`, and the wrapper forwards it with `onRead: (n) => this.onRead(n)`."
+ },
+ "classes": {
+  "pass": true,
+  "why": "The Ember wrapper keeps `tagName: 'span'`, `classNames: ['bell']` and `classNameBindings: ['hasUnread:bell--unread']`, with `unread` synced through `onUnreadChange`."
+ },
+ "no-silent-changes": {
+  "pass": true,
+  "why": "The message states the one-loop-per-mount match with `.drop()`, keeps the 20s interval, and flags the timing, error-handling, class-update and DOM differences."
+ }
+}

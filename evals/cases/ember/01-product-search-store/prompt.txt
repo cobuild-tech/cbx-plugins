@@ -1,0 +1,1 @@
+Rewrite the ProductSearch component in React + TypeScript (app/react/). The rest of the app stays Ember for now. Make the changes and summarise.

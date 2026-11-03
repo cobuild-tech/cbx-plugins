@@ -1,0 +1,26 @@
+{
+ "app-queue": {
+  "pass": true,
+  "why": "The mount effect in CheckoutForm.tsx sets App.checkout, drains the array App.q, then swaps in an immediate-run push, and the message says the inline script still works."
+ },
+ "prefill-semantics": {
+  "pass": true,
+  "why": "Initial state is seeded from the draft and prefill only sets fields that are still empty (`if (!next[k] && incoming[k])`), and the message says a restored draft wins over the DE prefill."
+ },
+ "no-card-draft": {
+  "pass": true,
+  "why": "The beforeunload handler saves only `{ email, country }`, and the card is also forced to '' when loading a draft."
+ },
+ "double-submit": {
+  "pass": true,
+  "why": "The button is `disabled={submitting}` with a ref guard, release() runs on a non-ok response or a network error, and the draft is removed on success."
+ },
+ "tracking-event": {
+  "pass": true,
+  "why": "onSubmit still calls `document.dispatchEvent(new Event('checkout:submit'))` right after starting the fetch."
+ },
+ "no-silent-changes": {
+  "pass": true,
+  "why": "The extra behaviours (the ref guard, re-enabling the button on network error, ignoring unparseable draft JSON, the countries prop, ignoring a stored card value) are all listed under 'Small changes beyond the original'."
+ }
+}

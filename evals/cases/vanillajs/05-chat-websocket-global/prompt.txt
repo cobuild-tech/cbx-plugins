@@ -1,0 +1,1 @@
+Turn the chat widget (chat.js) into a React + TypeScript component in src/. Edit the repo and summarise.

@@ -1,0 +1,26 @@
+{
+ "region-unmount": {
+  "pass": true,
+  "why": "InboxViewBridge.onDestroy calls this.root?.unmount(), so the React root is unmounted when the region swaps views."
+ },
+ "radio-cleanup": {
+  "pass": true,
+  "why": "The React effects return cleanups that call channel.off('message:new', onNewMessage) and clearInterval(id), which run on unmount."
+ },
+ "model-source": {
+  "pass": true,
+  "why": "onNewMessage calls model.set('unread', ...) on the shared model, and the component syncs from 'change:unread', so the count stays on app.mailbox."
+ },
+ "classname-quirk": {
+  "pass": false,
+  "why": "The summary says the old className was set once at creation and now updates dynamically, but it does not say Marionette evaluates className only at element creation. It also changed the behaviour rather than preserving it or asking first, and it moved the class to a child div."
+ },
+ "escape": {
+  "pass": true,
+  "why": "Subjects are rendered as React text children ({s}), which React escapes, and the summary states this."
+ },
+ "no-silent-changes": {
+  "pass": false,
+  "why": "The summary flags the className and root-element changes, but it omits others: message:new now only increments after mount, the initial list is no longer rendered by the template, and the model 'unread' is no longer rendered via the template. It also did not flag that the Radio listener moved off listenTo and that the channel is now a prop. Most importantly, the unread count after a model change from elsewhere now re-renders, which was not done before."
+ }
+}

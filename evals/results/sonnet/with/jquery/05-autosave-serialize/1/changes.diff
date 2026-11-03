@@ -1,0 +1,150 @@
+diff --git a/package.json b/package.json
+index 9dc93bc..56e7d42 100644
+--- a/package.json
++++ b/package.json
+@@ -1 +1,15 @@
+-{ "name": "cms", "private": true, "dependencies": { "react": "^18.3.1", "react-dom": "^18.3.1" } }
++{
++  "name": "cms",
++  "private": true,
++  "scripts": {
++    "build": "esbuild src/main.tsx --bundle --minify --outfile=public/js/edit-post.js",
++    "typecheck": "tsc"
++  },
++  "dependencies": { "react": "^18.3.1", "react-dom": "^18.3.1" },
++  "devDependencies": {
++    "@types/react": "^18.3.0",
++    "@types/react-dom": "^18.3.0",
++    "esbuild": "^0.24.0",
++    "typescript": "^5.6.0"
++  }
++}
+diff --git a/src/PostEditForm.tsx b/src/PostEditForm.tsx
+new file mode 100644
+index 0000000..e24c743
+--- /dev/null
++++ b/src/PostEditForm.tsx
+@@ -0,0 +1,78 @@
++import { useEffect, useRef, useState } from 'react';
++
++const AUTOSAVE_URL = '/posts/42/autosave';
++const DEBOUNCE_MS = 1000;
++
++type Status = '' | 'Saved' | 'Not saved';
++
++// Mirrors $.ajax({ type: 'PATCH', data: $form.serialize() }): urlencoded body
++// plus the X-Requested-With header jQuery adds. fetch resolves on 4xx/5xx, so
++// those are turned into failures to match $.ajax's .fail().
++async function autosave(form: HTMLFormElement): Promise<void> {
++  const body = new URLSearchParams(new FormData(form) as unknown as Record<string, string>);
++  const res = await fetch(AUTOSAVE_URL, {
++    method: 'PATCH',
++    headers: { 'X-Requested-With': 'XMLHttpRequest' },
++    body, // sent as application/x-www-form-urlencoded;charset=UTF-8
++    credentials: 'same-origin',
++  });
++  if (!res.ok) throw new Error(`Autosave failed: ${res.status}`);
++}
++
++export function PostEditForm() {
++  const formRef = useRef<HTMLFormElement>(null);
++  const [dirty, setDirty] = useState(false);
++  const [status, setStatus] = useState<Status>('');
++
++  useEffect(() => {
++    const form = formRef.current!;
++    let timer: number | undefined;
++    let mounted = true;
++
++    // The original listened for both `input` and `change` on every :input
++    // (change also fires on blur for text fields), so keep native listeners.
++    const onEdit = () => {
++      setDirty(true);
++      window.clearTimeout(timer);
++      timer = window.setTimeout(() => {
++        autosave(form).then(
++          () => {
++            if (!mounted) return;
++            setDirty(false);
++            setStatus('Saved');
++          },
++          () => {
++            if (mounted) setStatus('Not saved');
++          },
++        );
++      }, DEBOUNCE_MS);
++    };
++
++    form.addEventListener('input', onEdit);
++    form.addEventListener('change', onEdit);
++    return () => {
++      mounted = false;
++      window.clearTimeout(timer);
++      form.removeEventListener('input', onEdit);
++      form.removeEventListener('change', onEdit);
++    };
++  }, []);
++
++  // leave-guard.js (still jQuery) reads `form.dirty` from the DOM, so the
++  // class name must stay.
++  return (
++    <form id="post-form" action="/posts/42" method="post" ref={formRef} className={dirty ? 'dirty' : undefined}>
++      <input name="post[title]" />
++      <textarea name="post[body]" />
++      <label>
++        <input type="checkbox" name="post[tags][]" value="news" />
++        News
++      </label>
++      <label>
++        <input type="checkbox" name="post[tags][]" value="tips" />
++        Tips
++      </label>
++      <span className="save-status">{status}</span>
++    </form>
++  );
++}
+diff --git a/src/main.tsx b/src/main.tsx
+new file mode 100644
+index 0000000..fa0610f
+--- /dev/null
++++ b/src/main.tsx
+@@ -0,0 +1,4 @@
++import { createRoot } from 'react-dom/client';
++import { PostEditForm } from './PostEditForm';
++
++createRoot(document.getElementById('post-form-root')!).render(<PostEditForm />);
+diff --git a/tsconfig.json b/tsconfig.json
+new file mode 100644
+index 0000000..a88bd00
+--- /dev/null
++++ b/tsconfig.json
+@@ -0,0 +1,13 @@
++{
++  "compilerOptions": {
++    "target": "ES2020",
++    "lib": ["ES2020", "DOM", "DOM.Iterable"],
++    "module": "ESNext",
++    "moduleResolution": "Bundler",
++    "jsx": "react-jsx",
++    "strict": true,
++    "noEmit": true,
++    "skipLibCheck": true
++  },
++  "include": ["src"]
++}
+diff --git a/views/edit_post.html b/views/edit_post.html
+index f330976..07e6c2e 100644
+--- a/views/edit_post.html
++++ b/views/edit_post.html
+@@ -1,9 +1,4 @@
+-<form id="post-form" action="/posts/42" method="post">
+-  <input name="post[title]"><textarea name="post[body]"></textarea>
+-  <label><input type="checkbox" name="post[tags][]" value="news">News</label>
+-  <label><input type="checkbox" name="post[tags][]" value="tips">Tips</label>
+-  <span class="save-status"></span>
+-</form>
++<div id="post-form-root"></div>
+ <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+-<script src="/js/autosave.js"></script>
++<script src="/js/edit-post.js"></script>
+ <script src="/js/leave-guard.js"></script>

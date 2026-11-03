@@ -1,0 +1,148 @@
+diff --git a/package.json b/package.json
+index a6080e9..8090ee9 100644
+--- a/package.json
++++ b/package.json
+@@ -1 +1 @@
+-{ "name": "mail", "private": true, "dependencies": { "backbone": "1.4.1", "backbone.marionette": "4.1.3", "backbone.radio": "2.0.0", "react": "^18.3.1", "react-dom": "^18.3.1" } }
++{ "name": "mail", "private": true, "dependencies": { "backbone": "1.4.1", "backbone.marionette": "4.1.3", "backbone.radio": "2.0.0", "react": "^18.3.1", "react-dom": "^18.3.1" }, "devDependencies": { "@types/backbone": "^1.4.22", "@types/react": "^18.3.0", "@types/react-dom": "^18.3.0", "typescript": "^5.6.0" } }
+diff --git a/src/react/InboxView.tsx b/src/react/InboxView.tsx
+new file mode 100644
+index 0000000..0698ab4
+--- /dev/null
++++ b/src/react/InboxView.tsx
+@@ -0,0 +1,67 @@
++import React, { useEffect, useState } from 'react';
++import type { Model } from 'backbone';
++
++export interface MailChannel {
++  on(event: string, cb: (...args: any[]) => void, ctx?: unknown): unknown;
++  off(event: string, cb?: (...args: any[]) => void, ctx?: unknown): unknown;
++  trigger(event: string, ...args: any[]): unknown;
++}
++
++export interface MailMessage {
++  subject: string;
++}
++
++export interface InboxViewProps {
++  /** Mailbox model; its `unread` attribute is the unread counter. */
++  model: Model;
++  /** Radio 'mail' channel. */
++  channel: MailChannel;
++  pollIntervalMs?: number;
++}
++
++export function InboxView({ model, channel, pollIntervalMs = 30000 }: InboxViewProps) {
++  const [unread, setUnread] = useState<number>(model.get('unread'));
++  const [subjects, setSubjects] = useState<string[]>([]);
++
++  // Keep local state in sync with the Backbone model.
++  useEffect(() => {
++    const onChange = () => setUnread(model.get('unread'));
++    model.on('change:unread', onChange);
++    return () => {
++      model.off('change:unread', onChange);
++    };
++  }, [model]);
++
++  // New messages: bump the model counter and prepend the subject.
++  useEffect(() => {
++    const onNewMessage = (msg: MailMessage) => {
++      model.set('unread', model.get('unread') + 1);
++      setSubjects((prev) => [msg.subject, ...prev]);
++    };
++    channel.on('message:new', onNewMessage);
++    return () => {
++      channel.off('message:new', onNewMessage);
++    };
++  }, [model, channel]);
++
++  // Poll trigger (cleared on unmount, replacing Marionette's onDestroy).
++  useEffect(() => {
++    const id = setInterval(() => channel.trigger('mail:poll'), pollIntervalMs);
++    return () => clearInterval(id);
++  }, [channel, pollIntervalMs]);
++
++  return (
++    <div className={unread ? 'inbox has-unread' : 'inbox'}>
++      <h2>
++        Inbox (<span className="n">{unread}</span>)
++      </h2>
++      <ul className="msgs">
++        {subjects.map((s, i) => (
++          // Text is escaped by React. Index key is fine: list is prepend-only
++          // and items have no local state.
++          <li key={subjects.length - i}>{s}</li>
++        ))}
++      </ul>
++    </div>
++  );
++}
+diff --git a/src/react/InboxViewBridge.tsx b/src/react/InboxViewBridge.tsx
+new file mode 100644
+index 0000000..7e17d8a
+--- /dev/null
++++ b/src/react/InboxViewBridge.tsx
+@@ -0,0 +1,34 @@
++import React from 'react';
++import { createRoot, type Root } from 'react-dom/client';
++import Marionette from 'backbone.marionette';
++import Backbone from 'backbone';
++import 'backbone.radio';
++import { InboxView, type MailChannel } from './InboxView';
++
++/**
++ * Marionette view that hosts the React InboxView, so the existing layout/router
++ * (`region.show(new app.InboxView({ model }))`) keeps working unchanged.
++ */
++export const InboxViewBridge = Marionette.View.extend({
++  template: false,
++  root: null as Root | null,
++
++  onRender(this: any) {
++    const channel = (Backbone as any).Radio.channel('mail') as MailChannel;
++    this.root = createRoot(this.el);
++    this.root.render(<InboxView model={this.model} channel={channel} />);
++  },
++
++  onDestroy(this: any) {
++    this.root?.unmount();
++    this.root = null;
++  },
++} as any);
++
++declare global {
++  // eslint-disable-next-line no-var
++  var app: any;
++}
++
++// Replace the legacy global so app.js needs no changes.
++app.InboxView = InboxViewBridge;
+diff --git a/src/views/inbox-view.js b/src/views/inbox-view.js
+index 19a3616..12e29f9 100644
+--- a/src/views/inbox-view.js
++++ b/src/views/inbox-view.js
+@@ -1,3 +1,4 @@
++// DEPRECATED: replaced by src/react/InboxViewBridge.tsx (React). Kept only for reference; remove from the bundle.
+ app.InboxView = Marionette.View.extend({
+   template: _.template('<h2>Inbox (<span class="n"><%- unread %></span>)</h2><ul class="msgs"></ul>'),
+   className: function () { return this.model.get('unread') ? 'inbox has-unread' : 'inbox'; },
+diff --git a/tsconfig.json b/tsconfig.json
+new file mode 100644
+index 0000000..6695f9e
+--- /dev/null
++++ b/tsconfig.json
+@@ -0,0 +1,13 @@
++{
++  "compilerOptions": {
++    "target": "ES2020",
++    "module": "ESNext",
++    "moduleResolution": "Bundler",
++    "jsx": "react-jsx",
++    "strict": true,
++    "esModuleInterop": true,
++    "skipLibCheck": true,
++    "noEmit": true
++  },
++  "include": ["src/react"]
++}

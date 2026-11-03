@@ -1,0 +1,45 @@
+diff --git a/package.json b/package.json
+index 2019c2f..d19bf98 100644
+--- a/package.json
++++ b/package.json
+@@ -1 +1,6 @@
+-{ "name": "site", "private": true, "dependencies": { "react": "^18.3.1", "react-dom": "^18.3.1" } }
++{
++  "name": "site",
++  "private": true,
++  "dependencies": { "react": "^18.3.1", "react-dom": "^18.3.1" },
++  "devDependencies": { "@types/react": "^18.3.0", "@types/react-dom": "^18.3.0", "typescript": "^5.5.0" }
++}
+diff --git a/src/ThemeToggle.tsx b/src/ThemeToggle.tsx
+new file mode 100644
+index 0000000..e7f4d6d
+--- /dev/null
++++ b/src/ThemeToggle.tsx
+@@ -0,0 +1,27 @@
++import { useState } from 'react';
++
++export type Theme = 'light' | 'dark';
++
++const readTheme = (): Theme =>
++  document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light';
++
++export function ThemeToggle() {
++  const [theme, setTheme] = useState<Theme>(readTheme);
++  const dark = theme === 'dark';
++
++  const toggle = () => {
++    const next: Theme = readTheme() === 'dark' ? 'light' : 'dark';
++    document.documentElement.dataset.theme = next;
++    localStorage.setItem('theme', next);
++    document.dispatchEvent(new CustomEvent<Theme>('themechange', { detail: next }));
++    setTheme(next);
++  };
++
++  return (
++    <button id="theme-toggle" type="button" aria-pressed={dark} onClick={toggle}>
++      {dark ? 'Light mode' : 'Dark mode'}
++    </button>
++  );
++}
++
++export default ThemeToggle;

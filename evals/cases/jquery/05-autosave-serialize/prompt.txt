@@ -1,0 +1,1 @@
+Rewrite the post editor form with autosave (views/edit_post.html + public/js/autosave.js) as a React + TypeScript component in src/. Edit the repo and summarise.

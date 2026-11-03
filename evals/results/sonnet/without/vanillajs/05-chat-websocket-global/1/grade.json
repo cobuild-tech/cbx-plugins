@@ -1,0 +1,26 @@
+{
+ "global-api": {
+  "pass": true,
+  "why": "Chat sets window.Chat = { send } in a useEffect and the summary explicitly reasons that support-macros.js only reads window.Chat on click, so module load order doesn't matter, and send() queues messages until the socket is open."
+ },
+ "single-socket": {
+  "pass": true,
+  "why": "The effect cleanup sets disposed = true, clears the timer and closes the socket, and onclose returns early when disposed, so the StrictMode double-mount leaves one live socket with no reconnect loop."
+ },
+ "backoff": {
+  "pass": true,
+  "why": "ws.onclose schedules Math.min(30000, 1000 * 2 ** retry++) and ws.onopen resets retry = 0."
+ },
+ "queue": {
+  "pass": true,
+  "why": "send() pushes to queueRef when the socket is not OPEN, and onopen flushes it in order with queueRef.current.splice(0).forEach(ws.send)."
+ },
+ "render": {
+  "pass": true,
+  "why": "Messages are appended to state and rendered as <li>{m.user}: {m.text}</li>, and an effect on [messages] sets scrollTop = scrollHeight."
+ },
+ "no-silent-changes": {
+  "pass": true,
+  "why": "The summary calls out the unmount cleanup, the controlled input, the new build config and scripts, and that chat.js was left undeleted; nothing else changes behavior."
+ }
+}

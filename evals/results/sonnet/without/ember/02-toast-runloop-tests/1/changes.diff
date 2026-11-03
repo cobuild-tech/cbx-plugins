@@ -1,0 +1,145 @@
+diff --git a/app/components/toast-stack.js b/app/components/toast-stack.js
+index 12f84cf..e69de29 100644
+--- a/app/components/toast-stack.js
++++ b/app/components/toast-stack.js
+@@ -1,3 +0,0 @@
+-import Component from '@glimmer/component';
+-import { inject as service } from '@ember/service';
+-export default class ToastStack extends Component { @service toasts; }
+diff --git a/app/react/toasts/ToastStack.tsx b/app/react/toasts/ToastStack.tsx
+new file mode 100644
+index 0000000..b11b91a
+--- /dev/null
++++ b/app/react/toasts/ToastStack.tsx
+@@ -0,0 +1,14 @@
++import { useToasts } from './useToasts';
++
++export default function ToastStack() {
++  const { items, dismiss } = useToasts();
++  return (
++    <ul className="toasts">
++      {items.map((t) => (
++        <li key={t.id} onClick={() => dismiss(t)}>
++          {t.text}
++        </li>
++      ))}
++    </ul>
++  );
++}
+diff --git a/app/react/toasts/store.ts b/app/react/toasts/store.ts
+new file mode 100644
+index 0000000..38e8b07
+--- /dev/null
++++ b/app/react/toasts/store.ts
+@@ -0,0 +1,47 @@
++export interface Toast {
++  id: number;
++  text: string;
++}
++
++type Listener = () => void;
++
++/** Framework-agnostic toast store; usable from React (useToasts) and Ember (via the service shim). */
++export class ToastStore {
++  private items: readonly Toast[] = [];
++  private timers = new Map<number, ReturnType<typeof setTimeout>>();
++  private listeners = new Set<Listener>();
++  private nextId = 1;
++
++  show = (text: string, ms = 4000): Toast => {
++    const toast: Toast = { id: this.nextId++, text };
++    this.timers.set(toast.id, setTimeout(() => this.dismiss(toast), ms));
++    this.items = [...this.items, toast];
++    this.emit();
++    return toast;
++  };
++
++  dismiss = (toast: Toast): void => {
++    const timer = this.timers.get(toast.id);
++    if (timer !== undefined) clearTimeout(timer);
++    this.timers.delete(toast.id);
++    if (!this.items.includes(toast)) return;
++    this.items = this.items.filter((t) => t !== toast);
++    this.emit();
++  };
++
++  // Arrow properties so they can be passed directly to useSyncExternalStore.
++  subscribe = (listener: Listener): (() => void) => {
++    this.listeners.add(listener);
++    return () => {
++      this.listeners.delete(listener);
++    };
++  };
++
++  getSnapshot = (): readonly Toast[] => this.items;
++
++  private emit(): void {
++    this.listeners.forEach((l) => l());
++  }
++}
++
++export const toastStore = new ToastStore();
+diff --git a/app/react/toasts/useToasts.ts b/app/react/toasts/useToasts.ts
+new file mode 100644
+index 0000000..7e01e08
+--- /dev/null
++++ b/app/react/toasts/useToasts.ts
+@@ -0,0 +1,11 @@
++import { useSyncExternalStore } from 'react';
++import { toastStore, type Toast } from './store';
++
++export function useToasts() {
++  const items = useSyncExternalStore(toastStore.subscribe, toastStore.getSnapshot);
++  return { items, show: toastStore.show, dismiss: toastStore.dismiss } as {
++    items: readonly Toast[];
++    show: typeof toastStore.show;
++    dismiss: typeof toastStore.dismiss;
++  };
++}
+diff --git a/app/services/toasts.js b/app/services/toasts.js
+index 14b0582..c1129b4 100644
+--- a/app/services/toasts.js
++++ b/app/services/toasts.js
+@@ -1,12 +1,13 @@
+ import Service from '@ember/service';
+-import { tracked } from '@glimmer/tracking';
+-import { later, cancel } from '@ember/runloop';
++import { toastStore } from '../react/toasts/store';
++
++// Thin bridge so Ember routes can keep calling this.toasts.show(...).
++// Remove once all callers use the React store directly.
+ export default class ToastsService extends Service {
+-  @tracked items = [];
+-  show(text, ms = 4000) {
+-    const t = { text, id: Math.random() };
+-    t.timer = later(() => this.dismiss(t), ms);
+-    this.items = [...this.items, t];
++  show(text, ms) {
++    return toastStore.show(text, ms);
++  }
++  dismiss(toast) {
++    toastStore.dismiss(toast);
+   }
+-  dismiss(t) { cancel(t.timer); this.items = this.items.filter((x) => x !== t); }
+ }
+diff --git a/tests/acceptance/save-profile-test.js b/tests/acceptance/save-profile-test.js
+index 51cbc65..257f51a 100644
+--- a/tests/acceptance/save-profile-test.js
++++ b/tests/acceptance/save-profile-test.js
+@@ -1,5 +1,5 @@
+ import { module, test } from 'qunit';
+-import { visit, click, settled, find } from '@ember/test-helpers';
++import { visit, click, waitUntil, find } from '@ember/test-helpers';
+ import { setupApplicationTest } from 'ember-qunit';
+ module('Acceptance | save profile', function (hooks) {
+   setupApplicationTest(hooks);
+@@ -7,7 +7,8 @@ module('Acceptance | save profile', function (hooks) {
+     await visit('/profile');
+     await click('button.save');
+     assert.dom('.toasts li').hasText('Saved');
+-    await settled(); // waits for the run-loop timer
++    // The React store uses setTimeout, which settled() does not track.
++    await waitUntil(() => !document.querySelector('.toasts li'), { timeout: 6000 });
+     assert.dom('.toasts li').doesNotExist();
+   });
+ });

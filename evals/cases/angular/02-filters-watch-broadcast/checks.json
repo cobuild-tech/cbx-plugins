@@ -1,0 +1,8 @@
+{ "checks": [
+ {"id":"broadcast","must":"ResultsCtrl still receives 'filters:changed' with the filter object (e.g. via $rootScope.$broadcast from the React side)."},
+ {"id":"digest","must":"Calls into AngularJS from React run inside a digest ($apply/$applyAsync/$timeout or $evalAsync) so ResultsCtrl's $scope.items update renders; or the need is explicitly flagged."},
+ {"id":"debounce","must":"The 300 ms debounce (cancel-and-restart) is preserved."},
+ {"id":"url-sync","must":"Filters still sync to and initialise from $location.search() (URL query), going through AngularJS so its router sees it, or the change is flagged."},
+ {"id":"initial-skip","must":"Matches the original: no broadcast on initial load (nv===ov guard) or calls the difference out."},
+ {"id":"no-silent-changes","must":"No unrequested behaviour changes without calling them out."}
+]}

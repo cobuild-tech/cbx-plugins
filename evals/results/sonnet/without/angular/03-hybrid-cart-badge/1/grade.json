@@ -1,0 +1,26 @@
+{
+ "same-instance": {
+  "pass": true,
+  "why": "The directive injects the downgraded 'cartService' (downgradeInjectable(CartService)) and passes its count$ to CartBadge, so React reads the same Angular singleton ProductCtrl uses."
+ },
+ "unsubscribe": {
+  "pass": true,
+  "why": "CartBadge's useEffect returns () => sub.unsubscribe(), and the directive unmounts the root on $destroy."
+ },
+ "mount-path": {
+  "pass": true,
+  "why": "A new AngularJS cartBadge directive in cart-badge.directive.tsx mounts React into the element, and the downgradeComponent registration and declaration were removed from app.module.ts."
+ },
+ "zone": {
+  "pass": false,
+  "why": "Neither the diff nor the final message mentions NgZone, change detection, or the AngularJS digest; the React setState path is not discussed."
+ },
+ "empty-class": {
+  "pass": true,
+  "why": "CartBadge renders <a href=\"/cart\"> with className 'badge empty' when count === 0, otherwise 'badge'."
+ },
+ "no-silent-changes": {
+  "pass": true,
+  "why": "The summary explicitly calls out the added count$ map fix and the blanked-not-deleted old file, with revert/removal guidance."
+ }
+}

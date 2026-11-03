@@ -1,0 +1,26 @@
+{
+ "dom-truth": {
+  "pass": true,
+  "why": "ThemeToggle.tsx uses useSyncExternalStore with a MutationObserver on documentElement's data-theme and reads root.dataset.theme on click, so changes from chart.js hc=1 or theme-boot.js are reflected, and the message explains this."
+ },
+ "themechange-event": {
+  "pass": true,
+  "why": "The toggle handler dispatches new CustomEvent('themechange', { detail: next }) on document, matching the original."
+ },
+ "boot-script": {
+  "pass": true,
+  "why": "theme-boot.js is untouched and not moved into React; the diff only adds src/ files and the message says index.html still loads the old scripts."
+ },
+ "a11y": {
+  "pass": true,
+  "why": "The button keeps id, aria-pressed={dark}, and the 'Light mode'/'Dark mode' label toggling, which the message confirms."
+ },
+ "persist": {
+  "pass": true,
+  "why": "toggle calls localStorage.setItem('theme', next) as the original did."
+ },
+ "no-silent-changes": {
+  "pass": true,
+  "why": "The one behaviour change, the label now updating on external data-theme changes via MutationObserver, is explicitly called out in the message, along with the unbuilt/untested state and the required index.html and bundler steps."
+ }
+}

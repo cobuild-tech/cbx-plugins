@@ -1,0 +1,146 @@
+diff --git a/index.html b/index.html
+index aacd88b..14f63af 100644
+--- a/index.html
++++ b/index.html
+@@ -1,5 +1,3 @@
+ <script src="analytics.js"></script>
+-<nav id="filters"><button data-tag="all">All</button><button data-tag="cats">Cats</button><button data-tag="dogs">Dogs</button></nav>
+-<div id="grid"></div>
+-<template id="card"><figure><img class="lazy" alt=""><figcaption></figcaption></figure></template>
+-<script src="gallery.js"></script>
++<div id="root"></div>
++<script type="module" src="/src/main.tsx"></script>
+diff --git a/package.json b/package.json
+index 4315403..8faf718 100644
+--- a/package.json
++++ b/package.json
+@@ -1 +1,6 @@
+-{ "name": "app", "private": true, "dependencies": { "vite": "^5.2.0", "react": "^18.3.1", "react-dom": "^18.3.1" } }
++{
++  "name": "app",
++  "private": true,
++  "dependencies": { "vite": "^5.2.0", "react": "^18.3.1", "react-dom": "^18.3.1" },
++  "devDependencies": { "typescript": "^5.4.0", "@types/react": "^18.3.0", "@types/react-dom": "^18.3.0" }
++}
+diff --git a/src/Gallery.tsx b/src/Gallery.tsx
+new file mode 100644
+index 0000000..b9deb06
+--- /dev/null
++++ b/src/Gallery.tsx
+@@ -0,0 +1,86 @@
++import { useEffect, useRef, useState } from 'react';
++
++export interface Photo {
++  url: string;
++  title: string;
++  tags: string[];
++}
++
++declare global {
++  interface Window {
++    __PHOTOS__?: Photo[];
++  }
++}
++
++const FILTERS = [
++  { tag: 'all', label: 'All' },
++  { tag: 'cats', label: 'Cats' },
++  { tag: 'dogs', label: 'Dogs' },
++];
++
++function LazyImage({ src, alt }: { src: string; alt: string }) {
++  const ref = useRef<HTMLImageElement>(null);
++  const [loaded, setLoaded] = useState(false);
++
++  useEffect(() => {
++    const img = ref.current;
++    if (!img) return;
++    const io = new IntersectionObserver(
++      (entries) => {
++        if (entries.some((e) => e.isIntersecting)) {
++          setLoaded(true);
++          io.disconnect();
++        }
++      },
++      { rootMargin: '300px' },
++    );
++    io.observe(img);
++    return () => io.disconnect();
++  }, []);
++
++  return <img ref={ref} className="lazy" alt={alt} src={loaded ? src : undefined} />;
++}
++
++const tagFromLocation = () => new URLSearchParams(location.search).get('tag') || 'all';
++
++export function Gallery({ photos = window.__PHOTOS__ ?? [] }: { photos?: Photo[] }) {
++  const [tag, setTag] = useState(tagFromLocation);
++
++  useEffect(() => {
++    const onPop = (e: PopStateEvent) => setTag((e.state && e.state.tag) || 'all');
++    window.addEventListener('popstate', onPop);
++    return () => window.removeEventListener('popstate', onPop);
++  }, []);
++
++  const select = (next: string) => {
++    // Goes through history.pushState so the analytics.js wrapper still fires.
++    history.pushState({ tag: next }, '', '?tag=' + next);
++    setTag(next);
++  };
++
++  const visible = photos.filter((p) => tag === 'all' || p.tags.includes(tag));
++
++  return (
++    <>
++      <nav id="filters">
++        {FILTERS.map((f) => (
++          <button
++            key={f.tag}
++            className={f.tag === tag ? 'active' : undefined}
++            onClick={() => select(f.tag)}
++          >
++            {f.label}
++          </button>
++        ))}
++      </nav>
++      <div id="grid">
++        {visible.map((p, i) => (
++          <figure key={`${tag}:${i}:${p.url}`}>
++            <LazyImage src={p.url} alt={p.title} />
++            <figcaption>{p.title}</figcaption>
++          </figure>
++        ))}
++      </div>
++    </>
++  );
++}
+diff --git a/src/main.tsx b/src/main.tsx
+new file mode 100644
+index 0000000..7b6c66c
+--- /dev/null
++++ b/src/main.tsx
+@@ -0,0 +1,4 @@
++import { createRoot } from 'react-dom/client';
++import { Gallery } from './Gallery';
++
++createRoot(document.getElementById('root')!).render(<Gallery />);
+diff --git a/tsconfig.json b/tsconfig.json
+new file mode 100644
+index 0000000..279f592
+--- /dev/null
++++ b/tsconfig.json
+@@ -0,0 +1,14 @@
++{
++  "compilerOptions": {
++    "target": "ES2020",
++    "lib": ["ES2020", "DOM", "DOM.Iterable"],
++    "module": "ESNext",
++    "moduleResolution": "bundler",
++    "jsx": "react-jsx",
++    "strict": true,
++    "noEmit": true,
++    "skipLibCheck": true,
++    "isolatedModules": true
++  },
++  "include": ["src"]
++}

@@ -1,0 +1,175 @@
+diff --git a/package.json b/package.json
+index 3a35a65..43f4f00 100644
+--- a/package.json
++++ b/package.json
+@@ -1 +1,10 @@
+-{ "name": "billing", "private": true, "dependencies": { "angular": "1.8.3", "react": "^18.3.1", "react-dom": "^18.3.1", "react2angular": "^4.0.6" } }
++{
++  "name": "billing",
++  "private": true,
++  "scripts": {
++    "build:react": "esbuild src/react/invoice-list.react.tsx --bundle --format=iife --minify --outfile=dist/invoice-list.react.js",
++    "typecheck": "tsc -p ."
++  },
++  "dependencies": { "angular": "1.8.3", "react": "^18.3.1", "react-dom": "^18.3.1", "react2angular": "^4.0.6" },
++  "devDependencies": { "@types/react": "^18.3.0", "@types/react-dom": "^18.3.0", "esbuild": "^0.24.0", "typescript": "^5.6.0" }
++}
+diff --git a/src/react/InvoiceList.tsx b/src/react/InvoiceList.tsx
+new file mode 100644
+index 0000000..1ffca25
+--- /dev/null
++++ b/src/react/InvoiceList.tsx
+@@ -0,0 +1,93 @@
++import { useEffect, useState } from 'react';
++
++export interface Invoice {
++  number: string;
++  issuedAt: string;
++  balance: number;
++}
++
++/** Injected AngularJS `$http.get`, so authInterceptor (Bearer, X-Tenant, 401 refresh+retry) still applies. */
++export type HttpGet = (url: string) => PromiseLike<{ data: Invoice[] }>;
++
++export interface InvoiceListProps {
++  customerId: string | number | undefined;
++  httpGet: HttpGet;
++}
++
++// --- AngularJS filter equivalents (en-US) ---------------------------------
++
++const ISO_DATE_ONLY = /^(\d{4})-(\d{2})-(\d{2})$/;
++
++// AngularJS treats date-only strings as local midnight (not UTC).
++function toDate(v: unknown): Date | null {
++  if (v instanceof Date) return v;
++  if (typeof v === 'number') return new Date(v);
++  if (typeof v === 'string') {
++    const m = ISO_DATE_ONLY.exec(v);
++    const d = m ? new Date(+m[1], +m[2] - 1, +m[3]) : new Date(v);
++    return isNaN(d.getTime()) ? null : d;
++  }
++  return null;
++}
++
++const mediumDate = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
++const currency = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
++
++// `date:'mediumDate'`: null/undefined -> '', unparseable -> original value.
++function formatDate(v: unknown): string {
++  if (v == null || v === '') return '';
++  const d = toDate(v);
++  return d ? mediumDate.format(d) : String(v);
++}
++
++// `currency`: null/undefined/NaN -> ''.
++function formatCurrency(v: unknown): string {
++  if (v == null || v === '') return '';
++  const n = Number(v);
++  return isNaN(n) ? '' : currency.format(n);
++}
++
++// `orderBy:'-issuedAt'`: descending, stable, strings compared case-insensitively.
++function byIssuedAtDesc(a: Invoice, b: Invoice): number {
++  let x: unknown = a.issuedAt;
++  let y: unknown = b.issuedAt;
++  if (typeof x === 'string') x = x.toLowerCase();
++  if (typeof y === 'string') y = y.toLowerCase();
++  if (x === y) return 0;
++  return (x as any) < (y as any) ? 1 : -1;
++}
++
++export function InvoiceList({ customerId, httpGet }: InvoiceListProps) {
++  const [loading, setLoading] = useState(false);
++  const [invoices, setInvoices] = useState<Invoice[] | undefined>(undefined);
++
++  // Mirrors $onChanges: runs on first render and whenever customerId changes.
++  // Parity quirks kept: no error handling (loading stays true on failure),
++  // no cancellation of stale requests, fetches even when customerId is undefined.
++  useEffect(() => {
++    setLoading(true);
++    httpGet('/api/customers/' + customerId + '/invoices').then((r) => {
++      setInvoices(r.data);
++      setLoading(false);
++    });
++  }, [customerId]); // eslint-disable-line react-hooks/exhaustive-deps
++
++  const sorted = invoices ? [...invoices].sort(byIssuedAtDesc) : [];
++
++  return (
++    <>
++      {loading && <p>Loading…</p>}
++      <table>
++        <tbody>
++          {sorted.map((i, idx) => (
++            <tr key={idx}>
++              <td>{i.number}</td>
++              <td>{formatDate(i.issuedAt)}</td>
++              <td>{formatCurrency(i.balance)}</td>
++            </tr>
++          ))}
++        </tbody>
++      </table>
++    </>
++  );
++}
+diff --git a/src/react/invoice-list.react.tsx b/src/react/invoice-list.react.tsx
+new file mode 100644
+index 0000000..71f37ae
+--- /dev/null
++++ b/src/react/invoice-list.react.tsx
+@@ -0,0 +1,36 @@
++import { createRoot, Root } from 'react-dom/client';
++import { InvoiceList } from './InvoiceList';
++
++declare const angular: any;
++
++// Registers the same `invoiceList` AngularJS component name, so customer-page.html
++// (<invoice-list customer-id="vm.customerId">) is unchanged.
++angular.module('billing').component('invoiceList', {
++  bindings: { customerId: '<' },
++  controller: [
++    '$element',
++    '$http',
++    function (this: any, $element: any, $http: any) {
++      const ctrl = this;
++      let root: Root | null = null;
++
++      const render = () => {
++        // $http (not fetch) keeps authInterceptor in the request path.
++        root?.render(
++          <InvoiceList customerId={ctrl.customerId} httpGet={(url) => $http.get(url)} />
++        );
++      };
++
++      // Root is created once; first $onChanges runs before $postLink, so render is guarded.
++      ctrl.$postLink = () => {
++        root = createRoot($element[0]);
++        render();
++      };
++      ctrl.$onChanges = render;
++      ctrl.$onDestroy = () => {
++        root?.unmount();
++        root = null;
++      };
++    },
++  ],
++});
+diff --git a/tsconfig.json b/tsconfig.json
+new file mode 100644
+index 0000000..092ddf6
+--- /dev/null
++++ b/tsconfig.json
+@@ -0,0 +1,12 @@
++{
++  "compilerOptions": {
++    "target": "ES2019",
++    "module": "ESNext",
++    "moduleResolution": "bundler",
++    "jsx": "react-jsx",
++    "strict": true,
++    "noEmit": true,
++    "skipLibCheck": true
++  },
++  "include": ["src/react"]
++}

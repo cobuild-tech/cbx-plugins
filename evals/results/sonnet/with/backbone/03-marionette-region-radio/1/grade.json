@@ -1,0 +1,26 @@
+{
+ "region-unmount": {
+  "pass": true,
+  "why": "The Marionette host's onDestroy calls this.root?.unmount(), which unmounts the React root when the region swaps views."
+ },
+ "radio-cleanup": {
+  "pass": true,
+  "why": "The useEffect cleanup calls channel.off('message:new', onNewMessage) and clearInterval(poll), and unmounting triggers it."
+ },
+ "model-source": {
+  "pass": true,
+  "why": "The component still calls model.set('unread', model.get('unread') + 1), keeping the shared mailbox model as source of truth, and the summary says so."
+ },
+ "classname-quirk": {
+  "pass": true,
+  "why": "The host's className function is kept with a comment, and the summary explicitly flags that className runs once so has-unread is never updated."
+ },
+ "escape": {
+  "pass": true,
+  "why": "The subject is rendered as a React text child ({item.subject}), which escapes it, and the summary notes React escaping replaces _.escape."
+ },
+ "no-silent-changes": {
+  "pass": true,
+  "why": "The summary calls out the subscription timing gap, asynchronous rendering, subject escaping differences, and the old file left in place."
+ }
+}

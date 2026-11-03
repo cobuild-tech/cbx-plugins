@@ -1,0 +1,26 @@
+{
+ "test-waiters": {
+  "pass": true,
+  "why": "The diff switches to setTimeout (not tracked by settled()) but explicitly updates the test to use waitUntil and the summary explains that settled() doesn't track setTimeout."
+ },
+ "api-compat": {
+  "pass": true,
+  "why": "The Ember service's show(text, ms) delegates to toastStore.show, which defaults ms to 4000 when undefined is passed, so the signature and default are preserved."
+ },
+ "dismiss-cancel": {
+  "pass": true,
+  "why": "ToastStore.dismiss clears the timer via clearTimeout, deletes it from the map, and returns early if the toast is already removed, preventing double-removal."
+ },
+ "render-sync": {
+  "pass": true,
+  "why": "useToasts uses useSyncExternalStore with the store's subscribe/getSnapshot, and show() calls emit(), so Ember-triggered show() re-renders React."
+ },
+ "teardown": {
+  "pass": false,
+  "why": "No teardown is implemented: the singleton store has no willDestroy/clear to cancel pending timers on service or app teardown, and no React root unmount exists."
+ },
+ "no-silent-changes": {
+  "pass": false,
+  "why": "The summary does not call out that Toast ids changed from Math.random() to a counter, that the timer is no longer stored on the toast object, or that show() now returns the toast; the blanked component file is flagged but these behavior changes are not."
+ }
+}

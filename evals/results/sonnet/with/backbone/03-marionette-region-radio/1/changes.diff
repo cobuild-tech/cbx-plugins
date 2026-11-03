@@ -1,0 +1,116 @@
+diff --git a/src/react/InboxView.tsx b/src/react/InboxView.tsx
+new file mode 100644
+index 0000000..8210ff9
+--- /dev/null
++++ b/src/react/InboxView.tsx
+@@ -0,0 +1,69 @@
++import { useEffect, useState } from 'react';
++
++// Minimal structural types for the Backbone objects this component touches.
++export interface MailboxModel {
++  get(attr: 'unread'): number;
++  set(attr: 'unread', value: number): unknown;
++}
++
++export interface MailChannel {
++  on(event: 'message:new', cb: (msg: NewMessage) => void): unknown;
++  off(event: 'message:new', cb: (msg: NewMessage) => void): unknown;
++  trigger(event: 'mail:poll'): unknown;
++}
++
++export interface NewMessage {
++  subject?: string | null;
++}
++
++interface Props {
++  model: MailboxModel;
++  channel: MailChannel;
++}
++
++const POLL_INTERVAL_MS = 30000;
++
++interface Item {
++  id: number;
++  subject: string;
++}
++
++let nextId = 0;
++
++export function InboxView({ model, channel }: Props) {
++  const [unread, setUnread] = useState<number>(() => model.get('unread'));
++  const [items, setItems] = useState<Item[]>([]);
++
++  useEffect(() => {
++    // Was: listenTo(channel, 'message:new', onNewMessage)
++    const onNewMessage = (msg: NewMessage) => {
++      // The shared mailbox model is still the source of truth; other
++      // Backbone code may listen to its change events.
++      model.set('unread', model.get('unread') + 1);
++      setUnread(model.get('unread'));
++      setItems((prev) => [{ id: nextId++, subject: msg.subject ?? '' }, ...prev]);
++    };
++    channel.on('message:new', onNewMessage);
++
++    // Was: setInterval(...) in initialize, cleared in onDestroy
++    const poll = setInterval(() => channel.trigger('mail:poll'), POLL_INTERVAL_MS);
++
++    return () => {
++      channel.off('message:new', onNewMessage);
++      clearInterval(poll);
++    };
++  }, [model, channel]);
++
++  return (
++    <>
++      <h2>
++        Inbox (<span className="n">{unread}</span>)
++      </h2>
++      <ul className="msgs">
++        {items.map((item) => (
++          <li key={item.id}>{item.subject}</li>
++        ))}
++      </ul>
++    </>
++  );
++}
+diff --git a/src/react/inbox-view-host.tsx b/src/react/inbox-view-host.tsx
+new file mode 100644
+index 0000000..0793359
+--- /dev/null
++++ b/src/react/inbox-view-host.tsx
+@@ -0,0 +1,35 @@
++import { createRoot, type Root } from 'react-dom/client';
++import { InboxView, type MailChannel, type MailboxModel } from './InboxView';
++
++// Globals provided by the legacy Backbone/Marionette app.
++declare const Marionette: any;
++declare const Backbone: any;
++declare const app: any;
++
++// Thin Marionette host so the existing region/router code keeps working:
++//   app.layout.getRegion('main').show(new app.InboxView({ model: app.mailbox }))
++app.InboxView = Marionette.View.extend({
++  // React renders the markup; Marionette must not render a template.
++  template: false,
++
++  // Quirk kept for parity: className runs once, when the element is created,
++  // so 'has-unread' is NOT updated as messages arrive.
++  className(this: { model: MailboxModel }) {
++    return this.model.get('unread') ? 'inbox has-unread' : 'inbox';
++  },
++
++  root: null as Root | null,
++
++  onRender(this: any) {
++    // Create the root once; render() may be called repeatedly.
++    if (!this.root) this.root = createRoot(this.el);
++    const channel: MailChannel = Backbone.Radio.channel('mail');
++    this.root.render(<InboxView model={this.model} channel={channel} />);
++  },
++
++  onDestroy(this: any) {
++    // Unmounting runs the component's effect cleanup (off + clearInterval).
++    this.root?.unmount();
++    this.root = null;
++  },
++});

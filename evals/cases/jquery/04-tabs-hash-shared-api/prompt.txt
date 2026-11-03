@@ -1,0 +1,1 @@
+Replace the jQuery UI tabs on the account page (public/js/tabs.js) with a React + TypeScript tabs component under src/. Edit the repo and summarise.

@@ -1,0 +1,1 @@
+Rewrite the project edit form (template + controller) as a React + TypeScript component under app/react/. Ember keeps routing. Edit the repo and summarise.

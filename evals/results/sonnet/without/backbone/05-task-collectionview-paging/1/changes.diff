@@ -1,0 +1,176 @@
+diff --git a/package.json b/package.json
+index 8c9343b..f338e90 100644
+--- a/package.json
++++ b/package.json
+@@ -1 +1 @@
+-{ "name": "app", "private": true, "dependencies": { "backbone": "1.4.1", "backbone.marionette": "4.1.3", "jquery": "3.7.1", "bootstrap": "4.6.2", "react": "^18.3.1", "react-dom": "^18.3.1" } }
++{ "name": "app", "private": true, "dependencies": { "backbone": "1.4.1", "backbone.marionette": "4.1.3", "jquery": "3.7.1", "bootstrap": "4.6.2", "react": "^18.3.1", "react-dom": "^18.3.1", "underscore": "^1.13.7" }, "devDependencies": { "typescript": "^5.6.0", "@types/react": "^18.3.0", "@types/react-dom": "^18.3.0", "@types/backbone": "^1.4.0", "@types/jquery": "^3.5.0", "@types/underscore": "^1.13.0" } }
+diff --git a/src/react/TaskRow.tsx b/src/react/TaskRow.tsx
+new file mode 100644
+index 0000000..ae30ddd
+--- /dev/null
++++ b/src/react/TaskRow.tsx
+@@ -0,0 +1,26 @@
++import React, { useEffect, useRef } from 'react';
++import $ from 'jquery';
++import type { TaskModel } from './types';
++import { useBackbone } from './useBackbone';
++
++export function TaskRow({ model }: { model: TaskModel }) {
++  // Original only re-rendered on change:priority; title/owner edits are cheap to include too.
++  useBackbone(model, 'change');
++  const ref = useRef<HTMLLIElement>(null);
++  const owner = model.get('owner');
++
++  // Bootstrap tooltip: init after render, dispose on cleanup (replaces TooltipBehavior).
++  useEffect(() => {
++    const $els = $(ref.current!).find('[title]');
++    $els.tooltip({ placement: 'top' });
++    return () => {
++      $els.tooltip('dispose');
++    };
++  }, [owner]);
++
++  return (
++    <li ref={ref}>
++      <span title={owner}>{model.get('title')}</span> <em>{model.get('priority')}</em>
++    </li>
++  );
++}
+diff --git a/src/react/TasksView.tsx b/src/react/TasksView.tsx
+new file mode 100644
+index 0000000..59bc906
+--- /dev/null
++++ b/src/react/TasksView.tsx
+@@ -0,0 +1,38 @@
++import React, { useEffect } from 'react';
++import _ from 'underscore';
++import { TaskRow } from './TaskRow';
++import type { TaskCollection } from './types';
++import { useBackbone } from './useBackbone';
++
++export function TasksView({ collection }: { collection: TaskCollection }) {
++  useBackbone(collection, 'add remove reset sort change:archived change:priority');
++
++  // Infinite scroll (replaces onAttach/onDestroy window handler).
++  useEffect(() => {
++    let page = 1;
++    const onScroll = _.throttle(() => {
++      if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 200) {
++        collection.fetch({ remove: false, data: { page: ++page } });
++      }
++    }, 250);
++    window.addEventListener('scroll', onScroll);
++    return () => {
++      window.removeEventListener('scroll', onScroll);
++      onScroll.cancel();
++    };
++  }, [collection]);
++
++  // viewFilter + viewComparator: hide archived, highest priority first (stable sort).
++  const tasks = collection.filter((m) => !m.get('archived'));
++  tasks.sort((a, b) => b.get('priority') - a.get('priority'));
++
++  return (
++    <ul>
++      {tasks.length === 0 ? (
++        <li className="empty">No open tasks</li>
++      ) : (
++        tasks.map((m) => <TaskRow key={m.cid} model={m} />)
++      )}
++    </ul>
++  );
++}
+diff --git a/src/react/mountTasksView.tsx b/src/react/mountTasksView.tsx
+new file mode 100644
+index 0000000..d71110c
+--- /dev/null
++++ b/src/react/mountTasksView.tsx
+@@ -0,0 +1,26 @@
++import React from 'react';
++import { createRoot, type Root } from 'react-dom/client';
++import Marionette from 'backbone.marionette';
++import { TasksView } from './TasksView';
++import type { TaskCollection } from './types';
++
++/**
++ * Marionette shell adapter: keeps `app.TasksView` usable in regions
++ * (`region.show(new app.TasksView())`) while rendering React inside.
++ * Uses the shared `app.tasks` collection unless one is passed in options.
++ */
++export const TasksViewAdapter = Marionette.View.extend({
++  template: false,
++  root: null as Root | null,
++  onRender(this: any) {
++    const collection: TaskCollection = this.getOption('collection') ?? (window as any).app.tasks;
++    this.root = createRoot(this.el);
++    this.root.render(<TasksView collection={collection} />);
++  },
++  onBeforeDestroy(this: any) {
++    this.root?.unmount();
++    this.root = null;
++  },
++});
++
++(window as any).app.TasksView = TasksViewAdapter;
+diff --git a/src/react/types.ts b/src/react/types.ts
+new file mode 100644
+index 0000000..877f2ec
+--- /dev/null
++++ b/src/react/types.ts
+@@ -0,0 +1,17 @@
++import type { Collection, Model } from 'backbone';
++
++export interface TaskAttributes {
++  title: string;
++  owner: string;
++  priority: number;
++  archived?: boolean;
++}
++
++export type TaskModel = Model<TaskAttributes>;
++export type TaskCollection = Collection<TaskModel>;
++
++declare global {
++  interface JQuery {
++    tooltip(options?: { placement?: string } | 'dispose'): JQuery;
++  }
++}
+diff --git a/src/react/useBackbone.ts b/src/react/useBackbone.ts
+new file mode 100644
+index 0000000..66b9907
+--- /dev/null
++++ b/src/react/useBackbone.ts
+@@ -0,0 +1,13 @@
++import { useEffect, useReducer } from 'react';
++import type { Events } from 'backbone';
++
++/** Re-render whenever the Backbone object fires any of the given events. */
++export function useBackbone(source: Events, events: string): void {
++  const [, bump] = useReducer((n: number) => n + 1, 0);
++  useEffect(() => {
++    source.on(events, bump);
++    return () => {
++      source.off(events, bump);
++    };
++  }, [source, events]);
++}
+diff --git a/tsconfig.json b/tsconfig.json
+new file mode 100644
+index 0000000..6695f9e
+--- /dev/null
++++ b/tsconfig.json
+@@ -0,0 +1,13 @@
++{
++  "compilerOptions": {
++    "target": "ES2020",
++    "module": "ESNext",
++    "moduleResolution": "Bundler",
++    "jsx": "react-jsx",
++    "strict": true,
++    "esModuleInterop": true,
++    "skipLibCheck": true,
++    "noEmit": true
++  },
++  "include": ["src/react"]
++}

@@ -1,0 +1,151 @@
+diff --git a/package.json b/package.json
+index 5667e12..96b4a9f 100644
+--- a/package.json
++++ b/package.json
+@@ -1 +1 @@
+-{ "name": "catalog", "private": true, "dependencies": { "angular": "1.8.3", "react": "^18.3.1", "react-dom": "^18.3.1" } }
++{ "name": "catalog", "private": true, "dependencies": { "angular": "1.8.3", "react": "^18.3.1", "react-dom": "^18.3.1" }, "devDependencies": { "typescript": "^5.5.0", "@types/react": "^18.3.0", "@types/react-dom": "^18.3.0" } }
+diff --git a/src/filters.html b/src/filters.html
+index 871696e..f4cbd81 100644
+--- a/src/filters.html
++++ b/src/filters.html
+@@ -1,5 +1 @@
+-<div ng-controller="FiltersCtrl">
+-  <input ng-model="filters.q" placeholder="Search">
+-  <label ng-repeat="b in ['Acme','Globex','Initech']"><input type="checkbox" checklist-model="filters.brands" checklist-value="b">{{b}}</label>
+-  <label><input type="checkbox" ng-model="filters.inStock"> In stock</label>
+-</div>
++<react-filters></react-filters>
+diff --git a/src/react/FiltersPanel.tsx b/src/react/FiltersPanel.tsx
+new file mode 100644
+index 0000000..b8a5e0a
+--- /dev/null
++++ b/src/react/FiltersPanel.tsx
+@@ -0,0 +1,69 @@
++import React, { useEffect, useRef, useState } from 'react';
++
++export interface Filters {
++  q: string;
++  brands: string[];
++  inStock: boolean;
++}
++
++export const BRANDS = ['Acme', 'Globex', 'Initech'] as const;
++const DEBOUNCE_MS = 300;
++
++/** $location.search() yields strings / single values; coerce to a proper Filters. */
++export function normalizeFilters(raw: Record<string, unknown>): Filters {
++  const brands = raw.brands == null ? [] : Array.isArray(raw.brands) ? raw.brands : [raw.brands];
++  return {
++    q: raw.q == null ? '' : String(raw.q),
++    brands: brands.map(String),
++    inStock: raw.inStock === true || raw.inStock === 'true',
++  };
++}
++
++interface Props {
++  initial: Filters;
++  /** Called (debounced) after the user changes a filter. Not called on mount. */
++  onChange: (filters: Filters) => void;
++}
++
++export function FiltersPanel({ initial, onChange }: Props) {
++  const [filters, setFilters] = useState<Filters>(initial);
++  const initialRef = useRef(initial);
++  const onChangeRef = useRef(onChange);
++  onChangeRef.current = onChange;
++
++  useEffect(() => {
++    if (filters === initialRef.current) return; // mirror Angular's nv === ov skip
++    const t = setTimeout(() => onChangeRef.current(filters), DEBOUNCE_MS);
++    return () => clearTimeout(t);
++  }, [filters]);
++
++  const toggleBrand = (brand: string) =>
++    setFilters(f => ({
++      ...f,
++      brands: f.brands.includes(brand) ? f.brands.filter(b => b !== brand) : [...f.brands, brand],
++    }));
++
++  return (
++    <div>
++      <input
++        value={filters.q}
++        placeholder="Search"
++        onChange={e => setFilters(f => ({ ...f, q: e.target.value }))}
++      />
++      {BRANDS.map(b => (
++        <label key={b}>
++          <input type="checkbox" checked={filters.brands.includes(b)} onChange={() => toggleBrand(b)} />
++          {b}
++        </label>
++      ))}
++      <label>
++        <input
++          type="checkbox"
++          checked={filters.inStock}
++          onChange={e => setFilters(f => ({ ...f, inStock: e.target.checked }))}
++        />{' '}
++        In stock
++      </label>
++    </div>
++  );
++}
+diff --git a/src/react/reactFilters.tsx b/src/react/reactFilters.tsx
+new file mode 100644
+index 0000000..1f8454c
+--- /dev/null
++++ b/src/react/reactFilters.tsx
+@@ -0,0 +1,33 @@
++import React from 'react';
++import { createRoot } from 'react-dom/client';
++import { FiltersPanel, Filters, normalizeFilters } from './FiltersPanel';
++
++declare const angular: any;
++
++/**
++ * AngularJS bridge: <react-filters></react-filters> mounts the React panel.
++ * Keeps the old contract: URL stays in sync via $location.search and
++ * 'filters:changed' is broadcast on $rootScope with a copy of the filters.
++ */
++angular.module('catalog').directive('reactFilters', [
++  '$rootScope',
++  '$location',
++  ($rootScope: any, $location: any) => ({
++    restrict: 'E',
++    link(scope: any, el: any) {
++      const root = createRoot(el[0]);
++      const initial = normalizeFilters($location.search());
++
++      const handleChange = (f: Filters) => {
++        // Called outside Angular's digest (setTimeout), so wrap in $apply.
++        $rootScope.$evalAsync(() => {
++          $location.search(f); // keeps URL shareable
++          $rootScope.$broadcast('filters:changed', { ...f, brands: [...f.brands] });
++        });
++      };
++
++      root.render(<FiltersPanel initial={initial} onChange={handleChange} />);
++      scope.$on('$destroy', () => root.unmount());
++    },
++  }),
++]);
+diff --git a/tsconfig.json b/tsconfig.json
+new file mode 100644
+index 0000000..c96a80c
+--- /dev/null
++++ b/tsconfig.json
+@@ -0,0 +1,13 @@
++{
++  "compilerOptions": {
++    "target": "ES2019",
++    "module": "ESNext",
++    "moduleResolution": "Bundler",
++    "jsx": "react-jsx",
++    "strict": true,
++    "noEmit": true,
++    "skipLibCheck": true,
++    "esModuleInterop": true
++  },
++  "include": ["src/react"]
++}

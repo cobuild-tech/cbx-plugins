@@ -1,0 +1,26 @@
+{
+ "globals": {
+  "pass": true,
+  "why": "notesStore.ts defines window.notes as a getter/setter over the live array and sets window.save and window.render, so export.js's notes, save() and render() calls in importNotes keep working, and the message explains the bridge."
+ },
+ "storage-sync": {
+  "pass": true,
+  "why": "notesStore.ts keeps the window 'storage' listener, which for key 'notes' reparses e.newValue and calls render()."
+ },
+ "storage-format": {
+  "pass": true,
+  "why": "The store still reads and writes localStorage key 'notes' and pushes {text, at: Date.now()} objects, matching the original shape."
+ },
+ "dblclick-delete": {
+  "pass": true,
+  "why": "App.tsx puts onDoubleClick={() => removeNote(i)} on each li, and removeNote splices, saves and re-renders like the original."
+ },
+ "trim-empty": {
+  "pass": true,
+  "why": "App.tsx onSubmit trims input.value, returns on empty, calls addNote, then form.reset(), matching the original."
+ },
+ "no-silent-changes": {
+  "pass": true,
+  "why": "The final message calls out the early importNotes timing change, the extra #root wrapper, index-keyed rendering, the export.js dist-copy issue and the undeleted notes.js."
+ }
+}

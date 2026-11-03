@@ -1,0 +1,28 @@
+{
+ "checks": [
+  {
+   "id": "interceptor",
+   "must": "Requests still go through authInterceptor (Authorization, X-Tenant headers and 401 refresh-retry) e.g. by injecting $http via react2angular, or the answer explicitly replicates all three behaviours. A fetch with a placeholder token fails."
+  },
+  {
+   "id": "currency-format",
+   "must": "Balances are formatted like the AngularJS 1.8 currency filter (en-US: '$' symbol, 2 decimals, negative as '-$1.00') or the differences from Intl/toFixed are explicitly flagged."
+  },
+  {
+   "id": "order",
+   "must": "Invoices remain sorted by issuedAt descending."
+  },
+  {
+   "id": "mount",
+   "must": "The React component is mounted inside AngularJS (react2angular or equivalent) with customerId binding updates triggering refetch."
+  },
+  {
+   "id": "no-silent-changes",
+   "must": "Unrequested behaviour changes (e.g. clearing the list on customer change, skipping undefined ids, abort/stale handling, error UI) are either absent or explicitly listed."
+  },
+  {
+   "id": "tests",
+   "must": "Recommends or adds tests that pin current behaviour before/after the swap."
+  }
+ ]
+}

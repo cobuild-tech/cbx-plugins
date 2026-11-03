@@ -1,0 +1,26 @@
+{
+ "ngmodel": {
+  "pass": true,
+  "why": "tag-input.directive.tsx keeps a wrapper directive with require:'ngModel' that sets ngModel.$render and calls ngModel.$setViewValue(tags), so vm.contact.tags still updates."
+ },
+ "validity": {
+  "pass": true,
+  "why": "The maxTags validator (default 5, max from scope) and the $isEmpty override are carried over, and a $watch on max re-validates, so the maxTags and required errors and the Save button's disabled state behave as before."
+ },
+ "touched": {
+  "pass": true,
+  "why": "The onChange handler calls ngModel.$setTouched() after every add or remove."
+ },
+ "digest": {
+  "pass": true,
+  "why": "React's onChange callback wraps $setViewValue and $setTouched in scope.$apply(...), so changes reach AngularJS inside a digest."
+ },
+ "enter-trim": {
+  "pass": true,
+  "why": "TagInput.tsx adds draft.trim() on Enter only when non-empty, calls e.preventDefault(), and the × link removes the tag by index, matching the original."
+ },
+ "no-silent-changes": {
+  "pass": true,
+  "why": "The behaviour is preserved, and the summary flags the remaining differences: the old .js file is now a stub, no bundler is configured, and the code was never compiled or run."
+ }
+}

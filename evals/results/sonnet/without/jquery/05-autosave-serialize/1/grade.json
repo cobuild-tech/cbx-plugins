@@ -1,0 +1,26 @@
+{
+ "wire-format": {
+  "pass": true,
+  "why": "serialize() builds URLSearchParams with post[title], post[body], and post[tags][] and sends them as application/x-www-form-urlencoded, so the Rails controller still gets nested form params."
+ },
+ "empty-tags": {
+  "pass": true,
+  "why": "Tags are appended only via f.tags.forEach, so no post[tags][] param is sent when none are checked, which matches .serialize() for unchecked checkboxes."
+ },
+ "dirty-class": {
+  "pass": true,
+  "why": "The form gets className={dirty ? 'dirty' : undefined}, and the message explains this is for leave-guard.js's form.dirty check."
+ },
+ "debounce": {
+  "pass": true,
+  "why": "debounceMs defaults to 1000, and the effect cleanup calls clearTimeout(timer) and aborts the request on re-run or unmount."
+ },
+ "status-text": {
+  "pass": true,
+  "why": "The status is set to 'Saved' or 'Not saved', and setDirty(false) runs only after a successful response, so dirty stays on failure."
+ },
+ "no-silent-changes": {
+  "pass": false,
+  "why": "fetch does not send the X-Requested-With: XMLHttpRequest header that $.ajax added automatically, and the summary never mentions this; it only calls out the abort and dirty-version changes."
+ }
+}

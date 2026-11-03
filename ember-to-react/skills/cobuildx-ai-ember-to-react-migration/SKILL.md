@@ -1,8 +1,8 @@
 ---
 name: cobuildx-ai-ember-to-react-migration
-description: "Use when the user asks to convert or translate Ember.js code to React — a single component, template, route, controller, service, model, or helper, pasted Ember code with a request for React, or \"what would this look like in React\" — or to migrate, port, rewrite, or modernize an Ember.js app (Classic or Octane) to React — full rewrites or incremental/strangler-fig migrations of any size — or to continue, resume, or check the status of an Ember-to-React migration already in progress (e.g. \"continue the migration\", \"what's left to migrate\", \"why isn't Orders migrated yet\"). Also use for planning, scoping, or estimating a move off Ember, and for requests to upgrade, modernize, or replace Ember with React."
+description: "Use when the user asks to convert or translate Ember.js code to React — a single component, template, route, controller, service, model, or helper, pasted Ember code with a request for React, or \"what would this look like in React\" — or to migrate, port, rewrite, or modernize an Ember.js app (Classic or Octane) to React — full rewrites or incremental/strangler-fig migrations of any size — or to continue, resume, or check the status of an Ember-to-React migration already in progress (e.g. \"continue the migration\", \"what's left to migrate\", \"why isn't Orders migrated yet\"). Also use for planning, scoping, or estimating a move off Ember, and for requests to upgrade, modernize, or replace Ember with React. Also use for requests to rewrite, rebuild, or replace an Ember component, form, or route template with React."
 metadata:
-  version: "2.1.0"
+  version: "2.2.0"
 ---
 
 # Ember → React Migration
@@ -25,6 +25,21 @@ only when a condition below says to, and open only that file.
   Don't create `.migration/` or run the inventory agent. End with one line:
   "For a whole-app migration, open the repo in Claude Code and run
   `/ember-to-react:plan`."
+- **Direct mode.** Use this when you are in a repo and the user asks you
+  to convert a specific component, route, or file now, rather than plan a migration. Don't
+  create `.migration/` and don't stop for approval. Do this, in order:
+  1. Read the files you are converting, then read **every** reference the
+     routing table below gives for what that code contains. This is not
+     optional; most of the parity rules live there.
+  2. Search the **rest of the repo** for code that touches the area or
+     that it relies on, using the coupling checklist under "Always". Read
+     each hit. Ember code that stays behind is where migrations break.
+  3. Convert, mount React where the old code ran (remove the old component from the template, or pass the Ember service into React), and change
+     the remaining Ember code only as far as the handover needs.
+  4. Reply with what you changed and a **Behavior differences** list
+     covering every difference you introduced or could not rule out,
+     including request mechanics and timing. Say "none" only if you
+     checked.
 - **Project mode.** Use this for a whole app, an area of it, or an
   existing `.migration/`. Follow Steps 0–4. Before starting Step 1 on a
   repo with no `.migration/`, tell the user in one sentence what happens
@@ -110,6 +125,25 @@ When every unit is `done`, read `references/methodology/cutover.md`.
 
 ## Always
 
+- **Coupling checklist.** Before handing an area to React, check the
+  whole repo, not just the files you are converting, for:
+  - other code that reads the same records from the Ember Data store
+    (`peekAll`, `peekRecord`, relationships, store-backed getters); data
+    fetched outside the store is invisible to them;
+  - timing that tests wait on: `settled()` waits for the run loop
+    (`later`, `next`, `debounce`), Ember Concurrency, and registered test
+    waiters, but not for plain `setTimeout` or `fetch` unless you register
+    a waiter (`@ember/test-waiters`);
+  - the router while it still owns routing: query params,
+    `refreshModel`, loading and error substates, and `transitionTo`; URL
+    state must go through the Ember router, not React state or
+    `history.pushState`;
+  - services, tracked state, and actions (`@onX`) other components share;
+  - CSS and tests that depend on element structure; mounting React adds a
+    wrapper element, which breaks `>` and `:first-child` selectors;
+  - teardown: the React root must unmount in `willDestroy` or a
+    modifier's cleanup.
+  Keep each one working, or list it under Behavior differences.
 - Change one thing at a time. Port styles and class names as they are, in
   the same pass as the logic.
 - Keep existing bugs and timing oddities for parity, and list them as

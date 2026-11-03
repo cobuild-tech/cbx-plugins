@@ -1,0 +1,8 @@
+{ "checks": [
+ {"id":"csrf","must":"POST /notifications/:id/read still sends X-CSRF-Token (via $.ajax or explicit header)."},
+ {"id":"401-redirect","must":"A 401 from React's requests still redirects to /login?next=..., or the loss of the global ajaxError handler is explicitly flagged."},
+ {"id":"spinner","must":"The global #spinner (ajaxStart/ajaxStop) behavior is preserved or its loss is explicitly flagged."},
+ {"id":"cache-false","must":"The cache:false cache-busting of $.ajaxSetup is preserved or flagged when switching away from jQuery for GET."},
+ {"id":"interval-cleanup","must":"The polling interval is cleared on unmount."},
+ {"id":"html-injection","must":"n.html is rendered as HTML as before (e.g. dangerouslySetInnerHTML) with the change of escaping behaviour noted, or the change to text rendering is explicitly called out."}
+]}

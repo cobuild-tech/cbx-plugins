@@ -1,0 +1,195 @@
+diff --git a/package.json b/package.json
+index 6c19637..db4e6b1 100644
+--- a/package.json
++++ b/package.json
+@@ -1 +1,15 @@
+-{ "name": "booking", "private": true, "dependencies": { "react": "^18.3.1", "react-dom": "^18.3.1" }, "devDependencies": { "typescript": "^5.4.0" } }
++{
++  "name": "booking",
++  "private": true,
++  "scripts": {
++    "build": "esbuild src/index.tsx --bundle --minify --outfile=public/js/booking.bundle.js",
++    "typecheck": "tsc"
++  },
++  "dependencies": { "react": "^18.3.1", "react-dom": "^18.3.1" },
++  "devDependencies": {
++    "@types/react": "^18.3.0",
++    "@types/react-dom": "^18.3.0",
++    "esbuild": "^0.21.0",
++    "typescript": "^5.4.0"
++  }
++}
+diff --git a/src/BookingForm.tsx b/src/BookingForm.tsx
+new file mode 100644
+index 0000000..d7db28d
+--- /dev/null
++++ b/src/BookingForm.tsx
+@@ -0,0 +1,117 @@
++import React, { useEffect, useState } from 'react';
++
++interface Slot {
++  id: string | number;
++  label: string;
++}
++
++interface Errors {
++  name?: string;
++  shipDate?: string;
++}
++
++const DATE_MESSAGE = 'Pick a weekday from tomorrow onward';
++
++function pad(n: number): string {
++  return String(n).padStart(2, '0');
++}
++
++/** Earliest allowed date (tomorrow, local time) as yyyy-mm-dd, matching the old datepicker's minDate: 1. */
++function tomorrowIso(): string {
++  const d = new Date();
++  d.setDate(d.getDate() + 1);
++  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
++}
++
++/** Parse yyyy-mm-dd as a local date; returns null if invalid. */
++function parseIso(value: string): Date | null {
++  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
++  if (!m) return null;
++  const [y, mo, d] = [Number(m[1]), Number(m[2]), Number(m[3])];
++  const date = new Date(y, mo - 1, d);
++  return date.getFullYear() === y && date.getMonth() === mo - 1 && date.getDate() === d ? date : null;
++}
++
++/** The server parses ship_date with '%d/%m/%Y' (the old datepicker's dd/mm/yy). */
++function toServerDate(value: string): string {
++  const [y, m, d] = value.split('-');
++  return `${d}/${m}/${y}`;
++}
++
++function validate(name: string, shipDate: string): Errors {
++  const errors: Errors = {};
++  if (!name.trim()) errors.name = 'This field is required.';
++  else if (name.length < 2) errors.name = 'Please enter at least 2 characters.';
++
++  const date = parseIso(shipDate);
++  if (!shipDate) errors.shipDate = 'This field is required.';
++  else if (!date || shipDate < tomorrowIso() || date.getDay() === 0 || date.getDay() === 6) {
++    errors.shipDate = DATE_MESSAGE;
++  }
++  return errors;
++}
++
++export function BookingForm(): JSX.Element {
++  const [name, setName] = useState('');
++  const [shipDate, setShipDate] = useState('');
++  const [slots, setSlots] = useState<Slot[]>([]);
++  const [slot, setSlot] = useState('');
++  const [errors, setErrors] = useState<Errors>({});
++  const [submitted, setSubmitted] = useState(false);
++
++  // Load slots whenever the date changes; ignore stale responses.
++  useEffect(() => {
++    setSlots([]);
++    setSlot('');
++    if (!shipDate || validate('xx', shipDate).shipDate) return;
++
++    const controller = new AbortController();
++    fetch(`/slots?date=${encodeURIComponent(toServerDate(shipDate))}`, {
++      signal: controller.signal,
++      headers: { Accept: 'application/json' },
++    })
++      .then((r) => (r.ok ? (r.json() as Promise<Slot[]>) : Promise.reject(new Error(String(r.status)))))
++      .then((data) => {
++        setSlots(data);
++        if (data.length) setSlot(String(data[0].id));
++      })
++      .catch((e: unknown) => {
++        if (!(e instanceof DOMException && e.name === 'AbortError')) console.error('Failed to load slots', e);
++      });
++    return () => controller.abort();
++  }, [shipDate]);
++
++  // Re-validate live once the user has tried to submit (jquery-validate behaviour).
++  useEffect(() => {
++    if (submitted) setErrors(validate(name, shipDate));
++  }, [name, shipDate, submitted]);
++
++  function onSubmit(e: React.FormEvent<HTMLFormElement>): void {
++    setSubmitted(true);
++    const found = validate(name, shipDate);
++    setErrors(found);
++    if (found.name || found.shipDate) e.preventDefault();
++    // Otherwise let the browser post natively to /bookings (server redirects).
++  }
++
++  return (
++    <form id="booking" action="/bookings" method="post" onSubmit={onSubmit} noValidate>
++      <input name="name" value={name} onChange={(e) => setName(e.target.value)} aria-invalid={!!errors.name} />
++      {errors.name && <label className="error">{errors.name}</label>}
++
++      {/* Visible picker is unnamed; the hidden field carries the dd/mm/yyyy value the server expects. */}
++      <input type="date" min={tomorrowIso()} value={shipDate} onChange={(e) => setShipDate(e.target.value)} aria-invalid={!!errors.shipDate} />
++      <input type="hidden" name="ship_date" value={shipDate ? toServerDate(shipDate) : ''} />
++      {errors.shipDate && <label className="error">{errors.shipDate}</label>}
++
++      <select name="slot" value={slot} onChange={(e) => setSlot(e.target.value)}>
++        {slots.map((s) => (
++          <option key={s.id} value={s.id}>
++            {s.label}
++          </option>
++        ))}
++      </select>
++      <button type="submit">Book</button>
++    </form>
++  );
++}
+diff --git a/src/index.tsx b/src/index.tsx
+new file mode 100644
+index 0000000..5e5e3ee
+--- /dev/null
++++ b/src/index.tsx
+@@ -0,0 +1,6 @@
++import React from 'react';
++import { createRoot } from 'react-dom/client';
++import { BookingForm } from './BookingForm';
++
++const el = document.getElementById('booking-root');
++if (el) createRoot(el).render(<BookingForm />);
+diff --git a/tsconfig.json b/tsconfig.json
+new file mode 100644
+index 0000000..e53d37c
+--- /dev/null
++++ b/tsconfig.json
+@@ -0,0 +1,14 @@
++{
++  "compilerOptions": {
++    "target": "ES2020",
++    "lib": ["ES2020", "DOM"],
++    "module": "ESNext",
++    "moduleResolution": "Bundler",
++    "jsx": "react",
++    "strict": true,
++    "noEmit": true,
++    "esModuleInterop": true,
++    "skipLibCheck": true
++  },
++  "include": ["src"]
++}
+diff --git a/views/booking.html b/views/booking.html
+index f6f9e7a..d1751c3 100644
+--- a/views/booking.html
++++ b/views/booking.html
+@@ -1,12 +1,3 @@
+-<form id="booking" action="/bookings" method="post">
+-  <input name="name" id="name">
+-  <input name="ship_date" id="ship-date">
+-  <select name="slot" id="slot"></select>
+-  <button type="submit">Book</button>
+-</form>
++<div id="booking-root"></div>
+ <div id="partials"></div>
+-<script src="https://code.jquery.com/jquery-1.12.4.min.js"></script>
+-<script src="https://code.jquery.com/ui/1.12.1/jquery-ui.min.js"></script>
+-<script src="https://cdn.jsdelivr.net/npm/jquery-validation@1.19.5/dist/jquery.validate.min.js"></script>
+-<script src="/js/widgets.js"></script>
+-<script src="/js/booking.js"></script>
++<script src="/js/booking.bundle.js"></script>

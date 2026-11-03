@@ -1,0 +1,26 @@
+{
+ "test-waiters": {
+  "pass": true,
+  "why": "services/toasts.js calls setScheduler with the Ember run-loop `later` and `cancel`, and the message explains this keeps settled() waiting for toast expiry."
+ },
+ "api-compat": {
+  "pass": true,
+  "why": "The Ember service keeps `show(text, ms = 4000)` and delegates to toastStore.show(text, ms) with the same signature and default."
+ },
+ "dismiss-cancel": {
+  "pass": true,
+  "why": "The li onClick calls toastStore.dismiss(t), which calls scheduler.cancel(t.timer) before filtering the toast out."
+ },
+ "render-sync": {
+  "pass": true,
+  "why": "ToastStack.tsx uses useSyncExternalStore subscribed to toastStore, and publish() notifies listeners on every show/dismiss."
+ },
+ "teardown": {
+  "pass": false,
+  "why": "The modifier unmounts the React root, but nothing clears pending timers or resets the module-level store/scheduler on service destroy, and the service has no willDestroy."
+ },
+ "no-silent-changes": {
+  "pass": true,
+  "why": "The message calls out the non-tracked items getter, the extra wrapper div, async React rendering, and the scheduler-install ordering dependency."
+ }
+}
