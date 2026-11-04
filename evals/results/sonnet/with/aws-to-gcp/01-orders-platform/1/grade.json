@@ -1,0 +1,58 @@
+{
+ "ordering-key": {
+  "pass": true,
+  "why": "The subscription sets enable_message_ordering = true, and api.py publishes with ordering_key=str(customer_id) from a PublisherClient created with enable_message_ordering=True."
+ },
+ "dedup": {
+  "pass": true,
+  "why": "The summary flags that there is no dedup, that exactly-once is unsupported on push subscriptions, and that the worker must be idempotent."
+ },
+ "dlq-5": {
+  "pass": true,
+  "why": "dead_letter_policy sets max_delivery_attempts = 5, and the Pub/Sub agent gets publisher on the DLQ topic and subscriber on the orders-worker subscription."
+ },
+ "ack-deadline": {
+  "pass": true,
+  "why": "The orders_worker subscription sets ack_deadline_seconds = 360."
+ },
+ "concurrency": {
+  "pass": true,
+  "why": "The Cloud Run service sets max_instance_request_concurrency = 1, min_instance_count = 1 and max_instance_count = 20."
+ },
+ "auth-private": {
+  "pass": true,
+  "why": "There is no allUsers binding; run.invoker goes only to the scheduler SA on the API and to the worker SA on the worker."
+ },
+ "signed-url": {
+  "pass": true,
+  "why": "api.py generates a V4 PUT URL with a 3600 s expiry using service_account_email and access_token, and the api SA has serviceAccountTokenCreator, so no key file is used."
+ },
+ "cloudsql-iam": {
+  "pass": true,
+  "why": "Cloud SQL uses POSTGRES_15 with cloudsql.iam_authentication=on, availability_type REGIONAL, 7 retained backups and PITR enabled."
+ },
+ "worker-event-shape": {
+  "pass": true,
+  "why": "worker.py decodes base64 message.data from one push request and returns 500 on error instead of returning batchItemFailures."
+ },
+ "sql-dialect": {
+  "pass": true,
+  "why": "The SQL uses SAFE_CAST, APPROX_COUNT_DISTINCT, ARRAY_AGG(... ORDER BY ... LIMIT 3), UNNEST(o.items) AS i, and DATE_SUB/FORMAT_DATE, and keeps the string dt filter."
+ },
+ "scheduler-tz": {
+  "pass": true,
+  "why": "Cloud Scheduler uses schedule \"0 2 * * *\" with time_zone \"America/New_York\"."
+ },
+ "lifecycle": {
+  "pass": true,
+  "why": "The bucket has a NEARLINE rule at age 30, a Delete rule at 365, versioning enabled, public_access_prevention enforced and uniform_bucket_level_access true."
+ },
+ "region": {
+  "pass": true,
+  "why": "The bucket location is upper(var.region), which is US-EAST1, a single region, and the region mapping is noted in the summary."
+ },
+ "no-silent-changes": {
+  "pass": true,
+  "why": "The summary's behavior-change table calls out the changes: retry policy backoff, new scheduler SA, widened storage role, PITR, password handling and the deletion-protection setting; timeouts and scaling limits are unchanged."
+ }
+}

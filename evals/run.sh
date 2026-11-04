@@ -12,7 +12,7 @@ one() { # case model arm rep
   local c=$1 m=$2 a=$3 r=$4 fw=${1%%/*}
   local out="$EV/results/$m/$a/$c/$r"
   [ -f "$out/final.md" ] && { echo "skip $out"; return; }
-  mkdir -p "$out"; local w; w=$(mktemp -d)
+  mkdir -p "$out"; local w; w=$(mktemp -d "$HOME/.cbx-eval.XXXXXX")   # under $HOME so Docker Desktop can mount it
   cp -R "$EV/cases/$c/repo/." "$w/"
   ( cd "$w" && git init -q && git add -A && git -c user.email=e@x -c user.name=eval commit -qm base )
   local args=(-p "$(cat "$EV/cases/$c/prompt.txt")" --model "$m" --setting-sources project --strict-mcp-config

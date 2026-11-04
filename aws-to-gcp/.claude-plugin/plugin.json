@@ -1,0 +1,30 @@
+{
+  "name": "aws-to-gcp",
+  "version": "1.0.1",
+  "description": "Convert AWS workloads to Google Cloud (GCP). Paste AWS Terraform, CloudFormation, config, or SDK code in any Claude app and get the GCP version, or plan and run a full migration of compute, serverless, big data, and storage in Claude Code.",
+  "author": {
+    "name": "CobuildX",
+    "email": "emmanuel.r@cobuildx.ai"
+  },
+  "homepage": "https://github.com/cobuild-tech/cbx-plugins/tree/main/aws-to-gcp",
+  "repository": "https://github.com/cobuild-tech/cbx-plugins",
+  "license": "MIT",
+  "privacyPolicyUrl": "https://cobuildx.ai/privacy",
+  "termsOfServiceUrl": "https://cobuildx.ai/terms",
+  "supportUrl": "https://github.com/cobuild-tech/cbx-plugins/issues",
+  "keywords": [
+    "aws",
+    "gcp",
+    "cloud-migration",
+    "google-cloud",
+    "lambda",
+    "ecs",
+    "eks",
+    "redshift",
+    "athena",
+    "glue",
+    "kinesis",
+    "s3",
+    "terraform"
+  ]
+}

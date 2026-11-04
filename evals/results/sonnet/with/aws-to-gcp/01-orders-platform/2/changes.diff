@@ -1,0 +1,582 @@
+diff --git a/app/api.py b/app/api.py
+index d763fcc..c9ca907 100644
+--- a/app/api.py
++++ b/app/api.py
+@@ -1,22 +1,43 @@
+-import json, os, boto3
++import json, os
++from datetime import timedelta
++
++import google.auth
++from google.auth.transport.requests import Request
++from google.cloud import bigquery, pubsub_v1, storage
+ from flask import Flask, request
++
+ app = Flask(__name__)
+-s3 = boto3.client("s3"); sqs = boto3.client("sqs"); athena = boto3.client("athena")
+-CACHE = {}  # per-environment cache; Lambda serves one request per environment
++storage_client = storage.Client()
++publisher = pubsub_v1.PublisherClient(
++    publisher_options=pubsub_v1.types.PublisherOptions(enable_message_ordering=True),
++    client_options={"api_endpoint": f"{os.environ['PUBSUB_REGION']}-pubsub.googleapis.com:443"},  # ordering needs a regional endpoint
++)
++bq = bigquery.Client(location=os.environ["BQ_LOCATION"])
++CACHE = {}  # per-instance cache; Cloud Run concurrency is set to 1 to match Lambda
+ 
+ @app.post("/upload-url")
+ def upload_url():
+-    url = s3.generate_presigned_url("put_object", Params={"Bucket": os.environ["BUCKET"], "Key": request.json["name"]}, ExpiresIn=3600)
++    credentials, _ = google.auth.default()
++    credentials.refresh(Request())  # keyless signing: service account email + access token (signBlob)
++    blob = storage_client.bucket(os.environ["BUCKET"]).blob(request.json["name"])
++    url = blob.generate_signed_url(version="v4", method="PUT", expiration=timedelta(seconds=3600),
++                                   service_account_email=credentials.service_account_email,
++                                   access_token=credentials.token)
+     return {"url": url}
+ 
+ @app.post("/orders")
+ def create_order():
+     o = request.json
+-    sqs.send_message(QueueUrl=os.environ["QUEUE_URL"], MessageBody=json.dumps(o), MessageGroupId=o["customer_id"])
++    topic = os.environ["TOPIC_PATH"]
++    key = o["customer_id"]
++    try:
++        publisher.publish(topic, json.dumps(o).encode(), ordering_key=key).result()
++    except Exception:
++        publisher.resume_publish(topic, key)  # a failed publish pauses the key
++        raise
+     return {"ok": True}
+ 
+ @app.post("/jobs/rollup")
+ def rollup():
+-    athena.start_query_execution(QueryString=open("sql/rollup.sql").read(),
+-                                 ResultConfiguration={"OutputLocation": f"s3://{os.environ['BUCKET']}/athena/"})
++    bq.query(open("sql/rollup.sql").read())  # returns once the job is submitted, like StartQueryExecution
+     return {"ok": True}
+diff --git a/app/worker.py b/app/worker.py
+index 025fb32..a56ce0b 100644
+--- a/app/worker.py
++++ b/app/worker.py
+@@ -1,11 +1,17 @@
++import base64
+ import json
+ 
+-def handle(event, context):
+-    failures = []
+-    for record in event["Records"]:
+-        try:
+-            order = json.loads(record["body"])
+-            print("processing", order["id"])
+-        except Exception:
+-            failures.append({"itemIdentifier": record["messageId"]})
+-    return {"batchItemFailures": failures}
++import functions_framework
++
++
++@functions_framework.http
++def handle(request):
++    # Pub/Sub push delivers one message per request. A non-2xx response nacks
++    # it (retry, then dead-letter), replacing batchItemFailures.
++    try:
++        message = request.get_json()["message"]
++        order = json.loads(base64.b64decode(message["data"]).decode())
++        print("processing", order["id"])
++    except Exception:
++        return ("error", 500)
++    return ("", 204)
+diff --git a/gcp/main.tf b/gcp/main.tf
+new file mode 100644
+index 0000000..e3b014a
+--- /dev/null
++++ b/gcp/main.tf
+@@ -0,0 +1,465 @@
++terraform {
++  required_providers {
++    google = {
++      source  = "hashicorp/google"
++      version = "~> 6.0"
++    }
++    random = {
++      source  = "hashicorp/random"
++      version = "~> 3.6"
++    }
++  }
++}
++
++provider "google" {
++  project = var.project_id
++  region  = var.region # was us-east-1; us-east4 is Northern Virginia
++}
++
++variable "env" {
++  type = string
++}
++
++variable "project_id" {
++  type = string
++}
++
++variable "region" {
++  type    = string
++  default = "us-east4"
++}
++
++variable "api_image" {
++  type        = string
++  description = "Container image for the api service (must serve HTTP on $PORT, e.g. gunicorn app.api:app). Was a hard-coded ECR URI."
++  default     = ""
++}
++
++locals {
++  api_image = var.api_image != "" ? var.api_image : "${var.region}-docker.pkg.dev/${var.project_id}/api/api:latest"
++}
++
++data "google_project" "this" {}
++
++# ---------------------------------------------------------------- APIs
++
++resource "google_project_service" "apis" {
++  for_each = toset([
++    "artifactregistry.googleapis.com",
++    "bigquery.googleapis.com",
++    "cloudbuild.googleapis.com",
++    "cloudfunctions.googleapis.com",
++    "cloudscheduler.googleapis.com",
++    "iam.googleapis.com",
++    "iamcredentials.googleapis.com",
++    "pubsub.googleapis.com",
++    "run.googleapis.com",
++    "secretmanager.googleapis.com",
++    "sqladmin.googleapis.com",
++  ])
++  service            = each.value
++  disable_on_destroy = false
++}
++
++# ---------------------------------------------------------------- uploads bucket (S3)
++
++resource "google_storage_bucket" "uploads" {
++  name                        = "${var.env}-uploads" # bucket names are global
++  location                    = upper(var.region)    # single region, like S3
++  uniform_bucket_level_access = true
++  public_access_prevention    = "enforced"
++
++  versioning {
++    enabled = true
++  }
++
++  # tier-and-expire: STANDARD_IA after 30 days -> NEARLINE
++  lifecycle_rule {
++    condition {
++      age        = 30
++      with_state = "LIVE"
++    }
++    action {
++      type          = "SetStorageClass"
++      storage_class = "NEARLINE"
++    }
++  }
++
++  # expire after 365 days. On a versioned bucket this makes the live object
++  # noncurrent (S3: delete marker). with_state = LIVE keeps old versions, as S3 did.
++  lifecycle_rule {
++    condition {
++      age        = 365
++      with_state = "LIVE"
++    }
++    action {
++      type = "Delete"
++    }
++  }
++
++  depends_on = [google_project_service.apis]
++}
++
++# Source bucket for the worker function zip (new; Lambda took a local zip)
++resource "google_storage_bucket" "fn_source" {
++  name                        = "${var.env}-fn-source"
++  location                    = upper(var.region)
++  uniform_bucket_level_access = true
++  public_access_prevention    = "enforced"
++}
++
++resource "google_storage_bucket_object" "worker_zip" {
++  name   = "worker-${filemd5("worker.zip")}.zip"
++  bucket = google_storage_bucket.fn_source.name
++  source = "worker.zip"
++}
++
++# ---------------------------------------------------------------- orders queue (SQS FIFO -> Pub/Sub)
++
++resource "google_pubsub_topic" "orders_dlq" {
++  name = "orders-dlq"
++
++  depends_on = [google_project_service.apis]
++}
++
++resource "google_pubsub_subscription" "orders_dlq" {
++  # Without a subscription on the DLQ topic, dead letters are dropped.
++  name                       = "orders-dlq-pull"
++  topic                      = google_pubsub_topic.orders_dlq.id
++  message_retention_duration = "345600s" # SQS default 4 days
++
++  expiration_policy {
++    ttl = "" # never expire
++  }
++}
++
++resource "google_pubsub_topic" "orders" {
++  name = "orders"
++
++  depends_on = [google_project_service.apis]
++}
++
++resource "google_pubsub_subscription" "orders" {
++  name                       = "orders-worker"
++  topic                      = google_pubsub_topic.orders.id
++  ack_deadline_seconds       = 360 # was visibility_timeout_seconds
++  message_retention_duration = "345600s"
++  enable_message_ordering    = true # MessageGroupId -> ordering_key
++  # enable_exactly_once_delivery is not available on push subscriptions, so
++  # content_based_deduplication has no equivalent; the worker must be idempotent.
++
++  expiration_policy {
++    ttl = "" # never expire
++  }
++
++  retry_policy {
++    minimum_backoff = "360s" # SQS redelivers after the visibility timeout
++    maximum_backoff = "600s"
++  }
++
++  dead_letter_policy {
++    dead_letter_topic     = google_pubsub_topic.orders_dlq.id
++    max_delivery_attempts = 5 # maxReceiveCount
++  }
++
++  push_config {
++    push_endpoint = google_cloudfunctions2_function.worker.service_config[0].uri
++    oidc_token {
++      service_account_email = google_service_account.pubsub_push.email
++      audience              = google_cloudfunctions2_function.worker.service_config[0].uri
++    }
++  }
++}
++
++locals {
++  pubsub_agent = "serviceAccount:service-${data.google_project.this.number}@gcp-sa-pubsub.iam.gserviceaccount.com"
++}
++
++resource "google_pubsub_topic_iam_member" "dlq_publisher" {
++  topic  = google_pubsub_topic.orders_dlq.name
++  role   = "roles/pubsub.publisher"
++  member = local.pubsub_agent
++
++  depends_on = [google_project_service.apis]
++}
++
++resource "google_pubsub_subscription_iam_member" "source_subscriber" {
++  subscription = google_pubsub_subscription.orders.name
++  role         = "roles/pubsub.subscriber"
++  member       = local.pubsub_agent
++}
++
++# ---------------------------------------------------------------- database (RDS -> Cloud SQL)
++
++resource "random_password" "db" {
++  length  = 32
++  special = false
++}
++
++resource "google_sql_database_instance" "db" {
++  name                = "app-db"
++  database_version    = "POSTGRES_15"
++  region              = var.region
++  deletion_protection = false # RDS had no deletion protection
++
++  settings {
++    edition           = "ENTERPRISE"
++    tier              = "db-custom-2-8192" # db.m6g.large: 2 vCPU, 8 GiB
++    availability_type = "REGIONAL"         # multi_az
++    disk_size         = 50
++    disk_type         = "PD_SSD"
++
++    database_flags {
++      name  = "cloudsql.iam_authentication"
++      value = "on"
++    }
++
++    backup_configuration {
++      enabled                        = true
++      point_in_time_recovery_enabled = true
++      transaction_log_retention_days = 7
++      backup_retention_settings {
++        retained_backups = 7
++      }
++    }
++  }
++
++  depends_on = [google_project_service.apis]
++}
++
++resource "google_sql_user" "app" {
++  name     = "app"
++  instance = google_sql_database_instance.db.name
++  password = random_password.db.result
++}
++
++# IAM database authentication for the api service account (rds-db:connect)
++resource "google_sql_user" "api_iam" {
++  name     = trimsuffix(google_service_account.api.email, ".gserviceaccount.com")
++  instance = google_sql_database_instance.db.name
++  type     = "CLOUD_IAM_SERVICE_ACCOUNT"
++}
++
++# manage_master_user_password -> password kept in Secret Manager
++resource "google_secret_manager_secret" "db_password" {
++  secret_id = "app-db-password"
++
++  replication {
++    auto {}
++  }
++
++  depends_on = [google_project_service.apis]
++}
++
++resource "google_secret_manager_secret_version" "db_password" {
++  secret      = google_secret_manager_secret.db_password.id
++  secret_data = random_password.db.result
++}
++
++# ---------------------------------------------------------------- analytics (Athena -> BigQuery)
++
++resource "google_bigquery_dataset" "analytics" {
++  dataset_id = "analytics"
++  location   = upper(var.region)
++
++  depends_on = [google_project_service.apis]
++}
++
++# ---------------------------------------------------------------- identity
++
++resource "google_service_account" "api" {
++  account_id   = "api-runtime"
++  display_name = "api (was api-role)"
++}
++
++resource "google_service_account" "worker" {
++  account_id   = "worker-runtime"
++  display_name = "orders-worker (was worker-role)"
++}
++
++resource "google_service_account" "pubsub_push" {
++  account_id   = "orders-push"
++  display_name = "Pub/Sub push identity for orders-worker"
++}
++
++resource "google_service_account" "scheduler" {
++  account_id   = "nightly-rollup"
++  display_name = "Cloud Scheduler identity for nightly-rollup"
++}
++
++# s3:GetObject, s3:PutObject on uploads/*
++resource "google_storage_bucket_iam_member" "api_read" {
++  bucket = google_storage_bucket.uploads.name
++  role   = "roles/storage.objectViewer"
++  member = "serviceAccount:${google_service_account.api.email}"
++}
++
++resource "google_storage_bucket_iam_member" "api_write" {
++  bucket = google_storage_bucket.uploads.name
++  role   = "roles/storage.objectCreator"
++  member = "serviceAccount:${google_service_account.api.email}"
++}
++
++# V4 signed URLs without a key file need signBlob on itself
++resource "google_service_account_iam_member" "api_sign" {
++  service_account_id = google_service_account.api.name
++  role               = "roles/iam.serviceAccountTokenCreator"
++  member             = "serviceAccount:${google_service_account.api.email}"
++}
++
++# sqs:SendMessage on orders
++resource "google_pubsub_topic_iam_member" "api_publish" {
++  topic  = google_pubsub_topic.orders.name
++  role   = "roles/pubsub.publisher"
++  member = "serviceAccount:${google_service_account.api.email}"
++}
++
++# rds-db:connect
++resource "google_project_iam_member" "api_sql_client" {
++  project = var.project_id
++  role    = "roles/cloudsql.client"
++  member  = "serviceAccount:${google_service_account.api.email}"
++}
++
++resource "google_project_iam_member" "api_sql_instance_user" {
++  project = var.project_id
++  role    = "roles/cloudsql.instanceUser"
++  member  = "serviceAccount:${google_service_account.api.email}"
++}
++
++# athena:StartQueryExecution / GetQueryExecution
++resource "google_project_iam_member" "api_bq_jobs" {
++  project = var.project_id
++  role    = "roles/bigquery.jobUser"
++  member  = "serviceAccount:${google_service_account.api.email}"
++}
++
++resource "google_bigquery_dataset_iam_member" "api_bq_data" {
++  dataset_id = google_bigquery_dataset.analytics.dataset_id
++  role       = "roles/bigquery.dataEditor"
++  member     = "serviceAccount:${google_service_account.api.email}"
++}
++
++# ---------------------------------------------------------------- api (Lambda image -> Cloud Run)
++
++resource "google_artifact_registry_repository" "api" {
++  repository_id = "api"
++  location      = var.region
++  format        = "DOCKER"
++
++  depends_on = [google_project_service.apis]
++}
++
++resource "google_cloud_run_v2_service" "api" {
++  name                = "api"
++  location            = var.region
++  deletion_protection = false
++
++  template {
++    service_account                  = google_service_account.api.email
++    timeout                          = "300s"
++    max_instance_request_concurrency = 1 # Lambda: one request per environment (CACHE global)
++
++    scaling {
++      min_instance_count = 1  # provisioned concurrency
++      max_instance_count = 20 # reserved concurrency
++    }
++
++    containers {
++      image = local.api_image
++
++      resources {
++        limits = {
++          cpu    = "1"
++          memory = "1Gi"
++        }
++      }
++
++      env {
++        name  = "BUCKET"
++        value = google_storage_bucket.uploads.name
++      }
++      env {
++        name  = "TOPIC_PATH"
++        value = google_pubsub_topic.orders.id
++      }
++      env {
++        name  = "PUBSUB_REGION"
++        value = var.region
++      }
++      env {
++        name  = "BQ_LOCATION"
++        value = google_bigquery_dataset.analytics.location
++      }
++    }
++  }
++
++  depends_on = [google_project_service.apis]
++}
++
++# Function URL with AWS_IAM -> authenticated Cloud Run (no allUsers). Only the scheduler is granted here;
++# add other callers explicitly.
++resource "google_cloud_run_v2_service_iam_member" "api_scheduler_invoker" {
++  name     = google_cloud_run_v2_service.api.name
++  location = google_cloud_run_v2_service.api.location
++  role     = "roles/run.invoker"
++  member   = "serviceAccount:${google_service_account.scheduler.email}"
++}
++
++# ---------------------------------------------------------------- worker (Lambda zip -> Cloud Run function)
++
++resource "google_cloudfunctions2_function" "worker" {
++  name     = "orders-worker"
++  location = var.region
++
++  build_config {
++    runtime     = "python312"
++    entry_point = "handle"
++    environment_variables = {
++      GOOGLE_FUNCTION_SOURCE = "worker.py" # zip must also contain requirements.txt with functions-framework
++    }
++    source {
++      storage_source {
++        bucket = google_storage_bucket.fn_source.name
++        object = google_storage_bucket_object.worker_zip.name
++      }
++    }
++  }
++
++  service_config {
++    service_account_email            = google_service_account.worker.email
++    timeout_seconds                  = 60
++    available_memory                 = "512M"
++    max_instance_request_concurrency = 1 # Lambda: one request per environment
++  }
++
++  depends_on = [google_project_service.apis]
++}
++
++resource "google_cloud_run_v2_service_iam_member" "worker_push_invoker" {
++  name     = google_cloudfunctions2_function.worker.name
++  location = var.region
++  role     = "roles/run.invoker"
++  member   = "serviceAccount:${google_service_account.pubsub_push.email}"
++}
++
++# ---------------------------------------------------------------- schedule (EventBridge Scheduler -> Cloud Scheduler)
++
++resource "google_cloud_scheduler_job" "nightly" {
++  name      = "nightly-rollup"
++  region    = var.region
++  schedule  = "0 2 * * *"
++  time_zone = "America/New_York"
++
++  http_target {
++    http_method = "POST"
++    uri         = "${google_cloud_run_v2_service.api.uri}/jobs/rollup"
++
++    oidc_token {
++      service_account_email = google_service_account.scheduler.email
++      audience              = google_cloud_run_v2_service.api.uri
++    }
++  }
++
++  depends_on = [google_project_service.apis]
++}
+diff --git a/sql/rollup.sql b/sql/rollup.sql
+index ee90e47..70f2f36 100644
+--- a/sql/rollup.sql
++++ b/sql/rollup.sql
+@@ -1,13 +1,13 @@
+ CREATE TABLE analytics.daily AS
+ SELECT day, customer_id, amount, top_skus, sessions FROM (
+-  SELECT date_trunc('day', o.created_at) AS day,
++  SELECT DATETIME_TRUNC(o.created_at, DAY) AS day,
+          o.customer_id,
+-         SUM(TRY_CAST(o.amount AS DECIMAL(18,2))) AS amount,
+-         slice(array_agg(i.sku ORDER BY i.qty DESC), 1, 3) AS top_skus,
+-         approx_distinct(o.session_id) AS sessions,
+-         ROW_NUMBER() OVER (PARTITION BY o.customer_id ORDER BY SUM(TRY_CAST(o.amount AS DECIMAL(18,2))) DESC) AS rn
++         SUM(SAFE_CAST(o.amount AS NUMERIC(18,2))) AS amount,
++         ARRAY_AGG(i.sku IGNORE NULLS ORDER BY i.qty DESC LIMIT 3) AS top_skus,
++         APPROX_COUNT_DISTINCT(o.session_id) AS sessions,
++         ROW_NUMBER() OVER (PARTITION BY o.customer_id ORDER BY SUM(SAFE_CAST(o.amount AS NUMERIC(18,2))) DESC) AS rn
+   FROM analytics.orders o
+-  CROSS JOIN UNNEST(o.items) AS t(i)
+-  WHERE o.dt >= date_format(date_add('day', -1, current_date), '%Y-%m-%d')
++  CROSS JOIN UNNEST(o.items) AS i
++  WHERE o.dt >= FORMAT_DATE('%Y-%m-%d', DATE_SUB(CURRENT_DATE(), INTERVAL 1 DAY))
+   GROUP BY 1, 2
+ ) WHERE rn <= 100;
