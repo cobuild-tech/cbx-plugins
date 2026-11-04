@@ -1,0 +1,1 @@
+Migrate this repo from AWS to GCP. Write the GCP Terraform in gcp/ (same resources, same behavior), port the Python app code in place, and port the SQL. Make the changes in the repo and give me a short summary.

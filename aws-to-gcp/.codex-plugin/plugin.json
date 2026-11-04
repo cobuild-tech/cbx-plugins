@@ -1,0 +1,53 @@
+{
+  "name": "aws-to-gcp",
+  "version": "1.0.1",
+  "description": "Convert AWS workloads to Google Cloud (GCP). Paste AWS Terraform, CloudFormation, config, or SDK code in any Claude app and get the GCP version, or plan and run a full migration of compute, serverless, big data, and storage in Claude Code.",
+  "author": {
+    "name": "CobuildX",
+    "email": "emmanuel.r@cobuildx.ai",
+    "url": "https://cobuildx.ai"
+  },
+  "homepage": "https://github.com/cobuild-tech/cbx-plugins/tree/main/aws-to-gcp",
+  "repository": "https://github.com/cobuild-tech/cbx-plugins",
+  "license": "MIT",
+  "keywords": [
+    "aws",
+    "gcp",
+    "cloud-migration",
+    "google-cloud",
+    "lambda",
+    "ecs",
+    "eks",
+    "redshift",
+    "athena",
+    "glue",
+    "kinesis",
+    "s3",
+    "terraform"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "AWS to GCP",
+    "shortDescription": "Convert AWS workloads to GCP",
+    "longDescription": "Convert AWS workloads to Google Cloud (GCP). Paste AWS Terraform, CloudFormation, config, or SDK code in any Claude app and get the GCP version, or plan and run a full migration of compute, serverless, big data, and storage in Claude Code. Keeps resumable migration state in .migration/, inventories AWS resources before changing anything, and checks each migrated piece for parity with the original.",
+    "developerName": "CobuildX AI",
+    "category": "Developer Tools",
+    "capabilities": [
+      "Interactive",
+      "Read",
+      "Write"
+    ],
+    "websiteURL": "https://cobuildx.ai",
+    "privacyPolicyURL": "https://cobuildx.ai/privacy",
+    "termsOfServiceURL": "https://cobuildx.ai/terms",
+    "defaultPrompt": [
+      "Convert this AWS Terraform to GCP",
+      "Plan a migration of this AWS project to GCP",
+      "Continue the AWS-to-GCP migration"
+    ],
+    "logo": "./.cursor-plugin/icon.png",
+    "composerIcon": "./.cursor-plugin/icon.png",
+    "screenshots": [],
+    "supportURL": "https://github.com/cobuild-tech/cbx-plugins/issues"
+  }
+}

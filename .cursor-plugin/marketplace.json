@@ -38,6 +38,11 @@
       "name": "gcp-to-aws",
       "source": "./gcp-to-aws",
       "description": "Migrate Google Cloud (GCP) workloads to AWS — compute, GKE, serverless, big data, and storage — from single snippets to full phased migrations."
+    },
+    {
+      "name": "aws-to-gcp",
+      "source": "./aws-to-gcp",
+      "description": "Migrate AWS workloads to Google Cloud (GCP) — compute, EKS, serverless, big data, and storage — from single snippets to full phased migrations."
     }
   ]
 }

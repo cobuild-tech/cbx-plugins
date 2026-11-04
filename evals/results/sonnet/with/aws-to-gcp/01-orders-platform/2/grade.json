@@ -1,0 +1,58 @@
+{
+ "ordering-key": {
+  "pass": true,
+  "why": "The subscription sets enable_message_ordering = true, and the publisher client enables message ordering and publishes with ordering_key=o[\"customer_id\"]."
+ },
+ "dedup": {
+  "pass": true,
+  "why": "The Terraform comment and the summary's behavior table both flag that content-based dedup has no equivalent and the worker must be idempotent."
+ },
+ "dlq-5": {
+  "pass": true,
+  "why": "The subscription has dead_letter_policy with max_delivery_attempts = 5, and the Pub/Sub agent gets publisher on the DLQ topic and subscriber on the orders subscription."
+ },
+ "ack-deadline": {
+  "pass": true,
+  "why": "ack_deadline_seconds = 360, which is within the 600 s limit."
+ },
+ "concurrency": {
+  "pass": true,
+  "why": "The api service sets max_instance_request_concurrency = 1, max_instance_count = 20 and min_instance_count = 1."
+ },
+ "auth-private": {
+  "pass": true,
+  "why": "There is no allUsers binding; run.invoker goes only to the scheduler service account (api) and the push service account (worker)."
+ },
+ "signed-url": {
+  "pass": true,
+  "why": "The code uses generate_signed_url(version=\"v4\", method=\"PUT\", expiration=3600 s) with service_account_email and access_token, and Terraform grants serviceAccountTokenCreator on the api service account to itself."
+ },
+ "cloudsql-iam": {
+  "pass": true,
+  "why": "Cloud SQL is POSTGRES_15 with cloudsql.iam_authentication=on, availability_type REGIONAL, PITR enabled and retained_backups = 7."
+ },
+ "worker-event-shape": {
+  "pass": true,
+  "why": "worker.py reads the push body message.data as base64, handles one message per call, and returns 500 on error instead of batchItemFailures."
+ },
+ "sql-dialect": {
+  "pass": true,
+  "why": "The SQL uses SAFE_CAST, APPROX_COUNT_DISTINCT, ARRAY_AGG(... IGNORE NULLS ORDER BY ... LIMIT 3), UNNEST(o.items) AS i, and FORMAT_DATE/DATE_SUB, keeping the string dt filter."
+ },
+ "scheduler-tz": {
+  "pass": true,
+  "why": "Cloud Scheduler uses schedule = \"0 2 * * *\" with time_zone = \"America/New_York\"."
+ },
+ "lifecycle": {
+  "pass": true,
+  "why": "The bucket has SetStorageClass NEARLINE at age 30, Delete at 365, versioning enabled, public_access_prevention enforced and uniform_bucket_level_access."
+ },
+ "region": {
+  "pass": true,
+  "why": "The bucket and dataset use a single region, upper(us-east4), and the summary notes the region change."
+ },
+ "no-silent-changes": {
+  "pass": true,
+  "why": "The summary calls out the changed retry/backoff, concurrency, scaling mapping, batch semantics, added IAM, public IP, soft delete and deletion_protection, and keeps the 300 s and 60 s timeouts."
+ }
+}
