@@ -1,8 +1,29 @@
-{ "checks": [
- {"id":"ngmodel","must":"The React tag input still participates in ngModel (wrapper directive with require:'ngModel' calling $setViewValue / $render), so vm.contact.tags updates; a plain react2angular prop + callback with no ngModel integration fails unless flagged."},
- {"id":"validity","must":"contactForm.tags.$error.maxTags and required still work, so the Save button's ng-disabled and the error messages behave as before."},
- {"id":"touched","must":"$touched is still set after adding/removing a tag."},
- {"id":"digest","must":"Changes from React reach AngularJS inside a digest ($apply/$applyAsync/$evalAsync)."},
- {"id":"enter-trim","must":"Enter adds trimmed non-empty tags and prevents form submit; × removes."},
- {"id":"no-silent-changes","must":"No unrequested behaviour changes without calling them out."}
-]}
+{
+ "kind": "targeted",
+ "checks": [
+  {
+   "id": "ngmodel",
+   "must": "The React tag input still participates in ngModel (wrapper directive with require:'ngModel' calling $setViewValue / $render), so vm.contact.tags updates; a plain react2angular prop + callback with no ngModel integration fails unless flagged."
+  },
+  {
+   "id": "validity",
+   "must": "contactForm.tags.$error.maxTags and required still work, so the Save button's ng-disabled and the error messages behave as before."
+  },
+  {
+   "id": "touched",
+   "must": "$touched is still set after adding/removing a tag."
+  },
+  {
+   "id": "digest",
+   "must": "Changes from React reach AngularJS inside a digest ($apply/$applyAsync/$evalAsync)."
+  },
+  {
+   "id": "enter-trim",
+   "must": "Enter adds trimmed non-empty tags and prevents form submit; \u00d7 removes."
+  },
+  {
+   "id": "no-silent-changes",
+   "must": "No unrequested behaviour changes without calling them out."
+  }
+ ]
+}

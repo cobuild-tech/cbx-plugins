@@ -1,0 +1,1 @@
+Move this media pipeline from GCP to AWS. Put the AWS Terraform in aws/ (same resources, same behavior), port both functions in place, and port the SQL for Athena. Make the changes in the repo and give me a short summary.

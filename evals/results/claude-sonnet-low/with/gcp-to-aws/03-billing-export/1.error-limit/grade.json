@@ -1,0 +1,50 @@
+{
+ "job-timeout": {
+  "pass": true,
+  "why": "aws_batch_job_definition sets `timeout { attempt_duration_seconds = 10800 }` on a Fargate Batch job, which supports a 3-hour run."
+ },
+ "sharding": {
+  "pass": true,
+  "why": "The scheduler submits `ArrayProperties = { Size = local.task_count }` (16); `max_vcpus = parallelism * vcpu` (8/2) caps concurrency at 4; export.py reads `AWS_BATCH_JOB_ARRAY_INDEX` and a `TASK_COUNT` env var set to 16."
+ },
+ "retry-attempt": {
+  "pass": true,
+  "why": "`retry_strategy { attempts = 3 }` keeps 1 try plus 2 retries, and ATTEMPT comes from Batch's real `AWS_BATCH_JOB_ATTEMPT` minus 1 to match Cloud Run's zero-based count."
+ },
+ "secret-latest": {
+  "pass": true,
+  "why": "PARTNER_API_KEY is injected through container `secrets` with `valueFrom` set to the Secrets Manager ARN; the execution role resolves the current version at task start, which matches 'latest'."
+ },
+ "redis-tls-auth": {
+  "pass": true,
+  "why": "The replication group sets `transit_encryption_enabled`, `auth_token`, 2 cache clusters with automatic failover and Multi-AZ, and explicitly sets `port = 6378` so the unchanged client port and `ssl=True` stay consistent."
+ },
+ "private-network": {
+  "pass": true,
+  "why": "Tasks run in `var.subnet_ids` with `assignPublicIp = DISABLED`, the Redis SG allows 6378 only from the job SG, and the vpc variable comment requires private subnets with a NAT route for partner.example.com."
+ },
+ "worm-retention": {
+  "pass": true,
+  "why": "`object_lock_enabled = true` with default retention `mode = \"COMPLIANCE\"`, `days = 2555` (= 220752000 s) preserves the locked 7-year WORM retention."
+ },
+ "create-only-write": {
+  "pass": true,
+  "why": "`s3.put_object(..., IfNoneMatch=\"*\")` replaces `if_generation_match=0` as a create-only conditional write."
+ },
+ "scheduler-tz": {
+  "pass": true,
+  "why": "`aws_scheduler_schedule` uses `cron(0 3 1 * ? *)` with `schedule_expression_timezone = \"Europe/Berlin\"`."
+ },
+ "time-travel": {
+  "pass": true,
+  "why": "The SQL uses Athena Iceberg time travel `FOR TIMESTAMP AS OF TIMESTAMP '{month_end} 00:00:00 Europe/Berlin'`, and the header comment states the tables are Iceberg."
+ },
+ "shard-hash": {
+  "pass": true,
+  "why": "FARM_FINGERPRINT is replaced with a stable `from_big_endian_64(xxhash64(to_utf8(account_id)))`, wrapped in `abs(mod(...))` so negative hashes still map to shards 0..15."
+ },
+ "no-silent-changes": {
+  "pass": false,
+  "why": "The final message is only a rate-limit notice ('You've hit your 5-hour limit'), so the requested summary never surfaces several changes (eu-west-1 mapping, new Athena bucket/workgroup, IAM grants, Intelligent-Tiering, at-rest encryption, scheduler retries set to 0) or the reason for choosing Athena; they appear only as scattered code comments."
+ }
+}

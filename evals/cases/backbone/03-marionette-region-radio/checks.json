@@ -1,8 +1,29 @@
-{ "checks": [
- {"id":"region-unmount","must":"When the region swaps to SettingsView, the React root is unmounted (e.g. a Marionette wrapper view calling root.unmount() in onDestroy/onBeforeDestroy)."},
- {"id":"radio-cleanup","must":"The Radio 'message:new' subscription and the 30 s poll interval are removed on unmount — no zombie listeners or duplicated polls after navigating back and forth."},
- {"id":"model-source","must":"Unread count stays on the shared app.mailbox model (other code may read it), not only in React state."},
- {"id":"classname-quirk","must":"Notices that Marionette evaluates className only at element creation (so has-unread was stale) and either preserves it or asks/flags before changing it."},
- {"id":"escape","must":"Subjects remain escaped."},
- {"id":"no-silent-changes","must":"No unrequested behaviour changes without calling them out."}
-]}
+{
+ "kind": "targeted",
+ "checks": [
+  {
+   "id": "region-unmount",
+   "must": "When the region swaps to SettingsView, the React root is unmounted (e.g. a Marionette wrapper view calling root.unmount() in onDestroy/onBeforeDestroy)."
+  },
+  {
+   "id": "radio-cleanup",
+   "must": "The Radio 'message:new' subscription and the 30 s poll interval are removed on unmount \u2014 no zombie listeners or duplicated polls after navigating back and forth."
+  },
+  {
+   "id": "model-source",
+   "must": "Unread count stays on the shared app.mailbox model (other code may read it), not only in React state."
+  },
+  {
+   "id": "classname-quirk",
+   "must": "Notices that Marionette evaluates className only at element creation (so has-unread was stale) and either preserves it or asks/flags before changing it."
+  },
+  {
+   "id": "escape",
+   "must": "Subjects remain escaped."
+  },
+  {
+   "id": "no-silent-changes",
+   "must": "No unrequested behaviour changes without calling them out."
+  }
+ ]
+}

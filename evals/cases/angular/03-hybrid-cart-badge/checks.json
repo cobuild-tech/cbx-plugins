@@ -1,8 +1,29 @@
-{ "checks": [
- {"id":"same-instance","must":"React reads from the same CartService instance as AngularJS/Angular (via the injector/downgraded service), not a new copy or separate store, so adds from ProductCtrl update the badge."},
- {"id":"unsubscribe","must":"The count$ subscription is unsubscribed when the React component unmounts."},
- {"id":"mount-path","must":"Provides a working mount path inside AngularJS header.html (e.g. an AngularJS directive/react2angular wrapper or Angular wrapper component) and removes/updates the downgradeComponent registration."},
- {"id":"zone","must":"Mentions or handles NgZone/change detection implications (e.g. React event handlers running outside Angular zone, or runOutsideAngular) or AngularJS digest when calling the service."},
- {"id":"empty-class","must":"The 'empty' class when count is 0 and the /cart link are preserved."},
- {"id":"no-silent-changes","must":"No unrequested behaviour changes without calling them out."}
-]}
+{
+ "kind": "targeted",
+ "checks": [
+  {
+   "id": "same-instance",
+   "must": "React reads from the same CartService instance as AngularJS/Angular (via the injector/downgraded service), not a new copy or separate store, so adds from ProductCtrl update the badge."
+  },
+  {
+   "id": "unsubscribe",
+   "must": "The count$ subscription is unsubscribed when the React component unmounts."
+  },
+  {
+   "id": "mount-path",
+   "must": "Provides a working mount path inside AngularJS header.html (e.g. an AngularJS directive/react2angular wrapper or Angular wrapper component) and removes/updates the downgradeComponent registration."
+  },
+  {
+   "id": "zone",
+   "must": "Mentions or handles NgZone/change detection implications (e.g. React event handlers running outside Angular zone, or runOutsideAngular) or AngularJS digest when calling the service."
+  },
+  {
+   "id": "empty-class",
+   "must": "The 'empty' class when count is 0 and the /cart link are preserved."
+  },
+  {
+   "id": "no-silent-changes",
+   "must": "No unrequested behaviour changes without calling them out."
+  }
+ ]
+}

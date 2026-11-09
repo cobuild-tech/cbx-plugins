@@ -1,0 +1,50 @@
+{
+ "job-timeout": {
+  "pass": false,
+  "why": "The diff is empty and the final message only reports a usage limit, so no AWS compute service with a 3-hour timeout was produced or flagged."
+ },
+ "sharding": {
+  "pass": false,
+  "why": "No changes were made; the code still reads CLOUD_RUN_TASK_INDEX/COUNT and no AWS array/Map sharding exists."
+ },
+ "retry-attempt": {
+  "pass": false,
+  "why": "No AWS retry configuration or attempt-number source was written, and nothing was flagged in the message."
+ },
+ "secret-latest": {
+  "pass": false,
+  "why": "No Secrets Manager/SSM resource or task injection appears in the empty diff."
+ },
+ "redis-tls-auth": {
+  "pass": false,
+  "why": "No ElastiCache resource was created and the client still uses port 6378; nothing was flagged."
+ },
+ "private-network": {
+  "pass": false,
+  "why": "No VPC, subnets, security groups, or NAT were defined in the empty diff."
+ },
+ "worm-retention": {
+  "pass": false,
+  "why": "No S3 bucket with Object Lock compliance retention was written and the retention requirement was not flagged."
+ },
+ "create-only-write": {
+  "pass": false,
+  "why": "The upload was not ported to S3 with If-None-Match and the overwrite risk was not flagged."
+ },
+ "scheduler-tz": {
+  "pass": false,
+  "why": "No EventBridge Scheduler with Europe/Berlin timezone exists in the empty diff."
+ },
+ "time-travel": {
+  "pass": false,
+  "why": "The SQL was not ported and the loss of FOR SYSTEM_TIME AS OF was not addressed or flagged."
+ },
+ "shard-hash": {
+  "pass": false,
+  "why": "FARM_FINGERPRINT was not replaced and no note on shard membership or negative MOD was given."
+ },
+ "no-silent-changes": {
+  "pass": false,
+  "why": "No migration was delivered at all (empty diff, message is only a rate-limit notice), so the requested behaviour was not preserved or explained."
+ }
+}

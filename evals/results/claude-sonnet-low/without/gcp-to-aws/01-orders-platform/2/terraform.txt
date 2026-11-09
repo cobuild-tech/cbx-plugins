@@ -1,0 +1,16 @@
+FAIL
+
+Error: Terraform encountered problems during initialisation, including problems
+with the configuration, described below.
+
+The Terraform configuration must be valid before initialization so that
+Terraform can determine which modules and providers need to be installed.
+
+
+Error: Invalid single-argument block definition
+
+  on main.tf line 318, in resource "aws_lb_target_group" "api":
+ 318:   health_check { path = "/" matcher = "200-404" }
+
+A single-line block definition must end with a closing brace immediately
+after its single argument definition.

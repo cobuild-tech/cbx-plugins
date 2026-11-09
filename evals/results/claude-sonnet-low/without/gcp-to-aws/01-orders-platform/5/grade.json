@@ -1,0 +1,50 @@
+{
+ "ordering-fifo": {
+  "pass": true,
+  "why": "aws_sns_topic.orders is `fifo_topic = true` feeding `orders-worker.fifo`, and api.py publishes with `MessageGroupId=str(o[\"customer_id\"])`."
+ },
+ "dlq-5": {
+  "pass": true,
+  "why": "orders_worker has a redrive_policy to the FIFO `orders-dlq.fifo` with `maxReceiveCount = 5`."
+ },
+ "visibility-timeout": {
+  "pass": true,
+  "why": "`visibility_timeout_seconds = 3240` is above the Lambda's 540s timeout, and the summary flags the change from the 60s ack deadline."
+ },
+ "run-timeout-900": {
+  "pass": true,
+  "why": "The API runs on ECS Fargate behind an ALB with `idle_timeout = 900`, commented as matching Cloud Run's 900s."
+ },
+ "presign-expiry": {
+  "pass": true,
+  "why": "A code comment and the 'Presigned URL lifetime' bullet both warn that role credentials expire within hours, so the 7-day URL won't last."
+ },
+ "rds-iam-auth": {
+  "pass": true,
+  "why": "aws_db_instance uses engine_version 15, `iam_database_authentication_enabled = true`, `multi_az = true` and `backup_retention_period = 7`, which enables PITR."
+ },
+ "worker-event-shape": {
+  "pass": true,
+  "why": "worker.py reads `event[\"Records\"]` and `json.loads(rec[\"body\"])`, which is correct because the SNS subscription sets `raw_message_delivery = true`."
+ },
+ "sql-dialect": {
+  "pass": true,
+  "why": "rollup.sql uses TRY_CAST, rewrites QUALIFY as a ROW_NUMBER subquery, replaces _PARTITIONDATE with a flagged `dt` column, uses slice(array_agg(ROW...)) for top-3, and uses approx_distinct."
+ },
+ "scheduler-tz": {
+  "pass": true,
+  "why": "aws_scheduler_schedule uses `cron(0 2 * * ? *)` with `schedule_expression_timezone = \"America/New_York\"`."
+ },
+ "lifecycle": {
+  "pass": true,
+  "why": "Objects transition to STANDARD_IA at 30 days and expire at 365 days, and versioning is enabled."
+ },
+ "multi-region-flag": {
+  "pass": false,
+  "why": "The US multi-region bucket and BigQuery dataset are mapped to the single region us-east-2 with no cross-region replication, and the summary only notes the default region without flagging the durability/availability difference."
+ },
+ "no-silent-changes": {
+  "pass": true,
+  "why": "Versioning and min 1 / max 20 scaling are kept, and the changes to memory, scaling metric, visibility timeout, batch-failure ordering, noncurrent expiry, HTTP-only ALB and DROP+CREATE are all called out in the summary."
+ }
+}

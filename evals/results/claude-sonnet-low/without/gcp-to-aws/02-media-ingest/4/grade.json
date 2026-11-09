@@ -1,0 +1,50 @@
+{
+ "s3-key-decode": {
+  "pass": true,
+  "why": "The ingest handler does `name = unquote_plus(obj[\"key\"])` before filtering on the extension and using the key."
+ },
+ "two-hour-hold": {
+  "pass": true,
+  "why": "The hold uses an EventBridge Scheduler one-time `at(...)` schedule set to now + 2h with `ActionAfterCompletion=DELETE`, and the summary notes SQS can only delay 15 minutes."
+ },
+ "stale-generation": {
+  "pass": true,
+  "why": "The job carries the S3 `versionId` as `generation`, and transcode compares `head.get(\"VersionId\")` with it, returning \"stale\" on a mismatch or a 404; versioning is enabled on the bucket."
+ },
+ "overwrite-trigger": {
+  "pass": true,
+  "why": "`aws_s3_bucket_notification` uses `events = [\"s3:ObjectCreated:*\"]`, which also fires on overwrites."
+ },
+ "transcode-timeout": {
+  "pass": true,
+  "why": "The Lambda timeout is 900 and the summary says Lambda caps at 900s against GCP's 1800s and suggests Fargate or Batch."
+ },
+ "rate-limit": {
+  "pass": true,
+  "why": "`reserved_concurrent_executions = 3` keeps the concurrency cap, and the summary says the 5 dispatches/second limit isn't reproduced."
+ },
+ "retry-policy": {
+  "pass": true,
+  "why": "Ingest has `maximum_retry_attempts = 0`; transcode gets 2 async retries, and the summary says GCP allowed 4 attempts with 30s-600s backoff while Lambda's backoff is fixed."
+ },
+ "attribute-limit": {
+  "pass": true,
+  "why": "The 12 fields are published as a JSON `Message` body, and the summary cites the SNS 10-attribute limit."
+ },
+ "week-start": {
+  "pass": true,
+  "why": "`date_add('day', -1, date_trunc('week', date_add('day', 1, DATE(uploaded_at))))` gives Sunday-start weeks, and the comment and summary explain the shift."
+ },
+ "weekend-days": {
+  "pass": true,
+  "why": "It uses `COUNT_IF(day_of_week(uploaded_at) IN (6, 7))` with an ISO Mon=1 comment."
+ },
+ "safe-divide": {
+  "pass": true,
+  "why": "`CAST(SUM(transcode_seconds) AS double) / COUNT(*)` avoids integer truncation, and COUNT(*) per group is always at least 1, so it cannot divide by zero."
+ },
+ "no-silent-changes": {
+  "pass": true,
+  "why": "7-day retention (SQS 604800) and 4096 MB memory are kept, and the shared role and other deviations are called out; the us-east-2 region choice is noted only in a Terraform comment and the extra Scheduler `MaximumRetryAttempts: 3` isn't mentioned, but neither changes core pipeline behaviour."
+ }
+}

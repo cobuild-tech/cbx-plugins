@@ -134,6 +134,17 @@ connectors, which need replacements.
 
 Assume duplicates and make every consumer idempotent.
 
+Limits that change code, not just config:
+
+- **Attributes.** SNS and SQS accept at most 10 message attributes per
+  message; Pub/Sub accepts 100. Move the rest into the JSON body (and
+  update consumers), or keep the 10 that subscription filters use.
+- **Size.** Pub/Sub messages go up to 10 MB. SNS caps at 256 KB and SQS at
+  1 MiB; larger payloads go to S3 with a pointer in the message.
+- **Retention.** SQS keeps messages 4 days by default (max 14). Set
+  `message_retention_seconds` to match the subscription's retention
+  (Pub/Sub default 7 days), or messages disappear sooner than before.
+
 ## Composer → MWAA
 
 - Keep the same Airflow version. Upgrade after the move.

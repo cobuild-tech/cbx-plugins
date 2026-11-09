@@ -1,0 +1,50 @@
+{
+ "s3-key-decode": {
+  "pass": true,
+  "why": "The ingest handler sets `name = unquote_plus(rec[\"object\"][\"key\"])`, and the summary explains that S3 keys are URL-encoded."
+ },
+ "two-hour-hold": {
+  "pass": true,
+  "why": "The ingest handler creates a one-time EventBridge Scheduler schedule with `ScheduleExpression=at(now+2h)`, and the summary explicitly rejects SQS delay because it tops out at 15 minutes."
+ },
+ "stale-generation": {
+  "pass": true,
+  "why": "Bucket versioning is enabled, ingest passes `versionId` as `generation`, and transcode returns \"stale\" when `head_object`'s `VersionId` differs from the job or the key is missing."
+ },
+ "overwrite-trigger": {
+  "pass": true,
+  "why": "`aws_s3_bucket_notification` uses `events = [\"s3:ObjectCreated:*\"]`, which fires on new objects and on overwrites."
+ },
+ "transcode-timeout": {
+  "pass": true,
+  "why": "The transcode Lambda timeout is set to 900 with a comment, and the summary flags the 900s vs 1800s gap as \"the biggest risk\" and suggests ECS/Fargate."
+ },
+ "rate-limit": {
+  "pass": true,
+  "why": "The transcode Lambda sets `reserved_concurrent_executions = 3` to match `max_concurrent_dispatches = 3`, and the summary flags that the 5-per-second dispatch limit has no equivalent."
+ },
+ "retry-policy": {
+  "pass": true,
+  "why": "Ingest has `maximum_retry_attempts = 0` for DO_NOT_RETRY, and the summary flags that transcode async retries cap at 2 versus Cloud Tasks' 4 attempts and that custom backoff can't be set."
+ },
+ "attribute-limit": {
+  "pass": true,
+  "why": "The 12 fields are published as a JSON `Message` body rather than as MessageAttributes, and the summary cites SNS's 10-attribute limit."
+ },
+ "week-start": {
+  "pass": true,
+  "why": "`date_trunc('week', CAST(uploaded_at AS date) + INTERVAL '1' DAY) - INTERVAL '1' DAY` correctly yields Sunday-start weeks, and the summary explains the shift."
+ },
+ "weekend-days": {
+  "pass": true,
+  "why": "The query uses `COUNT_IF(day_of_week(uploaded_at) IN (6, 7))`, with a comment on the ISO numbering difference."
+ },
+ "safe-divide": {
+  "pass": true,
+  "why": "`CAST(SUM(transcode_seconds) AS double) / COUNT(*)` avoids integer truncation, and `COUNT(*)` in a non-empty GROUP BY group can never be zero."
+ },
+ "no-silent-changes": {
+  "pass": true,
+  "why": "Retention (604800s) and memory (4096) are preserved, and the summary calls out the region, bucket naming, source zipping, IAM role split, message body format, checksum semantics and timeout/retry differences; the added public access block only mirrors GCS defaults."
+ }
+}

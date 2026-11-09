@@ -1,0 +1,1 @@
+Migrate this billing export from GCP to AWS. Write the AWS Terraform in aws/ (same resources, same behavior), port the job code in place, and port the SQL (pick Athena or Redshift and say why). Make the changes in the repo and give me a short summary.

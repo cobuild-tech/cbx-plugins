@@ -2,7 +2,7 @@
 name: cobuildx-ai-ember-to-react-migration
 description: "Use when the user asks to convert or translate Ember.js code to React — a single component, template, route, controller, service, model, or helper, pasted Ember code with a request for React, or \"what would this look like in React\" — or to migrate, port, rewrite, or modernize an Ember.js app (Classic or Octane) to React — full rewrites or incremental/strangler-fig migrations of any size — or to continue, resume, or check the status of an Ember-to-React migration already in progress (e.g. \"continue the migration\", \"what's left to migrate\", \"why isn't Orders migrated yet\"). Also use for planning, scoping, or estimating a move off Ember, and for requests to upgrade, modernize, or replace Ember with React. Also use for requests to rewrite, rebuild, or replace an Ember component, form, or route template with React."
 metadata:
-  version: "2.2.0"
+  version: "2.3.0"
 ---
 
 # Ember → React Migration
@@ -142,7 +142,10 @@ When every unit is `done`, read `references/methodology/cutover.md`.
   - CSS and tests that depend on element structure; mounting React adds a
     wrapper element, which breaks `>` and `:first-child` selectors;
   - teardown: the React root must unmount in `willDestroy` or a
-    modifier's cleanup.
+    modifier's cleanup, and any service or module-level store the bridge
+    creates must clear its own timers, intervals, and subscribers in the
+    service's `willDestroy`; tests build a new app per test, so leftover
+    timers leak into the next one.
   Keep each one working, or list it under Behavior differences.
 - Change one thing at a time. Port styles and class names as they are, in
   the same pass as the logic.

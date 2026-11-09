@@ -2,7 +2,7 @@
 name: cobuildx-ai-gcp-to-aws-migration
 description: "Use when the user asks to convert or translate Google Cloud (GCP) code or configuration to AWS — Terraform with google_* resources, gcloud commands, app.yaml, Cloud Run or Cloud Functions code, Pub/Sub handlers, BigQuery SQL, Dataproc or Dataflow jobs, Composer DAGs, or google-cloud SDK calls, or \"what would this look like on AWS\" — or to migrate, move, or re-platform GCP workloads to AWS: Compute Engine, GKE, GPUs/TPUs, Cloud Run, Cloud Functions, App Engine, Eventarc, Cloud Tasks, Cloud Scheduler, Workflows, BigQuery, Dataproc, Dataflow, Pub/Sub, Composer, Cloud Storage, Persistent Disk, or Filestore. Also use to continue, resume, or check the status of a GCP-to-AWS migration already in progress (e.g. \"continue the migration\", \"what's left to move\", \"why isn't the orders bucket migrated yet\"), and for planning, scoping, sizing, or estimating the cost of a move off GCP."
 metadata:
-  version: "1.1.0"
+  version: "1.2.0"
 ---
 
 # GCP → AWS Migration
@@ -159,6 +159,12 @@ silently.
 - **Event shape.** Rewrite handlers for the payload they now get (SQS
   `Records[].body`, SNS envelope unless raw delivery, EventBridge
   `detail`), not the Pub/Sub CloudEvent.
+- **Delays and storage events.** Delays over 15 minutes can't use SQS
+  `DelaySeconds`; S3 event keys arrive URL-encoded; async Lambda
+  invocations retry twice unless told not to (`serverless.md`).
+- **Message limits.** More than 10 Pub/Sub attributes, messages over
+  256 KB (SNS) or 1 MiB (SQS), and SQS's 4-day default retention all need
+  a change or a row in the table (`big-data.md`).
 - **Schedules.** Cloud Scheduler `time_zone` → EventBridge Scheduler
   `schedule_expression_timezone`; EventBridge rules are UTC only.
 - **Storage features.** Versioning, lifecycle classes and ages (and
@@ -166,7 +172,7 @@ silently.
   Access, retention.
 - **Data and SQL.** BigQuery SQL → engine dialect (`big-data-sql.md`):
   `SAFE_CAST`, `QUALIFY`, `_PARTITIONDATE`, `STRUCT`/`ARRAY_AGG`,
-  approximate functions, time zones. Say how data gets to the new tables.
+  approximate functions, time zones, week start and weekday numbering. Say how data gets to the new tables.
 - **Defaults you introduced.** Instance classes, password management,
   health-check matchers, `ignore_changes`, new queues or Lambdas added
   as glue: anything with no GCP counterpart is a choice, so list it.

@@ -1,0 +1,50 @@
+{
+ "s3-key-decode": {
+  "pass": true,
+  "why": "The ingest handler sets `name = unquote_plus(rec[\"object\"][\"key\"])` before filtering on the name, calling head_object and scheduling, and the summary mentions the URL-decoding."
+ },
+ "two-hour-hold": {
+  "pass": true,
+  "why": "The hold uses a one-time EventBridge Scheduler schedule, `ScheduleExpression=at(now+HOLD)` with HOLD = 2 hours, which supports a 2-hour delay."
+ },
+ "stale-generation": {
+  "pass": true,
+  "why": "transcode/main.py runs head_object and returns \"stale\" when `head.get(\"VersionId\") != job[\"generation\"]`, and the generation is the S3 versionId on a versioned bucket."
+ },
+ "overwrite-trigger": {
+  "pass": true,
+  "why": "aws_s3_bucket_notification uses `events = [\"s3:ObjectCreated:*\"]`, which also fires when an existing key is overwritten."
+ },
+ "transcode-timeout": {
+  "pass": true,
+  "why": "The Lambda timeout is 900 with a comment that 1800 exceeds the Lambda maximum, and summary item 1 flags this and points to ECS/Batch or Step Functions for longer jobs."
+ },
+ "rate-limit": {
+  "pass": true,
+  "why": "`reserved_concurrent_executions = 3` keeps the cap of 3 concurrent transcodes, and summary item 3 flags that the 5/s dispatch rate is dropped."
+ },
+ "retry-policy": {
+  "pass": true,
+  "why": "Ingest has `maximum_retry_attempts = 0`, transcode gets `MaximumRetryAttempts: 3` (4 attempts), and summary item 4 flags the missing backoff and the possible extra Lambda async retries."
+ },
+ "attribute-limit": {
+  "pass": false,
+  "why": "sns.publish still sends up to 12 MessageAttributes (event, bucket, name, generation, content_type, size, md5, crc32c, uploader, show, season, episode), which exceeds the SNS limit of 10, and the summary never mentions the limit; omitting empty values does not guarantee staying under it."
+ },
+ "week-start": {
+  "pass": true,
+  "why": "`date_trunc('week', d + INTERVAL '1' DAY) - INTERVAL '1' DAY` correctly produces Sunday-start weeks, and summary item 14 explains the shift."
+ },
+ "weekend-days": {
+  "pass": true,
+  "why": "The query uses `COUNT_IF(day_of_week(uploaded_at) IN (6, 7))` with a Sat=6, Sun=7 comment, which correctly maps Trino's Monday=1 numbering."
+ },
+ "safe-divide": {
+  "pass": true,
+  "why": "`CAST(SUM(transcode_seconds) AS double) / COUNT(*)` avoids integer truncation, and COUNT(*) within a GROUP BY group is always at least 1, so division by zero cannot occur, as summary item 15 notes."
+ },
+ "no-silent-changes": {
+  "pass": true,
+  "why": "Memory stays at 4096; the summary calls out the dropped 7-day retention, the region and prefix change, versioning, the md5/crc32c semantics, empty attributes, duplicate-upload errors and the timeout; the remaining additions (public access block, least-privilege IAM) are defaults rather than behaviour changes, since the original service account had no explicit grants."
+ }
+}

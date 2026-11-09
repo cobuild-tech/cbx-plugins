@@ -1,0 +1,50 @@
+{
+ "job-timeout": {
+  "pass": true,
+  "why": "The Batch job definition sets `timeout { attempt_duration_seconds = 10800 }` on Fargate, so the 3-hour limit is kept on a service that allows it."
+ },
+ "sharding": {
+  "pass": true,
+  "why": "The scheduler submits an array job with `ArrayProperties = { Size = 16 }`, the code reads `AWS_BATCH_JOB_ARRAY_INDEX` and a `TASK_COUNT` env var, and parallelism 4 comes from `max_vcpus = 8` at 2 vCPU per task, a caveat the summary flags."
+ },
+ "retry-attempt": {
+  "pass": true,
+  "why": "`retry_strategy { attempts = 3 }` keeps max_retries 2, and ATTEMPT is now `AWS_BATCH_JOB_ATTEMPT - 1`, a real 1-based Batch variable, which the summary explains."
+ },
+ "secret-latest": {
+  "pass": true,
+  "why": "PARTNER_API_KEY is injected through the container `secrets` valueFrom the Secrets Manager ARN, which resolves the current version at task start, and the value is not stored in Terraform."
+ },
+ "redis-tls-auth": {
+  "pass": true,
+  "why": "The replication group has `transit_encryption_enabled = true`, an `auth_token`, 2 nodes with Multi-AZ and automatic failover, and it explicitly sets `port = 6378` with a matching SG rule, so the client's port 6378 with ssl=True stays consistent."
+ },
+ "private-network": {
+  "pass": true,
+  "why": "Tasks run in default VPC subnets with a job SG that the Redis SG admits on 6378, and `assignPublicIp = ENABLED` keeps the partner API reachable, which the summary also states."
+ },
+ "worm-retention": {
+  "pass": true,
+  "why": "The bucket has `object_lock_enabled = true` plus default retention in COMPLIANCE mode for 2555 days (exactly 220752000 s), with versioning enabled."
+ },
+ "create-only-write": {
+  "pass": true,
+  "why": "`s3.put_object(..., IfNoneMatch=\"*\")` preserves the create-only semantics of `if_generation_match=0`, and the summary notes it needs a recent boto3."
+ },
+ "scheduler-tz": {
+  "pass": true,
+  "why": "`aws_scheduler_schedule` uses `cron(0 3 1 * ? *)` with `schedule_expression_timezone = \"Europe/Berlin\"`."
+ },
+ "time-travel": {
+  "pass": true,
+  "why": "The SQL uses Iceberg `FOR TIMESTAMP AS OF TIMESTAMP '{next_month_start} 00:00:00 Europe/Berlin'`, and the summary flags the Iceberg v2 table assumption and that Redshift has no time travel."
+ },
+ "shard-hash": {
+  "pass": true,
+  "why": "Sharding moves to Python with pyfarmhash `fingerprint64`, converted to signed INT64 before `abs(...) % TASK_COUNT`, which keeps the same assignment and handles negative values; the summary flags the unverified equivalence and that each task now reads all rows."
+ },
+ "no-silent-changes": {
+  "pass": true,
+  "why": "The summary explicitly lists the region change to eu-west-1, Block Public Access, BucketOwnerEnforced, the Redis node size, the project_id rename, the data_lake_bucket IAM scope, the parallelism caveat, concurrent MERGE conflicts and row-type differences, and CPU and memory are unchanged at 2 vCPU / 4096 MiB."
+ }
+}

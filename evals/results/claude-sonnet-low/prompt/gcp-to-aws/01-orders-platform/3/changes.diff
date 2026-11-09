@@ -1,0 +1,525 @@
+diff --git a/app/api.py b/app/api.py
+index c8f6ea8..803789b 100644
+--- a/app/api.py
++++ b/app/api.py
+@@ -1,23 +1,52 @@
+-import datetime, json, os
+-from google.cloud import storage, pubsub_v1, bigquery
++import json, os, time, uuid
++import boto3
++from botocore.config import Config
+ from flask import Flask, request
+ app = Flask(__name__)
+-gcs = storage.Client(); pub = pubsub_v1.PublisherClient(publisher_options=pubsub_v1.types.PublisherOptions(enable_message_ordering=True))
+-TOPIC = pub.topic_path(os.environ["GOOGLE_CLOUD_PROJECT"], "orders")
++REGION = os.environ.get("AWS_REGION", "us-east-2")
++s3 = boto3.client("s3", region_name=REGION, config=Config(signature_version="s3v4"))
++sns = boto3.client("sns", region_name=REGION)
++athena = boto3.client("athena", region_name=REGION)
++TOPIC = os.environ["ORDERS_TOPIC_ARN"]
+ 
+ @app.post("/upload-url")
+ def upload_url():
+-    blob = gcs.bucket(os.environ["BUCKET"]).blob(request.json["name"])
+-    return {"url": blob.generate_signed_url(version="v4", expiration=datetime.timedelta(days=7), method="PUT")}
++    url = s3.generate_presigned_url(
++        "put_object",
++        Params={"Bucket": os.environ["BUCKET"], "Key": request.json["name"]},
++        ExpiresIn=7 * 24 * 3600,
++        HttpMethod="PUT",
++    )
++    return {"url": url}
+ 
+ @app.post("/orders")
+ def create_order():
+     o = request.json
+-    pub.publish(TOPIC, json.dumps(o).encode(), ordering_key=o["customer_id"]).result()
++    sns.publish(
++        TopicArn=TOPIC,
++        Message=json.dumps(o),
++        MessageGroupId=str(o["customer_id"]),
++        MessageDeduplicationId=uuid.uuid4().hex,  # no dedup, like Pub/Sub
++    )
+     return {"ok": True}
+ 
++def _run(sql):
++    qid = athena.start_query_execution(
++        QueryString=sql, WorkGroup=os.environ["ATHENA_WORKGROUP"],
++        QueryExecutionContext={"Database": "analytics"},
++    )["QueryExecutionId"]
++    while True:
++        st = athena.get_query_execution(QueryExecutionId=qid)["QueryExecution"]["Status"]
++        if st["State"] == "SUCCEEDED":
++            return
++        if st["State"] in ("FAILED", "CANCELLED"):
++            raise RuntimeError(st.get("StateChangeReason", st["State"]))
++        time.sleep(1)
++
+ @app.post("/jobs/rollup")
+ def rollup():
+-    sql = open("sql/rollup.sql").read()
+-    bigquery.Client().query(sql).result()
++    # Athena runs one statement per call; file holds DROP + CTAS separated by ';'
++    for stmt in open("sql/rollup.sql").read().split(";"):
++        if stmt.strip():
++            _run(stmt)
+     return {"ok": True}
+diff --git a/app/worker.py b/app/worker.py
+index 762334b..8fb05bd 100644
+--- a/app/worker.py
++++ b/app/worker.py
+@@ -1,5 +1,9 @@
+-import base64, json, functions_framework
+-@functions_framework.cloud_event
+-def handle(event):
+-    order = json.loads(base64.b64decode(event.data["message"]["data"]))
+-    print("processing", order["id"])
++import json
++
++
++def handle(event, context=None):
++    # SQS event source (batch_size=1); SNS raw message delivery => body is the order JSON.
++    # An exception fails the invocation, so SQS redelivers (DLQ after 5 receives).
++    for record in event["Records"]:
++        order = json.loads(record["body"])
++        print("processing", order["id"])
+diff --git a/aws/main.tf b/aws/main.tf
+new file mode 100644
+index 0000000..a476c33
+--- /dev/null
++++ b/aws/main.tf
+@@ -0,0 +1,399 @@
++terraform {
++  required_providers {
++    aws = { source = "hashicorp/aws", version = ">= 5.40" }
++  }
++}
++
++provider "aws" { region = "us-east-2" }
++
++variable "project" { type = string }
++
++data "aws_caller_identity" "me" {}
++data "aws_region" "here" {}
++data "aws_vpc" "default" { default = true }
++data "aws_subnets" "default" {
++  filter {
++    name   = "vpc-id"
++    values = [data.aws_vpc.default.id]
++  }
++}
++
++# ---------------- Storage (GCS -> S3) ----------------
++resource "aws_s3_bucket" "uploads" { bucket = "${var.project}-uploads" }
++
++resource "aws_s3_bucket_versioning" "uploads" {
++  bucket = aws_s3_bucket.uploads.id
++  versioning_configuration { status = "Enabled" }
++}
++
++resource "aws_s3_bucket_public_access_block" "uploads" {
++  bucket                  = aws_s3_bucket.uploads.id
++  block_public_acls       = true
++  block_public_policy     = true
++  ignore_public_acls      = true
++  restrict_public_buckets = true
++}
++
++resource "aws_s3_bucket_ownership_controls" "uploads" {
++  bucket = aws_s3_bucket.uploads.id
++  rule { object_ownership = "BucketOwnerEnforced" }
++}
++
++resource "aws_s3_bucket_lifecycle_configuration" "uploads" {
++  bucket     = aws_s3_bucket.uploads.id
++  depends_on = [aws_s3_bucket_versioning.uploads]
++  rule {
++    id     = "to-ia-30d"
++    status = "Enabled"
++    filter {}
++    transition {
++      days          = 30
++      storage_class = "STANDARD_IA"
++    }
++  }
++  rule {
++    id     = "delete-365d"
++    status = "Enabled"
++    filter {}
++    expiration { days = 365 }
++  }
++}
++
++# ---------------- Messaging (Pub/Sub -> SNS FIFO + SQS FIFO) ----------------
++resource "aws_sns_topic" "orders" {
++  name                        = "orders.fifo"
++  fifo_topic                  = true
++  content_based_deduplication = false # app supplies a unique dedup id per publish
++}
++
++resource "aws_sqs_queue" "orders_dlq" {
++  name       = "orders-dlq.fifo"
++  fifo_queue = true
++}
++
++resource "aws_sqs_queue" "orders_worker" {
++  name                       = "orders-worker.fifo"
++  fifo_queue                 = true
++  visibility_timeout_seconds = 540 # must be >= Lambda timeout
++  redrive_policy = jsonencode({
++    deadLetterTargetArn = aws_sqs_queue.orders_dlq.arn
++    maxReceiveCount     = 5
++  })
++}
++
++resource "aws_sqs_queue_policy" "orders_worker" {
++  queue_url = aws_sqs_queue.orders_worker.id
++  policy = jsonencode({
++    Version = "2012-10-17"
++    Statement = [{
++      Effect    = "Allow"
++      Principal = { Service = "sns.amazonaws.com" }
++      Action    = "sqs:SendMessage"
++      Resource  = aws_sqs_queue.orders_worker.arn
++      Condition = { ArnEquals = { "aws:SourceArn" = aws_sns_topic.orders.arn } }
++    }]
++  })
++}
++
++resource "aws_sns_topic_subscription" "orders_worker" {
++  topic_arn            = aws_sns_topic.orders.arn
++  protocol             = "sqs"
++  endpoint             = aws_sqs_queue.orders_worker.arn
++  raw_message_delivery = true
++}
++
++# ---------------- Database (Cloud SQL -> RDS Postgres) ----------------
++resource "aws_db_subnet_group" "db" {
++  name       = "app-db"
++  subnet_ids = data.aws_subnets.default.ids
++}
++
++resource "aws_security_group" "db" {
++  name   = "app-db"
++  vpc_id = data.aws_vpc.default.id
++}
++
++resource "aws_security_group" "api" {
++  name   = "api-egress"
++  vpc_id = data.aws_vpc.default.id
++  egress {
++    from_port   = 0
++    to_port     = 0
++    protocol    = "-1"
++    cidr_blocks = ["0.0.0.0/0"]
++  }
++}
++
++resource "aws_vpc_security_group_ingress_rule" "db_from_api" {
++  security_group_id            = aws_security_group.db.id
++  referenced_security_group_id = aws_security_group.api.id
++  from_port                    = 5432
++  to_port                      = 5432
++  ip_protocol                  = "tcp"
++}
++
++resource "aws_db_instance" "db" {
++  identifier                          = "app-db"
++  engine                              = "postgres"
++  engine_version                      = "15"
++  instance_class                      = "db.m5.large" # 2 vCPU / 8 GiB ~ db-custom-2-7680
++  allocated_storage                   = 20
++  multi_az                            = true
++  iam_database_authentication_enabled = true
++  manage_master_user_password         = true
++  username                            = "postgres"
++  backup_retention_period             = 7 # enables point-in-time recovery
++  db_subnet_group_name                = aws_db_subnet_group.db.name
++  vpc_security_group_ids              = [aws_security_group.db.id]
++  publicly_accessible                 = false
++  skip_final_snapshot                 = true
++}
++
++# ---------------- API (Cloud Run -> App Runner) ----------------
++data "aws_iam_policy_document" "apprunner_tasks_trust" {
++  statement {
++    actions = ["sts:AssumeRole"]
++    principals {
++      type        = "Service"
++      identifiers = ["tasks.apprunner.amazonaws.com"]
++    }
++  }
++}
++
++data "aws_iam_policy_document" "apprunner_build_trust" {
++  statement {
++    actions = ["sts:AssumeRole"]
++    principals {
++      type        = "Service"
++      identifiers = ["build.apprunner.amazonaws.com"]
++    }
++  }
++}
++
++resource "aws_iam_role" "api" {
++  name               = "api-role"
++  assume_role_policy = data.aws_iam_policy_document.apprunner_tasks_trust.json
++}
++
++resource "aws_iam_role_policy" "api" {
++  role = aws_iam_role.api.id
++  policy = jsonencode({
++    Version = "2012-10-17"
++    Statement = [
++      { # roles/storage.objectAdmin
++        Effect   = "Allow"
++        Action   = ["s3:GetObject", "s3:PutObject", "s3:DeleteObject", "s3:ListBucket", "s3:GetObjectVersion", "s3:DeleteObjectVersion", "s3:AbortMultipartUpload"]
++        Resource = [aws_s3_bucket.uploads.arn, "${aws_s3_bucket.uploads.arn}/*"]
++      },
++      { # needed by the ported app code
++        Effect   = "Allow"
++        Action   = ["sns:Publish"]
++        Resource = aws_sns_topic.orders.arn
++      },
++      {
++        Effect   = "Allow"
++        Action   = ["athena:StartQueryExecution", "athena:GetQueryExecution", "athena:GetWorkGroup"]
++        Resource = "*"
++      },
++      {
++        Effect   = "Allow"
++        Action   = ["glue:*Database*", "glue:*Table*", "glue:*Partition*"]
++        Resource = "*"
++      },
++      {
++        Effect   = "Allow"
++        Action   = ["s3:*"]
++        Resource = [aws_s3_bucket.athena.arn, "${aws_s3_bucket.athena.arn}/*"]
++      },
++      { # cloudsql.iam_authentication
++        Effect   = "Allow"
++        Action   = ["rds-db:connect"]
++        Resource = "arn:aws:rds-db:${data.aws_region.here.name}:${data.aws_caller_identity.me.account_id}:dbuser:${aws_db_instance.db.resource_id}/*"
++      },
++    ]
++  })
++}
++
++resource "aws_iam_role" "apprunner_access" {
++  name               = "api-ecr-access"
++  assume_role_policy = data.aws_iam_policy_document.apprunner_build_trust.json
++}
++
++resource "aws_iam_role_policy_attachment" "apprunner_access" {
++  role       = aws_iam_role.apprunner_access.name
++  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSAppRunnerServicePolicyForECRAccess"
++}
++
++resource "aws_apprunner_vpc_connector" "api" {
++  vpc_connector_name = "api"
++  subnets            = data.aws_subnets.default.ids
++  security_groups    = [aws_security_group.api.id]
++}
++
++resource "aws_apprunner_auto_scaling_configuration_version" "api" {
++  auto_scaling_configuration_name = "api"
++  min_size                        = 1
++  max_size                        = 20
++  max_concurrency                 = 80
++}
++
++resource "aws_apprunner_service" "api" {
++  service_name                   = "api"
++  auto_scaling_configuration_arn = aws_apprunner_auto_scaling_configuration_version.api.arn
++
++  source_configuration {
++    authentication_configuration { access_role_arn = aws_iam_role.apprunner_access.arn }
++    image_repository {
++      image_identifier      = "${data.aws_caller_identity.me.account_id}.dkr.ecr.${data.aws_region.here.name}.amazonaws.com/app/api:latest"
++      image_repository_type = "ECR"
++      image_configuration {
++        port = "8080"
++        runtime_environment_variables = {
++          BUCKET           = aws_s3_bucket.uploads.bucket
++          ORDERS_TOPIC_ARN = aws_sns_topic.orders.arn
++          ATHENA_WORKGROUP = aws_athena_workgroup.analytics.name
++          AWS_REGION       = data.aws_region.here.name
++        }
++      }
++    }
++  }
++
++  instance_configuration {
++    cpu               = "2048"
++    memory            = "4096" # App Runner minimum for 2 vCPU
++    instance_role_arn = aws_iam_role.api.arn
++  }
++
++  network_configuration {
++    egress_configuration {
++      egress_type       = "VPC"
++      vpc_connector_arn = aws_apprunner_vpc_connector.api.arn
++    }
++  }
++}
++
++# ---------------- Worker (Cloud Functions -> Lambda) ----------------
++data "archive_file" "worker" {
++  type        = "zip"
++  source_file = "${path.module}/../app/worker.py"
++  output_path = "${path.module}/worker.zip"
++}
++
++resource "aws_iam_role" "worker" {
++  name = "orders-worker"
++  assume_role_policy = jsonencode({
++    Version = "2012-10-17"
++    Statement = [{ Effect = "Allow", Principal = { Service = "lambda.amazonaws.com" }, Action = "sts:AssumeRole" }]
++  })
++}
++
++resource "aws_iam_role_policy_attachment" "worker" {
++  role       = aws_iam_role.worker.name
++  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaSQSQueueExecutionRole"
++}
++
++resource "aws_lambda_function" "worker" {
++  function_name    = "orders-worker"
++  role             = aws_iam_role.worker.arn
++  runtime          = "python3.12"
++  handler          = "worker.handle"
++  filename         = data.archive_file.worker.output_path
++  source_code_hash = data.archive_file.worker.output_base64sha256
++  timeout          = 540
++  memory_size      = 512
++}
++
++resource "aws_lambda_event_source_mapping" "worker" {
++  event_source_arn = aws_sqs_queue.orders_worker.arn
++  function_name    = aws_lambda_function.worker.arn
++  batch_size       = 1 # one message per invocation, as with Pub/Sub events
++}
++
++# ---------------- Analytics (BigQuery -> Glue + Athena) ----------------
++resource "aws_glue_catalog_database" "analytics" { name = "analytics" }
++
++resource "aws_s3_bucket" "athena" { bucket = "${var.project}-athena" }
++
++resource "aws_athena_workgroup" "analytics" {
++  name = "analytics"
++  configuration {
++    result_configuration { output_location = "s3://${aws_s3_bucket.athena.bucket}/results/" }
++  }
++}
++
++# ---------------- Scheduler (Cloud Scheduler -> EventBridge Scheduler) ----------------
++resource "aws_cloudwatch_event_connection" "api" {
++  name               = "api"
++  authorization_type = "API_KEY"
++  auth_parameters {
++    api_key {
++      key   = "x-scheduler"
++      value = "nightly-rollup"
++    }
++  }
++}
++
++resource "aws_cloudwatch_event_api_destination" "rollup" {
++  name                             = "nightly-rollup"
++  connection_arn                   = aws_cloudwatch_event_connection.api.arn
++  invocation_endpoint              = "https://${aws_apprunner_service.api.service_url}/jobs/rollup"
++  http_method                      = "POST"
++  invocation_rate_limit_per_second = 1
++}
++
++resource "aws_cloudwatch_event_rule" "rollup" {
++  name           = "nightly-rollup"
++  event_pattern  = jsonencode({ source = ["app.scheduler"], "detail-type" = ["nightly-rollup"] })
++}
++
++resource "aws_iam_role" "events_invoke" {
++  name = "nightly-rollup-events"
++  assume_role_policy = jsonencode({
++    Version = "2012-10-17"
++    Statement = [{ Effect = "Allow", Principal = { Service = "events.amazonaws.com" }, Action = "sts:AssumeRole" }]
++  })
++}
++
++resource "aws_iam_role_policy" "events_invoke" {
++  role = aws_iam_role.events_invoke.id
++  policy = jsonencode({
++    Version   = "2012-10-17"
++    Statement = [{ Effect = "Allow", Action = "events:InvokeApiDestination", Resource = aws_cloudwatch_event_api_destination.rollup.arn }]
++  })
++}
++
++resource "aws_cloudwatch_event_target" "rollup" {
++  rule     = aws_cloudwatch_event_rule.rollup.name
++  arn      = aws_cloudwatch_event_api_destination.rollup.arn
++  role_arn = aws_iam_role.events_invoke.arn
++}
++
++resource "aws_iam_role" "scheduler" {
++  name = "nightly-rollup-scheduler"
++  assume_role_policy = jsonencode({
++    Version = "2012-10-17"
++    Statement = [{ Effect = "Allow", Principal = { Service = "scheduler.amazonaws.com" }, Action = "sts:AssumeRole" }]
++  })
++}
++
++resource "aws_iam_role_policy" "scheduler" {
++  role = aws_iam_role.scheduler.id
++  policy = jsonencode({
++    Version   = "2012-10-17"
++    Statement = [{ Effect = "Allow", Action = "events:PutEvents", Resource = "arn:aws:events:${data.aws_region.here.name}:${data.aws_caller_identity.me.account_id}:event-bus/default" }]
++  })
++}
++
++resource "aws_scheduler_schedule" "nightly" {
++  name                         = "nightly-rollup"
++  schedule_expression          = "cron(0 2 * * ? *)"
++  schedule_expression_timezone = "America/New_York"
++  flexible_time_window { mode = "OFF" }
++  target {
++    arn      = "arn:aws:scheduler:::aws-sdk:eventbridge:putEvents"
++    role_arn = aws_iam_role.scheduler.arn
++    input = jsonencode({
++      Entries = [{ Source = "app.scheduler", DetailType = "nightly-rollup", Detail = "{}" }]
++    })
++  }
++}
+diff --git a/sql/rollup.sql b/sql/rollup.sql
+index b79db8d..633b156 100644
+--- a/sql/rollup.sql
++++ b/sql/rollup.sql
+@@ -1,10 +1,20 @@
+-CREATE OR REPLACE TABLE analytics.daily AS
+-SELECT DATE(TIMESTAMP_TRUNC(created_at, DAY)) AS day,
+-       customer_id,
+-       SUM(SAFE_CAST(amount AS NUMERIC)) AS amount,
+-       ARRAY_AGG(STRUCT(sku, qty) ORDER BY qty DESC LIMIT 3) AS top_items,
+-       APPROX_COUNT_DISTINCT(session_id) AS sessions
+-FROM `analytics.orders`, UNNEST(items)
+-WHERE _PARTITIONDATE >= DATE_SUB(CURRENT_DATE(), INTERVAL 1 DAY)
+-GROUP BY 1, 2
+-QUALIFY ROW_NUMBER() OVER (PARTITION BY customer_id ORDER BY amount DESC) <= 100;
++DROP TABLE IF EXISTS analytics.daily;
++CREATE TABLE analytics.daily
++WITH (table_type = 'ICEBERG', is_external = false) AS
++SELECT day, customer_id, amount, top_items, sessions
++FROM (
++  SELECT day, customer_id, amount, top_items, sessions,
++         ROW_NUMBER() OVER (PARTITION BY customer_id ORDER BY amount DESC) AS rn
++  FROM (
++    SELECT CAST(date_trunc('day', created_at) AS date) AS day,
++           customer_id,
++           SUM(TRY_CAST(amount AS DECIMAL(38, 9))) AS amount,
++           slice(array_agg(CAST(ROW(it.sku, it.qty) AS ROW(sku varchar, qty bigint)) ORDER BY it.qty DESC), 1, 3) AS top_items,
++           approx_distinct(session_id) AS sessions
++    FROM analytics.orders
++    CROSS JOIN UNNEST(items) AS u(it)
++    WHERE partition_date >= date_add('day', -1, current_date)
++    GROUP BY 1, 2
++  )
++)
++WHERE rn <= 100;

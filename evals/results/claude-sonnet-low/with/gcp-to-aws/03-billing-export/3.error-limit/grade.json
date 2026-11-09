@@ -1,0 +1,50 @@
+{
+ "job-timeout": {
+  "pass": true,
+  "why": "The job runs as an AWS Batch Fargate job definition with `timeout { attempt_duration_seconds = 10800 }`, which keeps the 3-hour limit."
+ },
+ "sharding": {
+  "pass": true,
+  "why": "The schedule submits an array job with `ArrayProperties = { Size = 16 }`, max_vcpus 8 with 2 vCPU per task allows 4 concurrent tasks, and the code reads `AWS_BATCH_JOB_ARRAY_INDEX` and a `TASK_COUNT` env var."
+ },
+ "retry-attempt": {
+  "pass": true,
+  "why": "`retry_strategy { attempts = 3 }` matches max_retries 2, and ATTEMPT comes from `AWS_BATCH_JOB_ATTEMPT` minus 1 to match Cloud Run's zero-based count."
+ },
+ "secret-latest": {
+  "pass": true,
+  "why": "PARTNER_API_KEY is injected from the Secrets Manager secret ARN via the container `secrets` block, so the current version is resolved at task start, and no value appears in Terraform."
+ },
+ "redis-tls-auth": {
+  "pass": true,
+  "why": "The ElastiCache replication group sets `transit_encryption_enabled = true`, an `auth_token`, 2 cache clusters with Multi-AZ and automatic failover, and the client uses port 6379 with `ssl=True` and the injected REDIS_AUTH."
+ },
+ "private-network": {
+  "pass": true,
+  "why": "Tasks run in `private_subnet_ids` with `assignPublicIp = DISABLED` and a job security group that Redis allows on 6379, and the variables comment requires NAT for the partner API."
+ },
+ "worm-retention": {
+  "pass": true,
+  "why": "The exports bucket sets `object_lock_enabled = true` with versioning and a default retention of `COMPLIANCE` mode for 2555 days, which equals 220752000 s."
+ },
+ "create-only-write": {
+  "pass": true,
+  "why": "The upload uses `s3.put_object(..., IfNoneMatch=\"*\")`, with a comment that it is the equivalent of `if_generation_match=0`."
+ },
+ "scheduler-tz": {
+  "pass": true,
+  "why": "`aws_scheduler_schedule` uses `cron(0 3 1 * ? *)` with `schedule_expression_timezone = \"Europe/Berlin\"`."
+ },
+ "time-travel": {
+  "pass": true,
+  "why": "The SQL moves to Athena on Iceberg and uses `FOR TIMESTAMP AS OF date_trunc('month', current_timestamp AT TIME ZONE 'Europe/Berlin')`."
+ },
+ "shard-hash": {
+  "pass": true,
+  "why": "FARM_FINGERPRINT is replaced with the stable `from_big_endian_64(xxhash64(to_utf8(account_id)))`, wrapped in `abs()` before `mod`, so negative values are handled."
+ },
+ "no-silent-changes": {
+  "pass": true,
+  "why": "The final message was only a rate-limit notice with no summary, but the Terraform comments call out each change: region (`# was europe-west1`), Block Public Access, the IAM role split, Redis node size, Scheduler retries set to 0, and the new Athena results bucket, while CPU and memory stay the same."
+ }
+}

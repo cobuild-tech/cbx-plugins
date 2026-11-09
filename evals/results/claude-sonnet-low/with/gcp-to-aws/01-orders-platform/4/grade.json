@@ -1,0 +1,50 @@
+{
+ "ordering-fifo": {
+  "pass": true,
+  "why": "aws/main.tf creates `orders.fifo` as an SNS FIFO topic (`fifo_topic = true`) feeding an SQS FIFO queue, and api.py publishes with `MessageGroupId=str(o[\"customer_id\"])`."
+ },
+ "dlq-5": {
+  "pass": true,
+  "why": "`aws_sqs_queue.orders_worker` has a redrive_policy to the FIFO `orders-dlq.fifo` with `maxReceiveCount = 5`."
+ },
+ "visibility-timeout": {
+  "pass": true,
+  "why": "`visibility_timeout_seconds = 3240` is 6x the Lambda's 540s timeout, which is well above the 540s minimum."
+ },
+ "run-timeout-900": {
+  "pass": true,
+  "why": "The API runs on ECS Fargate behind an ALB with `idle_timeout = 900`, commented as the Cloud Run request timeout."
+ },
+ "presign-expiry": {
+  "pass": true,
+  "why": "Expiry is reduced to a configurable 3600s, and both variables.tf and the summary table explain that URLs signed with role credentials die when the credentials expire, marked 'Needs decision'."
+ },
+ "rds-iam-auth": {
+  "pass": true,
+  "why": "`aws_db_instance.db` uses postgres `engine_version = \"15\"`, `iam_database_authentication_enabled = true`, `multi_az = true`, and `backup_retention_period = 7` (automated backups and PITR)."
+ },
+ "worker-event-shape": {
+  "pass": true,
+  "why": "worker.py now iterates `event[\"Records\"]` and parses `record[\"body\"]` without base64, which matches `raw_message_delivery = true` on the SNS->SQS subscription."
+ },
+ "sql-dialect": {
+  "pass": true,
+  "why": "rollup.sql is rewritten for Redshift: a regex-guarded cast replaces SAFE_CAST, ROW_NUMBER + LISTAGG + JSON_PARSE replaces ARRAY_AGG(STRUCT ... LIMIT 3), an explicit `ingest_date` column replaces _PARTITIONDATE, and QUALIFY is kept with `SUM(amount_num)`, which Redshift supports."
+ },
+ "scheduler-tz": {
+  "pass": true,
+  "why": "`aws_scheduler_schedule.nightly` uses `cron(0 2 * * ? *)` with `schedule_expression_timezone = \"America/New_York\"`."
+ },
+ "lifecycle": {
+  "pass": true,
+  "why": "The lifecycle rule transitions to STANDARD_IA at 30 days and expires at 365, with approximate noncurrent-version rules, and `aws_s3_bucket_versioning` is Enabled."
+ },
+ "multi-region-flag": {
+  "pass": true,
+  "why": "The summary table row 'US multi-region bucket and BigQuery dataset -> Single region, us-east-2 | Changed' explicitly flags the difference and suggests cross-region replication."
+ },
+ "no-silent-changes": {
+  "pass": true,
+  "why": "The behavior-changes table calls out the ~54-minute retry delay, the 4 GB memory, CPU-based scaling replacing concurrency 80 (min 1 / max 20 preserved), the internal ALB and HTTP default, narrowed IAM, the ECS-task scheduler target, RDS storage and snapshot defaults, and other introduced defaults, while versioning is kept."
+ }
+}

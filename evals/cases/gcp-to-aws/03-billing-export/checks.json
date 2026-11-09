@@ -1,0 +1,16 @@
+{ "kind": "held-out",
+  "note": "Written and committed before any run of the current harness. The skill is not edited in response to this case's results.",
+  "checks": [
+ {"id":"job-timeout","must":"The 3-hour task timeout (10800 s) is kept on a service that allows it (ECS/Fargate task, AWS Batch, Step Functions); Lambda (15 min max) fails unless the limit is explicitly flagged."},
+ {"id":"sharding","must":"The 16-task / parallelism-4 sharding is preserved: each task still receives its shard index and count (e.g. AWS Batch array job AWS_BATCH_JOB_ARRAY_INDEX, Step Functions Map with MaxConcurrency 4), and the code reads the new variables instead of CLOUD_RUN_TASK_INDEX/COUNT."},
+ {"id":"retry-attempt","must":"Per-task retries (max_retries 2) are kept and the attempt number used by the dedupe logic still comes from somewhere real on AWS (e.g. Batch retry attempts, Step Functions retry), or the change is flagged."},
+ {"id":"secret-latest","must":"The partner API key is read from Secrets Manager (or SSM SecureString) and injected into the task, not hard-coded or placed in plain Terraform variables; behaviour of 'latest' version (picked up at task start) is kept or flagged."},
+ {"id":"redis-tls-auth","must":"ElastiCache Redis keeps TLS (transit_encryption_enabled) and auth (AUTH token or RBAC), Multi-AZ/replica for STANDARD_HA, and the client port/TLS settings are ported (ElastiCache uses 6379 with TLS, not 6378), or flagged."},
+ {"id":"private-network","must":"The job reaches Redis over private networking (task in VPC subnets with a security group allowing it) and still reaches the public partner API (NAT or public subnet), matching egress PRIVATE_RANGES_ONLY."},
+ {"id":"worm-retention","must":"The locked 7-year retention is kept with S3 Object Lock in compliance mode (object_lock_enabled + default retention 7 years), or explicitly flagged. Versioning alone or a lifecycle rule fails."},
+ {"id":"create-only-write","must":"The if_generation_match=0 create-only upload is preserved (S3 PutObject with If-None-Match: '*' conditional write) or the overwrite risk is flagged."},
+ {"id":"scheduler-tz","must":"The monthly run at 03:00 Europe/Berlin uses EventBridge Scheduler with schedule_expression_timezone = Europe/Berlin (or a flagged UTC conversion that accounts for DST)."},
+ {"id":"time-travel","must":"BigQuery FOR SYSTEM_TIME AS OF is handled: Redshift has no time travel and Athena only has it on Iceberg tables (FOR TIMESTAMP AS OF), so the port uses Iceberg time travel, a snapshot table, or flags the loss of point-in-time reads."},
+ {"id":"shard-hash","must":"FARM_FINGERPRINT sharding is replaced with a hash available on the chosen engine, with a note that shard membership changes (or a stable equivalent like xxhash64/crc32), and MOD of a negative value handled."},
+ {"id":"no-silent-changes","must":"No unrequested behaviour changes without calling them out (region europe-west1 mapped to an EU region, public access prevention -> Block Public Access, CPU/memory, IAM scope)."}
+]}

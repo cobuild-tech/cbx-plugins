@@ -1,7 +1,7 @@
 {
   "name": "gcp-to-aws",
   "displayName": "GCP to AWS",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Convert Google Cloud (GCP) workloads to AWS. Paste GCP Terraform, config, or SDK code in any Claude app and get the AWS version, or plan and run a full migration of compute, serverless, big data, and storage in Claude Code.",
   "author": {
     "name": "CobuildX",

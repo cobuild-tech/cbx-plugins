@@ -1,0 +1,50 @@
+{
+ "s3-key-decode": {
+  "pass": true,
+  "why": "The ingest handler runs `name = unquote_plus(record[\"s3\"][\"object\"][\"key\"])` before any use, with the comment 'S3 keys arrive URL-encoded'."
+ },
+ "two-hour-hold": {
+  "pass": true,
+  "why": "Ingest creates a one-time EventBridge Scheduler entry `at(run_at)` with `run_at = now + HOLD` (2 hours) that targets the SQS queue, and the Terraform comment notes that SQS DelaySeconds tops out at 15 minutes."
+ },
+ "stale-generation": {
+  "pass": true,
+  "why": "Versioning is enabled on the bucket, ingest passes `versionId` as `generation`, and the transcode worker returns 'stale' when `head.get(\"VersionId\") != str(job[\"generation\"])` or the object is missing (404/NoSuchKey)."
+ },
+ "overwrite-trigger": {
+  "pass": true,
+  "why": "`aws_s3_bucket_notification` uses `events = [\"s3:ObjectCreated:*\"]`, which fires on overwrites."
+ },
+ "transcode-timeout": {
+  "pass": true,
+  "why": "Transcode runs as a Fargate ECS service polling SQS, and the comment and summary say 1800 s exceeds Lambda's 15-minute limit."
+ },
+ "rate-limit": {
+  "pass": true,
+  "why": "The ECS service has `desired_count = 3` and each worker receives `MaxNumberOfMessages=1`, which caps concurrency at 3; the summary explicitly flags that the 5/s limit was dropped."
+ },
+ "retry-policy": {
+  "pass": true,
+  "why": "The SQS redrive uses `maxReceiveCount = 4` and the worker sets visibility to `min(30*2**(n-1), 600)` for backoff; ingest has `aws_lambda_function_event_invoke_config` with `maximum_retry_attempts = 0`."
+ },
+ "attribute-limit": {
+  "pass": true,
+  "why": "All 12 fields go into the JSON message body, and MessageAttributes excludes md5/crc32c and empty values (at most 10); the summary flags the SNS 10-attribute limit."
+ },
+ "week-start": {
+  "pass": true,
+  "why": "week_start is `date_add('day', -(day_of_week(CAST(uploaded_at AS date)) % 7), ...)`, which shifts to Sunday-start weeks, with a comment explaining that Trino starts weeks on Monday."
+ },
+ "weekend-days": {
+  "pass": true,
+  "why": "Uses `COUNT_IF(day_of_week(uploaded_at) IN (6, 7))`, which is Saturday and Sunday in Trino numbering."
+ },
+ "safe-divide": {
+  "pass": true,
+  "why": "SAFE_DIVIDE became `CAST(SUM(transcode_seconds) AS double) / NULLIF(COUNT(*), 0)`."
+ },
+ "no-silent-changes": {
+  "pass": true,
+  "why": "The behavior-change table calls out lost 7-day retention, the per-workload IAM role split, versioning, the region change, the visibility-timeout-vs-deadline semantics, the attribute changes and no scale-to-zero, and memory is kept at 4096 MiB."
+ }
+}

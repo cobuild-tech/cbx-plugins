@@ -1,0 +1,50 @@
+{
+ "s3-key-decode": {
+  "pass": true,
+  "why": "The ingest handler sets `name = unquote_plus(s3_event[\"object\"][\"key\"])` before using the key for the extension check, head_object and the job payload."
+ },
+ "two-hour-hold": {
+  "pass": true,
+  "why": "The hold uses a one-time EventBridge Scheduler `at(...)` schedule set to now+2h that targets SQS, not SQS DelaySeconds; separately, the name `transcode-` + a 64-char sha256 is 74 characters, which exceeds Scheduler's 64-character name limit and would fail at runtime."
+ },
+ "stale-generation": {
+  "pass": true,
+  "why": "The transcode handler head_objects the current key and returns \"stale\" when `head.get(\"VersionId\") != str(job[\"generation\"])`, and versioning is enabled so the versionId stands in for the generation."
+ },
+ "overwrite-trigger": {
+  "pass": true,
+  "why": "The bucket notification uses `events = [\"s3:ObjectCreated:*\"]`, which fires on overwrites too."
+ },
+ "transcode-timeout": {
+  "pass": true,
+  "why": "Lambda timeout is set to 900, and the summary flags that the limit is 900s rather than 1800s and that longer jobs need Fargate or Batch."
+ },
+ "rate-limit": {
+  "pass": true,
+  "why": "The event source mapping sets `scaling_config { maximum_concurrency = 3 }` with `batch_size = 1`."
+ },
+ "retry-policy": {
+  "pass": true,
+  "why": "Ingest sets `maximum_retry_attempts = 0`, transcode uses an SQS redrive with `maxReceiveCount = 4`, and the summary flags that the 30s–600s backoff is replaced by the 1800s visibility timeout."
+ },
+ "attribute-limit": {
+  "pass": true,
+  "why": "The fields are published as a JSON `Message` body, and the summary explains this is because of SNS's 10-attribute limit."
+ },
+ "week-start": {
+  "pass": true,
+  "why": "`date_trunc('week', date(uploaded_at) + INTERVAL '1' DAY) - INTERVAL '1' DAY` correctly gives Sunday-start weeks."
+ },
+ "weekend-days": {
+  "pass": true,
+  "why": "The weekend check uses `day_of_week(uploaded_at) IN (6, 7)`, which is Saturday and Sunday in Trino."
+ },
+ "safe-divide": {
+  "pass": true,
+  "why": "SAFE_DIVIDE becomes `CAST(SUM(transcode_seconds) AS double) / NULLIF(COUNT(*), 0)`."
+ },
+ "no-silent-changes": {
+  "pass": false,
+  "why": "The Cloud Tasks `max_dispatches_per_second = 5` limit is dropped without mention (only concurrency 3 is carried over), and `scheduler:CreateSchedule` is granted on `Resource = \"*\"` without being called out, although retention, timeout, region and the md5/etag change are flagged."
+ }
+}

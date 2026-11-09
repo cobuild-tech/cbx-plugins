@@ -1,0 +1,50 @@
+{
+ "s3-key-decode": {
+  "pass": true,
+  "why": "Ingest decodes the key with `name = unquote_plus(obj[\"key\"])`, and the summary item 11 calls this out."
+ },
+ "two-hour-hold": {
+  "pass": true,
+  "why": "The hold uses an EventBridge Scheduler one-time `at(...)` schedule set to now + 2 hours (`HOLD`), with `ActionAfterCompletion=\"DELETE\"`."
+ },
+ "stale-generation": {
+  "pass": true,
+  "why": "The S3 versionId is passed as `generation`, and transcode compares `head.get(\"VersionId\")` to `job[\"generation\"]`, returning \"stale\" on a mismatch or a 404; the bucket has versioning enabled."
+ },
+ "overwrite-trigger": {
+  "pass": true,
+  "why": "`aws_s3_bucket_notification` uses `events = [\"s3:ObjectCreated:*\"]`, which fires on overwrites too."
+ },
+ "transcode-timeout": {
+  "pass": true,
+  "why": "The Lambda timeout is 900, and the summary item 1 explicitly flags the 900s cap against the old 1800s and suggests ECS or Batch."
+ },
+ "rate-limit": {
+  "pass": true,
+  "why": "`reserved_concurrent_executions = 3` replaces max_concurrent_dispatches, and the summary item 3 flags that 5/s has no equivalent and that excess calls are throttled rather than queued."
+ },
+ "retry-policy": {
+  "pass": true,
+  "why": "Ingest sets `maximum_retry_attempts = 0` via `aws_lambda_function_event_invoke_config`; transcode uses Scheduler `MaximumRetryAttempts: 3`, and summary item 2 flags the lost 30s–600s backoff."
+ },
+ "attribute-limit": {
+  "pass": true,
+  "why": "The fields move into a JSON `Message` body with only `event` kept as a MessageAttribute, and summary item 7 explains the 10-attribute SNS limit."
+ },
+ "week-start": {
+  "pass": true,
+  "why": "`date_trunc('week', DATE(uploaded_at) + INTERVAL '1' DAY) - INTERVAL '1' DAY` correctly yields Sunday week starts."
+ },
+ "weekend-days": {
+  "pass": true,
+  "why": "It uses `COUNT_IF(day_of_week(uploaded_at) IN (6, 7))` with the ISO Sat=6/Sun=7 comment."
+ },
+ "safe-divide": {
+  "pass": true,
+  "why": "`CAST(SUM(transcode_seconds) AS DOUBLE) / COUNT(*)` avoids integer truncation, and COUNT(*) can never be 0 within a GROUP BY group, so division by zero cannot occur."
+ },
+ "no-silent-changes": {
+  "pass": true,
+  "why": "Memory stays at 4096, the loss of 7-day retention is flagged (item 8), and the region, function source, checksum and metadata semantics, the extra head_object call and the invocation model are all called out; versioning is stated in the summary."
+ }
+}

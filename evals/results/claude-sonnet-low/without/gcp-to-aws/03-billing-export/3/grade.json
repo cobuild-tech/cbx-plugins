@@ -1,0 +1,50 @@
+{
+ "job-timeout": {
+  "pass": true,
+  "why": "The AWS Batch job definition sets `timeout { attempt_duration_seconds = 10800 }` on Fargate, which supports a 3-hour run."
+ },
+ "sharding": {
+  "pass": true,
+  "why": "The scheduler submits an array job with `ArrayProperties = { Size = 16 }` and `max_vcpus = parallelism * vcpu` (8) caps it at 4 concurrent children; the code reads `AWS_BATCH_JOB_ARRAY_INDEX` and a `TASK_COUNT` env var set to 16."
+ },
+ "retry-attempt": {
+  "pass": true,
+  "why": "`retry_strategy { attempts = 3 }` keeps 1 try plus 2 retries, and the dedupe ATTEMPT comes from Batch's real `AWS_BATCH_JOB_ATTEMPT` minus 1 to keep it 0-based."
+ },
+ "secret-latest": {
+  "pass": true,
+  "why": "`partner-api-key` is an `aws_secretsmanager_secret` injected via container `secrets` `valueFrom` the secret ARN, which resolves the current version at task start, matching `latest`."
+ },
+ "redis-tls-auth": {
+  "pass": true,
+  "why": "The replication group sets `transit_encryption_enabled = true`, an `auth_token`, `num_cache_clusters = 2` with Multi-AZ and automatic failover, and the client moved from port 6378 to 6379 with `ssl=True` and `REDIS_AUTH` injected from Secrets Manager."
+ },
+ "private-network": {
+  "pass": true,
+  "why": "Batch Fargate runs in `var.subnet_ids` (described as private subnets with NAT egress) with `assignPublicIp = DISABLED`, and the Redis security group admits 6379 only from the job security group; the summary also flags NAT IP allowlisting."
+ },
+ "worm-retention": {
+  "pass": true,
+  "why": "The bucket has `object_lock_enabled = true` with default retention `mode = COMPLIANCE` and `days = 2555`, plus versioning, and the summary warns the lock is irreversible."
+ },
+ "create-only-write": {
+  "pass": true,
+  "why": "`s3.put_object(..., IfNoneMatch=\"*\")` replaces `if_generation_match=0` as a create-only conditional write, as noted in a code comment and the summary."
+ },
+ "scheduler-tz": {
+  "pass": true,
+  "why": "`aws_scheduler_schedule` uses `cron(0 3 1 * ? *)` with `schedule_expression_timezone = \"Europe/Berlin\"`."
+ },
+ "time-travel": {
+  "pass": true,
+  "why": "`merge_snapshots.sql` uses Iceberg `FOR TIMESTAMP AS OF with_timezone(date_trunc('month', ...), 'Europe/Berlin')`, and the summary explains Redshift has no time travel and flags the Iceberg snapshot-history requirement."
+ },
+ "shard-hash": {
+  "pass": true,
+  "why": "`FARM_FINGERPRINT` is replaced by `abs(mod(xxhash64(to_utf8(account_id)), ?))`, which handles negative values, and the summary notes accounts will land in different shards."
+ },
+ "no-silent-changes": {
+  "pass": true,
+  "why": "The region maps to EU `eu-west-1` with an explanatory comment, public access prevention maps to a full Public Access Block, 2 vCPU/4 GiB are kept, and the Redis auth injection, two-file SQL split and hash change are all called out in the summary."
+ }
+}

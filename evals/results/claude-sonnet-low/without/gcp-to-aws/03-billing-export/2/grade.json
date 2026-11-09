@@ -1,0 +1,50 @@
+{
+ "job-timeout": {
+  "pass": true,
+  "why": "The Batch job definition sets `timeout { attempt_duration_seconds = 10800 }` on Fargate, so the 3-hour limit is kept on a service that allows it."
+ },
+ "sharding": {
+  "pass": true,
+  "why": "The scheduler submits `ArrayProperties = { Size = 16 }`, the code reads `AWS_BATCH_JOB_ARRAY_INDEX` and a `TASK_COUNT` env var instead of the CLOUD_RUN_* variables, and parallelism 4 is approximated by capping the Fargate compute environment at 8 vCPU (4 tasks of 2 vCPU), which the message explains."
+ },
+ "retry-attempt": {
+  "pass": true,
+  "why": "`retry_strategy { attempts = 3 }` maps max_retries = 2, and ATTEMPT now comes from Batch's real `AWS_BATCH_JOB_ATTEMPT`, converted from 1-based to 0-based and called out in the summary."
+ },
+ "secret-latest": {
+  "pass": true,
+  "why": "PARTNER_API_KEY is injected through the container `secrets` block with `valueFrom` set to the Secrets Manager secret ARN, which resolves the current version at task start, the same as GCP's `version = \"latest\"`."
+ },
+ "redis-tls-auth": {
+  "pass": true,
+  "why": "The ElastiCache replication group has `transit_encryption_enabled = true`, an `auth_token` stored in Secrets Manager, 2 nodes with automatic failover and Multi-AZ, and the client uses port 6379 with `ssl=True`; the summary flags both the port change and the auth change."
+ },
+ "private-network": {
+  "pass": true,
+  "why": "Tasks run in default-VPC subnets with a job security group that the Redis security group admits on 6379, and `assignPublicIp = \"ENABLED\"` gives the partner API a public route; the summary flags this as the stand-in for PRIVATE_RANGES_ONLY and suggests NAT."
+ },
+ "worm-retention": {
+  "pass": true,
+  "why": "The bucket has `object_lock_enabled = true`, versioning, and a COMPLIANCE default retention of 2555 days (7 years), and the summary flags that this cannot be undone."
+ },
+ "create-only-write": {
+  "pass": true,
+  "why": "`s3.put_object(..., IfNoneMatch=\"*\")` preserves the create-only semantics of `if_generation_match=0`."
+ },
+ "scheduler-tz": {
+  "pass": true,
+  "why": "`aws_scheduler_schedule` uses `cron(0 3 1 * ? *)` with `schedule_expression_timezone = \"Europe/Berlin\"`."
+ },
+ "time-travel": {
+  "pass": true,
+  "why": "`invoices_merge.sql` uses Iceberg `FOR TIMESTAMP AS OF` on Athena engine v3, and the summary says why Redshift was rejected (no time travel) and that both tables must be Iceberg; the cutoff expression `CAST(... AS timestamp) AT TIME ZONE 'Europe/Berlin'` probably lands at UTC midnight rather than Berlin midnight, but that is an accuracy bug, not a missing feature."
+ },
+ "shard-hash": {
+  "pass": true,
+  "why": "`mod(crc32(to_utf8(account_id)), ?)` uses a non-negative hash, so negative MOD cannot occur, and both the SQL comment and the summary say shard membership differs from GCP."
+ },
+ "no-silent-changes": {
+  "pass": true,
+  "why": "The EU region (eu-west-1), the Redis port and auth, public-subnet networking, the 1.5 GiB node size, the SQL split and per-task MERGE, and the crc32 shard change are all called out, CPU and memory are kept at 2 vCPU / 4096, and Block Public Access is a direct equivalent of public access prevention."
+ }
+}

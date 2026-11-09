@@ -1,0 +1,50 @@
+{
+ "job-timeout": {
+  "pass": true,
+  "why": "The ECS Fargate task runs from Step Functions with `TimeoutSeconds = 10800` on both the Snapshot and Export states, so the 3-hour limit is kept."
+ },
+ "sharding": {
+  "pass": true,
+  "why": "A Step Functions Map with `MaxConcurrency = 4` iterates over `range(16)` and passes `TASK_INDEX` via container override, `TASK_COUNT=16` is set in the task env, and export.py reads `TASK_INDEX`/`TASK_COUNT` instead of the `CLOUD_RUN_*` vars."
+ },
+ "retry-attempt": {
+  "pass": false,
+  "why": "Retries are kept (`Retry MaxAttempts = 2`), but `TASK_ATTEMPT` is never set by anything on AWS, so the dedupe value is always 0; this is only noted in a code comment ('Step Functions retries don't expose an attempt number') and the final summary never flags it."
+ },
+ "secret-latest": {
+  "pass": true,
+  "why": "`PARTNER_API_KEY` is injected through the ECS `secrets` block using the Secrets Manager ARN, which resolves the current version at task start, matching 'latest'."
+ },
+ "redis-tls-auth": {
+  "pass": true,
+  "why": "The replication group has `transit_encryption_enabled`, an `auth_token`, 2 nodes with `multi_az_enabled` and automatic failover, and the client uses `REDIS_PORT` 6379 with `ssl=True`; the summary flags the 6378→6379 port change."
+ },
+ "private-network": {
+  "pass": true,
+  "why": "Fargate tasks run in `var.subnet_ids` with an export security group, the Redis security group allows 6379 only from that group, and the subnet variable description and the `assign_public_ip` option cover NAT or public-IP egress to the partner API."
+ },
+ "worm-retention": {
+  "pass": true,
+  "why": "The bucket sets `object_lock_enabled = true` with default retention `mode = \"COMPLIANCE\"`, `days = 2555` (7 years), plus versioning."
+ },
+ "create-only-write": {
+  "pass": true,
+  "why": "`s3.put_object(..., IfNoneMatch=\"*\")` preserves the `if_generation_match=0` create-only semantics, and a comment says so."
+ },
+ "scheduler-tz": {
+  "pass": true,
+  "why": "`aws_scheduler_schedule` uses `cron(0 3 1 * ? *)` with `schedule_expression_timezone = \"Europe/Berlin\"`."
+ },
+ "time-travel": {
+  "pass": true,
+  "why": "invoices_snapshot.sql uses Iceberg `FOR TIMESTAMP AS OF with_timezone(...)`, and the summary explains Athena/Iceberg time travel versus Redshift."
+ },
+ "shard-hash": {
+  "pass": true,
+  "why": "`FARM_FINGERPRINT` is replaced by `crc32(to_utf8(account_id))`, which is non-negative so the negative MOD case goes away, and both the SQL and the summary note that shard membership changes."
+ },
+ "no-silent-changes": {
+  "pass": false,
+  "why": "The Intelligent-Tiering config adds an `ARCHIVE_ACCESS` tier at 90 days, which needs a restore before reading, unlike GCS Autoclass, and the summary presents it simply as 'Intelligent-Tiering'; Redis tripling from 1 GB to `cache.t4g.medium` (~3 GiB) is only noted in a code comment."
+ }
+}

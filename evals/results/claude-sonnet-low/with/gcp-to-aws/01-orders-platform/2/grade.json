@@ -1,0 +1,50 @@
+{
+ "ordering-fifo": {
+  "pass": true,
+  "why": "messaging.tf creates `orders.fifo` SNS FIFO topic and `orders-worker.fifo` SQS FIFO queue, and api.py publishes with `MessageGroupId=str(o[\"customer_id\"])`."
+ },
+ "dlq-5": {
+  "pass": true,
+  "why": "`aws_sqs_queue.orders_worker` has a redrive_policy to `orders-dlq.fifo` with `maxReceiveCount = 5`."
+ },
+ "visibility-timeout": {
+  "pass": true,
+  "why": "`visibility_timeout_seconds = 600` is at least the Lambda `timeout = 540`, and the change is explained in the summary."
+ },
+ "run-timeout-900": {
+  "pass": true,
+  "why": "The API runs on ECS Fargate behind an ALB with `idle_timeout = 900`, and the summary flags that this is an idle timeout, not a total timeout."
+ },
+ "presign-expiry": {
+  "pass": true,
+  "why": "`UPLOAD_URL_TTL` defaults to 3600 with a comment and a summary row saying role credentials can't sign for 7 days."
+ },
+ "rds-iam-auth": {
+  "pass": true,
+  "why": "`aws_db_instance` uses postgres 15 with `iam_database_authentication_enabled = true`, `multi_az = true`, and `backup_retention_period = 7`, which enables PITR."
+ },
+ "worker-event-shape": {
+  "pass": true,
+  "why": "worker.py iterates `event[\"Records\"]` and parses `record[\"body\"]`, which matches `raw_message_delivery = true` on the SNS to SQS subscription."
+ },
+ "sql-dialect": {
+  "pass": true,
+  "why": "The Redshift port replaces SAFE_CAST with a regex-guarded CAST, `_PARTITIONDATE` with a flagged `ingest_date` column, ARRAY_AGG(STRUCT…LIMIT 3) with ROW_NUMBER plus LISTAGG/JSON_PARSE, and UNNEST with PartiQL `o.items AS i`, and it keeps QUALIFY, which Redshift supports."
+ },
+ "scheduler-tz": {
+  "pass": true,
+  "why": "`aws_scheduler_schedule` uses `cron(0 2 * * ? *)` with `schedule_expression_timezone = \"America/New_York\"`."
+ },
+ "lifecycle": {
+  "pass": true,
+  "why": "storage.tf enables versioning, transitions to STANDARD_IA at 30 days, and expires at 365 days, with matching noncurrent-version rules."
+ },
+ "multi-region-flag": {
+  "pass": false,
+  "why": "The summary flags the GCS `US` multi-region bucket becoming single-region, but never mentions that the BigQuery dataset's `US` multi-region location became a single-region Redshift Serverless deployment."
+ },
+ "no-silent-changes": {
+  "pass": true,
+  "why": "The behavior-changes table calls out the ack deadline, concurrency to CPU scaling (keeping 1–20), memory, retries, IAM narrowing, lifecycle semantics, health check, and SQL NULL ordering, and I found no material unflagged change."
+ }
+}

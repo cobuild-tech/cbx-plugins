@@ -1,0 +1,50 @@
+{
+ "s3-key-decode": {
+  "pass": true,
+  "why": "The ingest handler does `name = urllib.parse.unquote_plus(obj[\"key\"])` before filtering, calling head_object, or building the job."
+ },
+ "two-hour-hold": {
+  "pass": true,
+  "why": "A Step Functions `WaitForHold` Wait state uses `TimestampPath = \"$.run_at\"`, and ingest sets run_at to now + 2 h."
+ },
+ "stale-generation": {
+  "pass": true,
+  "why": "Bucket versioning is enabled, the job carries the versionId, and transcode returns 'stale' when the current `head.get(\"VersionId\")` differs or the key is deleted (404)."
+ },
+ "overwrite-trigger": {
+  "pass": true,
+  "why": "`aws_s3_bucket_notification` uses `events = [\"s3:ObjectCreated:*\"]`, which fires on overwrites too."
+ },
+ "transcode-timeout": {
+  "pass": true,
+  "why": "Transcode runs as a Fargate task through Step Functions `ecs:runTask.sync` with `TimeoutSeconds = 1800`, and the summary notes Lambda's 15-minute limit."
+ },
+ "rate-limit": {
+  "pass": true,
+  "why": "The summary table lists the Cloud Tasks limits (5/s, 3 concurrent) as 'Not enforced / Needs decision'."
+ },
+ "retry-policy": {
+  "pass": true,
+  "why": "The Step Functions Retry has MaxAttempts 3 (4 attempts total), 30 s interval, BackoffRate 2 and MaxDelaySeconds 600, and ingest has `maximum_retry_attempts = 0` in `aws_lambda_function_event_invoke_config`."
+ },
+ "attribute-limit": {
+  "pass": true,
+  "why": "Fields are moved into the SNS JSON message body with only `event` kept as a MessageAttribute, and the summary explains the 10-attribute limit."
+ },
+ "week-start": {
+  "pass": true,
+  "why": "week_start uses `date_add('day', -(day_of_week(CAST(uploaded_at AS date)) % 7), ...)` to shift to Sunday-start weeks."
+ },
+ "weekend-days": {
+  "pass": true,
+  "why": "Uses `count_if(day_of_week(uploaded_at) IN (6, 7))` with a comment explaining the Trino numbering."
+ },
+ "safe-divide": {
+  "pass": true,
+  "why": "Uses `CAST(SUM(transcode_seconds) AS double) / NULLIF(COUNT(*), 0)`."
+ },
+ "no-silent-changes": {
+  "pass": true,
+  "why": "The summary calls out dropped topic retention, the 4 GB/2 vCPU Fargate sizing, per-workload IAM roles, the region change, the 7-day noncurrent version expiry, the SNS body format and the unenforced rate limits."
+ }
+}

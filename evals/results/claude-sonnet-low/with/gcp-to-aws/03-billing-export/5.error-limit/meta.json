@@ -1,0 +1,9 @@
+{
+ "model": "claude-sonnet-5-5",
+ "cli": "claude-code 2.1.319",
+ "cost": 0,
+ "turns": 1,
+ "error": true,
+ "skillInvoked": false,
+ "pluginVersion": "1.2.0"
+}

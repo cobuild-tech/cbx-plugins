@@ -2,7 +2,7 @@
 name: cobuildx-ai-backbone-to-react-migration
 description: "Use when the user asks to convert or translate Backbone.js code to React — a single view, template, model, collection, router, or Marionette view, pasted Backbone code with a request for React, or \"what would this look like in React\" — or to migrate, port, rewrite, or modernize a Backbone.js app (including Marionette, jQuery, and Underscore/Handlebars templates) to React — full rewrites or incremental/strangler-fig migrations of any size — or to continue, resume, or check the status of a Backbone-to-React migration already in progress (e.g. \"continue the migration\", \"what's left to migrate\", \"why isn't Orders migrated yet\"). Also use for planning, scoping, or estimating a move off Backbone, and for requests to upgrade, modernize, or replace Backbone with React. Also use for requests to rewrite, rebuild, or replace a Backbone or Marionette view, form, or collection view with React."
 metadata:
-  version: "2.2.0"
+  version: "2.3.0"
 ---
 
 # Backbone → React Migration
@@ -141,6 +141,11 @@ When every unit is `done`, read `references/methodology/cutover.md`.
   - Marionette lifecycle: a region destroys its view on swap, so the React
     root must unmount in `onDestroy`/`onBeforeDestroy`; `className` and
     `attributes` functions run only once, when the element is created;
+  - every re-render and re-sort trigger the original declares
+    (`modelEvents`, `collectionEvents`, `viewComparator`, `viewFilter`,
+    `listenTo(... 'change:x')`); if the old view re-renders or re-sorts
+    when an attribute changes, the React list must too, even though a
+    plain Backbone collection would not re-sort on its own;
   - the router and `Backbone.history`;
   - escaping: `<%- %>` and `_.escape` escape, `<%= %>` does not.
   Keep each one working, or list it under Behavior differences.

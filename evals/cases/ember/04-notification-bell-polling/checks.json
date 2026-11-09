@@ -1,8 +1,29 @@
-{ "checks": [
- {"id":"testing-guard","must":"Polling still runs only once under tests (the Ember.testing guard) or otherwise keeps settled() from hanging (test waiter + stop in tests); an unconditional setInterval/setTimeout loop fails unless flagged."},
- {"id":"stop-on-destroy","must":"Polling stops when the component is destroyed/unmounted."},
- {"id":"store-query","must":"Unread notifications still come through the Ember Data store with the current user's id from the session service, or the change is flagged."},
- {"id":"on-read","must":"The onRead closure action passed from application.hbs is still called with the unread count before resetting it."},
- {"id":"classes","must":"The span.bell wrapper with bell--unread class when unread > 0 is preserved."},
- {"id":"no-silent-changes","must":"No unrequested behaviour changes (e.g. drop() concurrency, 20 s interval) without calling them out."}
-]}
+{
+ "kind": "targeted",
+ "checks": [
+  {
+   "id": "testing-guard",
+   "must": "Polling still runs only once under tests (the Ember.testing guard) or otherwise keeps settled() from hanging (test waiter + stop in tests); an unconditional setInterval/setTimeout loop fails unless flagged."
+  },
+  {
+   "id": "stop-on-destroy",
+   "must": "Polling stops when the component is destroyed/unmounted."
+  },
+  {
+   "id": "store-query",
+   "must": "Unread notifications still come through the Ember Data store with the current user's id from the session service, or the change is flagged."
+  },
+  {
+   "id": "on-read",
+   "must": "The onRead closure action passed from application.hbs is still called with the unread count before resetting it."
+  },
+  {
+   "id": "classes",
+   "must": "The span.bell wrapper with bell--unread class when unread > 0 is preserved."
+  },
+  {
+   "id": "no-silent-changes",
+   "must": "No unrequested behaviour changes (e.g. drop() concurrency, 20 s interval) without calling them out."
+  }
+ ]
+}

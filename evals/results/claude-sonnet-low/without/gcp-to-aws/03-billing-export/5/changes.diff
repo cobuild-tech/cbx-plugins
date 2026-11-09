@@ -1,0 +1,700 @@
+diff --git a/aws/main.tf b/aws/main.tf
+new file mode 100644
+index 0000000..8d34d0b
+--- /dev/null
++++ b/aws/main.tf
+@@ -0,0 +1,499 @@
++terraform {
++  required_providers {
++    aws    = { source = "hashicorp/aws", version = "~> 5.60" }
++    random = { source = "hashicorp/random", version = "~> 3.6" }
++  }
++}
++
++provider "aws" {
++  region = var.region
++}
++
++variable "region" {
++  type    = string
++  default = "eu-west-1"
++}
++
++variable "vpc_id" { type = string }
++
++variable "subnet_ids" {
++  type        = list(string)
++  description = "Subnets for Redis and the export tasks. Tasks need outbound internet (NAT or public IP) to reach the partner API."
++}
++
++variable "assign_public_ip" {
++  type        = bool
++  default     = false
++  description = "Set true if subnet_ids are public subnets without NAT."
++}
++
++variable "lake_bucket" {
++  type        = string
++  description = "S3 bucket holding the Iceberg tables billing.invoices and billing.invoice_snapshots (pre-existing, as the BigQuery dataset was)."
++}
++
++data "aws_caller_identity" "current" {}
++
++locals {
++  account_id = data.aws_caller_identity.current.account_id
++}
++
++# ---------- Identity ----------
++
++data "aws_iam_policy_document" "ecs_assume" {
++  statement {
++    actions = ["sts:AssumeRole"]
++    principals {
++      type        = "Service"
++      identifiers = ["ecs-tasks.amazonaws.com"]
++    }
++  }
++}
++
++# Task role == the GCP "billing-export" service account.
++resource "aws_iam_role" "export" {
++  name               = "billing-export"
++  assume_role_policy = data.aws_iam_policy_document.ecs_assume.json
++}
++
++resource "aws_iam_role" "execution" {
++  name               = "billing-export-execution"
++  assume_role_policy = data.aws_iam_policy_document.ecs_assume.json
++}
++
++resource "aws_iam_role_policy_attachment" "execution_managed" {
++  role       = aws_iam_role.execution.name
++  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
++}
++
++# ---------- Secrets ----------
++
++resource "aws_secretsmanager_secret" "partner_api_key" {
++  name = "partner-api-key"
++}
++
++resource "random_password" "redis_auth" {
++  length  = 32
++  special = false
++}
++
++resource "aws_secretsmanager_secret" "redis_auth" {
++  name = "export-dedupe-auth"
++}
++
++resource "aws_secretsmanager_secret_version" "redis_auth" {
++  secret_id     = aws_secretsmanager_secret.redis_auth.id
++  secret_string = random_password.redis_auth.result
++}
++
++# Secrets are injected into the container by ECS, using the execution role.
++data "aws_iam_policy_document" "execution_secrets" {
++  statement {
++    actions = ["secretsmanager:GetSecretValue"]
++    resources = [
++      aws_secretsmanager_secret.partner_api_key.arn,
++      aws_secretsmanager_secret.redis_auth.arn,
++    ]
++  }
++}
++
++resource "aws_iam_role_policy" "execution_secrets" {
++  name   = "export-reads-secrets"
++  role   = aws_iam_role.execution.id
++  policy = data.aws_iam_policy_document.execution_secrets.json
++}
++
++# ---------- Network ----------
++
++resource "aws_security_group" "export" {
++  name   = "billing-export"
++  vpc_id = var.vpc_id
++
++  egress {
++    from_port   = 0
++    to_port     = 0
++    protocol    = "-1"
++    cidr_blocks = ["0.0.0.0/0"]
++  }
++}
++
++resource "aws_security_group" "redis" {
++  name   = "export-dedupe"
++  vpc_id = var.vpc_id
++
++  ingress {
++    from_port       = 6379
++    to_port         = 6379
++    protocol        = "tcp"
++    security_groups = [aws_security_group.export.id]
++  }
++}
++
++# ---------- Redis (dedupe) ----------
++
++resource "aws_elasticache_subnet_group" "dedupe" {
++  name       = "export-dedupe"
++  subnet_ids = var.subnet_ids
++}
++
++resource "aws_elasticache_replication_group" "dedupe" {
++  replication_group_id       = "export-dedupe"
++  description                = "Billing export dedupe"
++  engine                     = "redis"
++  engine_version             = "7.0"
++  node_type                  = "cache.t4g.medium" # ~3 GiB; closest standard size to the 1 GB GCP instance
++  num_cache_clusters         = 2
++  automatic_failover_enabled = true
++  multi_az_enabled           = true
++  subnet_group_name          = aws_elasticache_subnet_group.dedupe.name
++  security_group_ids         = [aws_security_group.redis.id]
++  transit_encryption_enabled = true
++  at_rest_encryption_enabled = true
++  auth_token                 = random_password.redis_auth.result
++}
++
++# ---------- Export bucket ----------
++
++resource "aws_s3_bucket" "exports" {
++  bucket              = "${local.account_id}-billing-exports"
++  object_lock_enabled = true
++}
++
++resource "aws_s3_bucket_public_access_block" "exports" {
++  bucket                  = aws_s3_bucket.exports.id
++  block_public_acls       = true
++  block_public_policy     = true
++  ignore_public_acls      = true
++  restrict_public_buckets = true
++}
++
++resource "aws_s3_bucket_ownership_controls" "exports" {
++  bucket = aws_s3_bucket.exports.id
++  rule { object_ownership = "BucketOwnerEnforced" }
++}
++
++resource "aws_s3_bucket_versioning" "exports" {
++  bucket = aws_s3_bucket.exports.id
++  versioning_configuration { status = "Enabled" }
++}
++
++# COMPLIANCE mode == GCS locked retention policy: nobody, including root, can shorten it.
++resource "aws_s3_bucket_object_lock_configuration" "exports" {
++  bucket = aws_s3_bucket.exports.id
++  rule {
++    default_retention {
++      mode = "COMPLIANCE"
++      days = 2555 # 220752000 s = 7 years, required for invoices
++    }
++  }
++  depends_on = [aws_s3_bucket_versioning.exports]
++}
++
++# Autoclass equivalent.
++resource "aws_s3_bucket_intelligent_tiering_configuration" "exports" {
++  bucket = aws_s3_bucket.exports.id
++  name   = "entire-bucket"
++  tiering {
++    access_tier = "ARCHIVE_ACCESS"
++    days        = 90
++  }
++}
++
++resource "aws_s3_bucket_lifecycle_configuration" "exports" {
++  bucket = aws_s3_bucket.exports.id
++  rule {
++    id     = "autoclass"
++    status = "Enabled"
++    filter {}
++    transition {
++      days          = 0
++      storage_class = "INTELLIGENT_TIERING"
++    }
++  }
++}
++
++# ---------- Athena ----------
++
++resource "aws_s3_bucket" "athena_results" {
++  bucket = "${local.account_id}-billing-export-athena-results"
++}
++
++resource "aws_s3_bucket_public_access_block" "athena_results" {
++  bucket                  = aws_s3_bucket.athena_results.id
++  block_public_acls       = true
++  block_public_policy     = true
++  ignore_public_acls      = true
++  restrict_public_buckets = true
++}
++
++resource "aws_s3_bucket_lifecycle_configuration" "athena_results" {
++  bucket = aws_s3_bucket.athena_results.id
++  rule {
++    id     = "expire"
++    status = "Enabled"
++    filter {}
++    expiration { days = 7 }
++  }
++}
++
++resource "aws_athena_workgroup" "export" {
++  name = "billing-export"
++  configuration {
++    enforce_workgroup_configuration = true
++    engine_version { selected_engine_version = "Athena engine version 3" }
++    result_configuration {
++      output_location = "s3://${aws_s3_bucket.athena_results.bucket}/"
++      encryption_configuration { encryption_option = "SSE_S3" }
++    }
++  }
++}
++
++# ---------- Task permissions ----------
++
++data "aws_iam_policy_document" "export_task" {
++  statement {
++    actions   = ["s3:PutObject"]
++    resources = ["${aws_s3_bucket.exports.arn}/invoices/*"]
++  }
++  statement {
++    actions = ["athena:StartQueryExecution", "athena:GetQueryExecution", "athena:GetQueryResults"]
++    resources = [aws_athena_workgroup.export.arn]
++  }
++  statement {
++    actions = [
++      "glue:GetDatabase", "glue:GetTable", "glue:GetTables", "glue:GetPartitions",
++      "glue:UpdateTable", # Iceberg commits from MERGE
++    ]
++    resources = [
++      "arn:aws:glue:${var.region}:${local.account_id}:catalog",
++      "arn:aws:glue:${var.region}:${local.account_id}:database/billing",
++      "arn:aws:glue:${var.region}:${local.account_id}:table/billing/*",
++    ]
++  }
++  statement {
++    actions   = ["s3:GetObject", "s3:PutObject", "s3:DeleteObject", "s3:ListBucket", "s3:GetBucketLocation"]
++    resources = ["arn:aws:s3:::${var.lake_bucket}", "arn:aws:s3:::${var.lake_bucket}/*"]
++  }
++  statement {
++    actions   = ["s3:GetObject", "s3:PutObject", "s3:ListBucket", "s3:GetBucketLocation", "s3:AbortMultipartUpload"]
++    resources = [aws_s3_bucket.athena_results.arn, "${aws_s3_bucket.athena_results.arn}/*"]
++  }
++}
++
++resource "aws_iam_role_policy" "export_task" {
++  name   = "billing-export"
++  role   = aws_iam_role.export.id
++  policy = data.aws_iam_policy_document.export_task.json
++}
++
++# ---------- Job (Cloud Run job equivalent: ECS Fargate task) ----------
++
++resource "aws_ecr_repository" "export" {
++  name = "billing-export"
++}
++
++resource "aws_cloudwatch_log_group" "export" {
++  name              = "/ecs/billing-export"
++  retention_in_days = 90
++}
++
++resource "aws_ecs_cluster" "export" {
++  name = "billing-export"
++}
++
++resource "aws_ecs_task_definition" "export" {
++  family                   = "billing-export"
++  requires_compatibilities = ["FARGATE"]
++  network_mode             = "awsvpc"
++  cpu                      = "2048"
++  memory                   = "4096"
++  task_role_arn            = aws_iam_role.export.arn
++  execution_role_arn       = aws_iam_role.execution.arn
++
++  container_definitions = jsonencode([{
++    name      = "export"
++    image     = "${aws_ecr_repository.export.repository_url}:latest"
++    essential = true
++    environment = [
++      { name = "REDIS_HOST", value = aws_elasticache_replication_group.dedupe.primary_endpoint_address },
++      { name = "REDIS_PORT", value = "6379" },
++      { name = "EXPORT_BUCKET", value = aws_s3_bucket.exports.bucket },
++      { name = "ATHENA_WORKGROUP", value = aws_athena_workgroup.export.name },
++      { name = "TASK_COUNT", value = "16" },
++    ]
++    secrets = [
++      { name = "PARTNER_API_KEY", valueFrom = aws_secretsmanager_secret.partner_api_key.arn },
++      { name = "REDIS_AUTH", valueFrom = aws_secretsmanager_secret.redis_auth.arn },
++    ]
++    logConfiguration = {
++      logDriver = "awslogs"
++      options = {
++        awslogs-group         = aws_cloudwatch_log_group.export.name
++        awslogs-region        = var.region
++        awslogs-stream-prefix = "export"
++      }
++    }
++  }])
++}
++
++# ---------- Orchestration: 16 shards, 4 at a time, 3h timeout, 2 retries ----------
++
++data "aws_iam_policy_document" "sfn_assume" {
++  statement {
++    actions = ["sts:AssumeRole"]
++    principals {
++      type        = "Service"
++      identifiers = ["states.amazonaws.com"]
++    }
++  }
++}
++
++resource "aws_iam_role" "sfn" {
++  name               = "billing-export-sfn"
++  assume_role_policy = data.aws_iam_policy_document.sfn_assume.json
++}
++
++data "aws_iam_policy_document" "sfn" {
++  statement {
++    actions   = ["ecs:RunTask"]
++    resources = ["arn:aws:ecs:${var.region}:${local.account_id}:task-definition/${aws_ecs_task_definition.export.family}:*"]
++  }
++  statement {
++    actions   = ["ecs:StopTask", "ecs:DescribeTasks"]
++    resources = ["*"]
++  }
++  statement {
++    actions   = ["iam:PassRole"]
++    resources = [aws_iam_role.export.arn, aws_iam_role.execution.arn]
++  }
++  statement {
++    actions   = ["events:PutTargets", "events:PutRule", "events:DescribeRule"]
++    resources = ["arn:aws:events:${var.region}:${local.account_id}:rule/StepFunctionsGetEventsForECSTaskRule"]
++  }
++}
++
++resource "aws_iam_role_policy" "sfn" {
++  name   = "run-export"
++  role   = aws_iam_role.sfn.id
++  policy = data.aws_iam_policy_document.sfn.json
++}
++
++locals {
++  run_task_params = {
++    Cluster        = aws_ecs_cluster.export.arn
++    TaskDefinition = aws_ecs_task_definition.export.family
++    LaunchType     = "FARGATE"
++    NetworkConfiguration = {
++      AwsvpcConfiguration = {
++        Subnets        = var.subnet_ids
++        SecurityGroups = [aws_security_group.export.id]
++        AssignPublicIp = var.assign_public_ip ? "ENABLED" : "DISABLED"
++      }
++    }
++  }
++  retry = [{
++    ErrorEquals     = ["States.TaskFailed"]
++    IntervalSeconds = 10
++    MaxAttempts     = 2
++    BackoffRate     = 2
++  }]
++}
++
++resource "aws_sfn_state_machine" "export" {
++  name     = "billing-export"
++  role_arn = aws_iam_role.sfn.arn
++
++  definition = jsonencode({
++    StartAt = "Snapshot"
++    States = {
++      # The MERGE runs once up front: 16 concurrent Iceberg MERGEs on one table would conflict on commit.
++      Snapshot = {
++        Type     = "Task"
++        Resource = "arn:aws:states:::ecs:runTask.sync"
++        Parameters = merge(local.run_task_params, {
++          Overrides = { ContainerOverrides = [{
++            Name        = "export"
++            Environment = [{ Name = "PHASE", Value = "snapshot" }]
++          }] }
++        })
++        TimeoutSeconds = 10800
++        Retry          = local.retry
++        ResultPath     = null
++        Next           = "Shards"
++      }
++      Shards = {
++        Type           = "Map"
++        MaxConcurrency = 4
++        ItemsPath      = "$.shards"
++        ItemSelector   = { "index.$" = "$$.Map.Item.Value" }
++        ItemProcessor = {
++          ProcessorConfig = { Mode = "INLINE" }
++          StartAt         = "Export"
++          States = {
++            Export = {
++              Type     = "Task"
++              Resource = "arn:aws:states:::ecs:runTask.sync"
++              Parameters = merge(local.run_task_params, {
++                Overrides = { ContainerOverrides = [{
++                  Name = "export"
++                  Environment = [
++                    { Name = "PHASE", Value = "export" },
++                    { "Name" = "TASK_INDEX", "Value.$" = "States.Format('{}', $.index)" },
++                  ]
++                }] }
++              })
++              TimeoutSeconds = 10800
++              Retry          = local.retry
++              End            = true
++            }
++          }
++        }
++        End = true
++      }
++    }
++  })
++}
++
++# ---------- Schedule ----------
++
++data "aws_iam_policy_document" "scheduler_assume" {
++  statement {
++    actions = ["sts:AssumeRole"]
++    principals {
++      type        = "Service"
++      identifiers = ["scheduler.amazonaws.com"]
++    }
++  }
++}
++
++resource "aws_iam_role" "scheduler" {
++  name               = "billing-export-scheduler"
++  assume_role_policy = data.aws_iam_policy_document.scheduler_assume.json
++}
++
++resource "aws_iam_role_policy" "scheduler" {
++  name = "start-export"
++  role = aws_iam_role.scheduler.id
++  policy = jsonencode({
++    Version = "2012-10-17"
++    Statement = [{
++      Effect   = "Allow"
++      Action   = "states:StartExecution"
++      Resource = aws_sfn_state_machine.export.arn
++    }]
++  })
++}
++
++resource "aws_scheduler_schedule" "monthly" {
++  name                         = "billing-export-monthly"
++  schedule_expression          = "cron(0 3 1 * ? *)"
++  schedule_expression_timezone = "Europe/Berlin"
++
++  flexible_time_window { mode = "OFF" }
++
++  target {
++    arn      = aws_sfn_state_machine.export.arn
++    role_arn = aws_iam_role.scheduler.arn
++    input    = jsonencode({ shards = range(16) })
++  }
++}
+diff --git a/job/export.py b/job/export.py
+index 6d748e2..fae9b73 100644
+--- a/job/export.py
++++ b/job/export.py
+@@ -1,49 +1,110 @@
+-"""Monthly invoice export. Runs as 16 tasks, 4 at a time; each task exports one shard of accounts."""
++"""Monthly invoice export. Runs as 16 tasks, 4 at a time (Step Functions Map); each task exports one shard of accounts.
++
++PHASE=snapshot runs the MERGE once before the shards; PHASE=export (default) exports TASK_INDEX's shard.
++"""
+ import csv
+ import io
+ import os
++import time
++from datetime import date, datetime
++from zoneinfo import ZoneInfo
+ 
++import boto3
+ import redis
+ import requests
+-from google.cloud import bigquery, storage
+-
+-TASK_INDEX = int(os.environ.get("CLOUD_RUN_TASK_INDEX", 0))
+-TASK_COUNT = int(os.environ.get("CLOUD_RUN_TASK_COUNT", 1))
+-ATTEMPT = int(os.environ.get("CLOUD_RUN_TASK_ATTEMPT", 0))
+-
+-r = redis.Redis(host=os.environ["REDIS_HOST"], port=6378, ssl=True, password=os.environ.get("REDIS_AUTH"))
+-bq = bigquery.Client()
+-gcs = storage.Client()
+-
+-
+-def main():
+-    sql = open(os.path.join(os.path.dirname(__file__), "..", "sql", "invoices.sql")).read()
+-    job = bq.query(
+-        sql,
+-        job_config=bigquery.QueryJobConfig(
+-            query_parameters=[
+-                bigquery.ScalarQueryParameter("shard", "INT64", TASK_INDEX),
+-                bigquery.ScalarQueryParameter("shards", "INT64", TASK_COUNT),
+-            ]
+-        ),
++
++PHASE = os.environ.get("PHASE", "export")
++TASK_INDEX = int(os.environ.get("TASK_INDEX", 0))
++TASK_COUNT = int(os.environ.get("TASK_COUNT", 1))
++# Step Functions retries don't expose an attempt number; this only labels the dedupe key's value.
++ATTEMPT = int(os.environ.get("TASK_ATTEMPT", 0))
++WORKGROUP = os.environ.get("ATHENA_WORKGROUP", "billing-export")
++
++SQL_DIR = os.path.join(os.path.dirname(__file__), "..", "sql")
++
++athena = boto3.client("athena")
++s3 = boto3.client("s3")
++
++
++def month_bounds():
++    today = datetime.now(ZoneInfo("Europe/Berlin")).date()
++    first_this = today.replace(day=1)
++    start = (first_this.replace(year=first_this.year - 1, month=12)
++             if first_this.month == 1 else first_this.replace(month=first_this.month - 1))
++    return start, first_this
++
++
++def run_query(sql):
++    qid = athena.start_query_execution(QueryString=sql, WorkGroup=WORKGROUP)["QueryExecutionId"]
++    delay = 1.0
++    while True:
++        status = athena.get_query_execution(QueryExecutionId=qid)["QueryExecution"]["Status"]
++        if status["State"] == "SUCCEEDED":
++            return qid
++        if status["State"] in ("FAILED", "CANCELLED"):
++            raise RuntimeError(f"Athena query {status['State']}: {status.get('StateChangeReason')}")
++        time.sleep(delay)
++        delay = min(delay * 1.5, 10)
++
++
++def read_rows(qid):
++    """Yield dicts with Athena strings converted to int where the column is integral."""
++    cols = None
++    first = True
++    for page in athena.get_paginator("get_query_results").paginate(QueryExecutionId=qid):
++        if cols is None:
++            cols = [(c["Name"], c["Type"]) for c in page["ResultSet"]["ResultSetMetadata"]["ColumnInfo"]]
++        for rec in page["ResultSet"]["Rows"]:
++            if first:  # header row, first page only
++                first = False
++                continue
++            row = {}
++            for (name, typ), cell in zip(cols, rec["Data"]):
++                v = cell.get("VarCharValue")
++                row[name] = int(v) if v is not None and typ in ("bigint", "integer", "smallint", "tinyint") else v
++            yield row
++
++
++def snapshot():
++    start, next_start = month_bounds()
++    sql = open(os.path.join(SQL_DIR, "invoices_snapshot.sql")).read()
++    run_query(sql.format(month_start=start.isoformat(), next_month_start=next_start.isoformat()))
++
++
++def export():
++    r = redis.Redis(
++        host=os.environ["REDIS_HOST"],
++        port=int(os.environ.get("REDIS_PORT", 6379)),
++        ssl=True,
++        password=os.environ.get("REDIS_AUTH"),
+     )
++    start, _ = month_bounds()
++    sql = open(os.path.join(SQL_DIR, "invoices.sql")).read()
++    qid = run_query(sql.format(month_start=start.isoformat(), shard=TASK_INDEX, shards=TASK_COUNT))
++
+     buf = io.StringIO()
+     w = csv.writer(buf)
+-    for row in job.result():
++    for row in read_rows(qid):
+         # Skip invoices already pushed by an earlier attempt of this task.
+-        if not r.set(f"invoice:{row.invoice_id}", ATTEMPT, nx=True, ex=40 * 86400):
++        if not r.set(f"invoice:{row['invoice_id']}", ATTEMPT, nx=True, ex=40 * 86400):
+             continue
+         requests.post(
+             "https://partner.example.com/v1/invoices",
+-            json=dict(row.items()),
++            json=row,
+             headers={"X-Api-Key": os.environ["PARTNER_API_KEY"]},
+             timeout=30,
+         ).raise_for_status()
+         w.writerow(row.values())
+ 
+-    blob = gcs.bucket(os.environ["EXPORT_BUCKET"]).blob(f"invoices/shard-{TASK_INDEX:02d}.csv")
+-    blob.upload_from_string(buf.getvalue(), content_type="text/csv", if_generation_match=0)
++    # IfNoneMatch="*" == GCS if_generation_match=0: fail if the object already exists.
++    s3.put_object(
++        Bucket=os.environ["EXPORT_BUCKET"],
++        Key=f"invoices/shard-{TASK_INDEX:02d}.csv",
++        Body=buf.getvalue().encode(),
++        ContentType="text/csv",
++        IfNoneMatch="*",
++    )
+ 
+ 
+ if __name__ == "__main__":
+-    main()
++    snapshot() if PHASE == "snapshot" else export()
+diff --git a/sql/invoices.sql b/sql/invoices.sql
+index 88d7ffc..3b884ab 100644
+--- a/sql/invoices.sql
++++ b/sql/invoices.sql
+@@ -1,18 +1,8 @@
+--- Invoices for last calendar month (Berlin time), as they were at the end of the month.
+-DECLARE month_start DATE DEFAULT DATE_TRUNC(DATE_SUB(CURRENT_DATE("Europe/Berlin"), INTERVAL 1 MONTH), MONTH);
+-
+-MERGE billing.invoice_snapshots AS s
+-USING (
+-  SELECT invoice_id, account_id, amount_cents, currency, status, updated_at
+-  FROM billing.invoices FOR SYSTEM_TIME AS OF TIMESTAMP(DATE_ADD(month_start, INTERVAL 1 MONTH), "Europe/Berlin")
+-  WHERE DATE(issued_at, "Europe/Berlin") >= month_start
+-    AND DATE(issued_at, "Europe/Berlin") < DATE_ADD(month_start, INTERVAL 1 MONTH)
+-) AS i
+-ON s.invoice_id = i.invoice_id
+-WHEN MATCHED THEN UPDATE SET status = i.status, amount_cents = i.amount_cents, updated_at = i.updated_at
+-WHEN NOT MATCHED THEN INSERT ROW;
+-
++-- Athena (engine v3). Per-shard read of last month's snapshot (see invoices_snapshot.sql).
++-- Placeholders filled by job/export.py: {month_start} (YYYY-MM-DD), {shard}, {shards} (ints).
++-- crc32 replaces BigQuery's FARM_FINGERPRINT: it is non-negative, so no ABS() is needed.
++-- NOTE: shard assignment differs from the GCP version; it is stable within AWS.
+ SELECT invoice_id, account_id, amount_cents, currency, status
+ FROM billing.invoice_snapshots
+-WHERE MOD(ABS(FARM_FINGERPRINT(account_id)), @shards) = @shard
+-  AND DATE(updated_at, "Europe/Berlin") >= month_start;
++WHERE crc32(to_utf8(account_id)) % {shards} = {shard}
++  AND CAST(at_timezone(updated_at, 'Europe/Berlin') AS date) >= DATE '{month_start}'
+diff --git a/sql/invoices_snapshot.sql b/sql/invoices_snapshot.sql
+new file mode 100644
+index 0000000..a8fa278
+--- /dev/null
++++ b/sql/invoices_snapshot.sql
+@@ -0,0 +1,17 @@
++-- Athena (engine v3), Iceberg tables. Run once per export, before the shard queries.
++-- Invoices for last calendar month (Berlin time), as they were at the end of the month.
++-- Placeholders are filled by job/export.py from a computed date (never from user input):
++--   {month_start}      first day of last month in Europe/Berlin, YYYY-MM-DD
++--   {next_month_start} first day of the following month, YYYY-MM-DD
++MERGE INTO billing.invoice_snapshots AS s
++USING (
++  SELECT invoice_id, account_id, amount_cents, currency, status, updated_at
++  FROM billing.invoices
++  FOR TIMESTAMP AS OF with_timezone(TIMESTAMP '{next_month_start} 00:00:00', 'Europe/Berlin')
++  WHERE CAST(at_timezone(issued_at, 'Europe/Berlin') AS date) >= DATE '{month_start}'
++    AND CAST(at_timezone(issued_at, 'Europe/Berlin') AS date) < DATE '{next_month_start}'
++) AS i
++ON s.invoice_id = i.invoice_id
++WHEN MATCHED THEN UPDATE SET status = i.status, amount_cents = i.amount_cents, updated_at = i.updated_at
++WHEN NOT MATCHED THEN INSERT (invoice_id, account_id, amount_cents, currency, status, updated_at)
++  VALUES (i.invoice_id, i.account_id, i.amount_cents, i.currency, i.status, i.updated_at)

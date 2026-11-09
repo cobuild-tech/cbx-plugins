@@ -1,39 +1,62 @@
 #!/usr/bin/env bash
-# Usage: evals/run.sh [--case 'jquery/*'] [--models 'sonnet opus'] [--arms 'without with'] [--reps 3] [--jobs 4]
-# Runs each case in a fresh git copy of its repo/ via `claude -p`, with and without the plugin.
+# Usage: evals/run.sh [--agent claude|copilot] [--case 'jquery/*'] [--models 'sonnet'] [--arms 'without prompt with'] [--reps 5] [--jobs 4] [--effort low]
+#
+# Runs each case in a fresh git copy of its repo/, once per arm:
+#   without  no plugin
+#   prompt   no plugin, plus a one-line instruction to preserve behaviour and list differences
+#            (the cheapest alternative to the plugin; the plugin has to beat this, not just "without")
+#   with     the plugin in this repo
+# Results go to results/<agent>-<model>/<arm>/<case>/<rep>/.
 set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd); EV="$ROOT/evals"
-CASE='*/*'; MODELS='sonnet opus'; ARMS='without with'; REPS=3; JOBS=4
+AGENT=claude; CASE='*/*'; MODELS='sonnet'; ARMS='without prompt with'; REPS=5; JOBS=4; EFFORT=''
 while [ $# -gt 0 ]; do case $1 in
-  --case) CASE=$2; shift 2;; --models) MODELS=$2; shift 2;; --arms) ARMS=$2; shift 2;;
-  --reps) REPS=$2; shift 2;; --jobs) JOBS=$2; shift 2;; *) echo "unknown $1"; exit 1;; esac; done
+  --agent) AGENT=$2; shift 2;; --case) CASE=$2; shift 2;; --models) MODELS=$2; shift 2;;
+  --arms) ARMS=$2; shift 2;; --reps) REPS=$2; shift 2;; --jobs) JOBS=$2; shift 2;; --effort) EFFORT=$2; shift 2;;
+  *) echo "unknown $1"; exit 1;; esac; done
+case $AGENT in claude|copilot) ;; *) echo "--agent must be claude or copilot"; exit 1;; esac
+command -v "$AGENT" >/dev/null || { echo "$AGENT CLI not found on PATH"; exit 1; }
+
+BASELINE_LINE='Preserve the existing behaviour exactly, and end your summary with a list of every behaviour difference between the old and new code.'
 
 one() { # case model arm rep
   local c=$1 m=$2 a=$3 r=$4 fw=${1%%/*}
-  local out="$EV/results/$m/$a/$c/$r"
+  local out="$EV/results/$AGENT-$m${EFFORT:+-$EFFORT}/$a/$c/$r"
   [ -f "$out/final.md" ] && { echo "skip $out"; return; }
-  mkdir -p "$out"; local w; w=$(mktemp -d)
+  mkdir -p "$out" "$HOME/.cbx-eval-work"; local w; w=$(mktemp -d "$HOME/.cbx-eval-work/XXXXXX")   # under $HOME: Docker Desktop cannot mount macOS temp folders; outside this repo so no project config leaks in
   cp -R "$EV/cases/$c/repo/." "$w/"
   ( cd "$w" && git init -q && git add -A && git -c user.email=e@x -c user.name=eval commit -qm base )
-  local args=(-p "$(cat "$EV/cases/$c/prompt.txt")" --model "$m" --setting-sources project --strict-mcp-config
-              --permission-mode acceptEdits --allowedTools "Read Edit Write Glob Grep Skill"
-              --disallowedTools "Bash WebFetch WebSearch Agent" --output-format stream-json --verbose)
+  local prompt; prompt=$(cat "$EV/cases/$c/prompt.txt")
+  [ "$a" = prompt ] && prompt="$prompt $BASELINE_LINE"
   local pd="$ROOT/$fw"; [ -d "$pd/.claude-plugin" ] || pd="$ROOT/$fw-to-react"   # gcp-to-aws/ or <fw>-to-react/
-  [ "$a" = with ] && args+=(--plugin-dir "$pd")
-  ( cd "$w" && claude "${args[@]}" > "$out/transcript.jsonl" 2> "$out/stderr.txt" ) || echo "FAIL $out"
+
+  if [ "$AGENT" = claude ]; then
+    local args=(-p "$prompt" --model "$m" --setting-sources project --strict-mcp-config
+                --permission-mode acceptEdits --allowedTools "Read Edit Write Glob Grep Skill"
+                --disallowedTools "Bash WebFetch WebSearch Agent" --output-format stream-json --verbose)
+    [ -n "$EFFORT" ] && args+=(--effort "$EFFORT")
+    [ "$a" = with ] && args+=(--plugin-dir "$pd")
+    ( cd "$w" && claude "${args[@]}" > "$out/transcript.jsonl" 2> "$out/stderr.txt" ) || echo "FAIL $out"
+  else
+    # Isolated COPILOT_HOME: no user plugins, skills, MCP servers, or instructions leak into the baseline.
+    # Auth comes from COPILOT_GITHUB_TOKEN / GH_TOKEN (see README).
+    local home; home=$(mktemp -d)
+    local args=(-p "$prompt" --model "$m" --output-format json --no-ask-user --no-custom-instructions
+                --disable-builtin-mcps --allow-tool write --deny-tool shell --deny-tool url)
+    [ "$a" = with ] && args+=(--plugin-dir "$pd")
+    ( cd "$w" && COPILOT_HOME="$home" copilot "${args[@]}" > "$out/transcript.jsonl" 2> "$out/stderr.txt" ) || echo "FAIL $out"
+    rm -rf "$home"
+  fi
+
   ( cd "$w" && git add -A && git diff --cached > "$out/changes.diff" )
-  node -e '
-    const fs=require("fs"),L=fs.readFileSync(process.argv[1],"utf8").trim().split("\n").map(l=>{try{return JSON.parse(l)}catch{return{}}});
-    const res=L.find(x=>x.type==="result")||{}, init=L.find(x=>x.subtype==="init")||{};
-    const skill=L.some(x=>x.type==="assistant"&&(x.message?.content||[]).some(b=>b.type==="tool_use"&&b.name==="Skill"));
-    fs.writeFileSync(process.argv[2]+"/final.md",res.result||"");
-    fs.writeFileSync(process.argv[2]+"/meta.json",JSON.stringify({model:init.model,cli:init.claude_code_version,skillInvoked:skill,cost:res.total_cost_usd,turns:res.num_turns,error:res.is_error},null,1));
-  ' "$out/transcript.jsonl" "$out"
-  [ "$a" = with ] && node -e 'const fs=require("fs"),m=JSON.parse(fs.readFileSync(process.argv[1]));m.pluginVersion=JSON.parse(fs.readFileSync(process.argv[2])).version;fs.writeFileSync(process.argv[1],JSON.stringify(m,null,1))' "$out/meta.json" "$pd/.claude-plugin/plugin.json"
+  node "$EV/lib/meta.mjs" "$AGENT" "$out" "$a" "$pd"
+  [ -f "$EV/cases/$c/verify.mjs" ] && node "$EV/cases/$c/verify.mjs" "$w" "$EV/cases/$c/repo" > "$out/auto.json"
   [ -x "$EV/tfvalidate.sh" ] && "$EV/tfvalidate.sh" "$w" "$out"
-  rm -rf "$w"; echo "done $out"
+  rm -rf "$w"
+  if node -e 'process.exit(require(process.argv[1]).error?0:1)' "$out/meta.json"; then
+    mv "$out" "$out.error-$(date +%s)"; echo "ERROR $out (moved aside; rerun to retry)"; else echo "done $out"; fi
 }
-export -f one; export EV ROOT
+export -f one; export EV ROOT AGENT BASELINE_LINE EFFORT
 
 jobs=()
 for c in $(cd "$EV/cases" && ls -d $CASE); do for m in $MODELS; do for a in $ARMS; do

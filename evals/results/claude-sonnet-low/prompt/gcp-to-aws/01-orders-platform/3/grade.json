@@ -1,0 +1,50 @@
+{
+ "ordering-fifo": {
+  "pass": true,
+  "why": "The diff creates an SNS FIFO topic `orders.fifo` feeding an SQS FIFO queue `orders-worker.fifo`, and api.py publishes with `MessageGroupId=str(o[\"customer_id\"])`."
+ },
+ "dlq-5": {
+  "pass": true,
+  "why": "The redrive_policy on `aws_sqs_queue.orders_worker` points to the FIFO `orders_dlq` with `maxReceiveCount = 5`."
+ },
+ "visibility-timeout": {
+  "pass": true,
+  "why": "`visibility_timeout_seconds = 540` equals the Lambda `timeout = 540`, and item 3 explains why."
+ },
+ "run-timeout-900": {
+  "pass": true,
+  "why": "The API runs on App Runner, but item 10 explicitly flags that App Runner caps requests at about 120s versus 900s on Cloud Run."
+ },
+ "presign-expiry": {
+  "pass": true,
+  "why": "Item 17 explicitly flags that the 7-day presigned URLs stop working when the App Runner role's temporary credentials expire."
+ },
+ "rds-iam-auth": {
+  "pass": true,
+  "why": "`aws_db_instance` uses postgres 15 with `iam_database_authentication_enabled = true`, `multi_az = true` and `backup_retention_period = 7` (PITR)."
+ },
+ "worker-event-shape": {
+  "pass": true,
+  "why": "worker.py iterates `event[\"Records\"]` and parses `record[\"body\"]`, which is correct because the SNS subscription sets `raw_message_delivery = true`."
+ },
+ "sql-dialect": {
+  "pass": true,
+  "why": "The SQL uses TRY_CAST, a ROW_NUMBER subquery in place of QUALIFY, `slice(array_agg(CAST(ROW(...))) ORDER BY ...), 1, 3)` and `approx_distinct`; `_PARTITIONDATE` is replaced with an assumed `partition_date` column, which item 20 flags for confirmation."
+ },
+ "scheduler-tz": {
+  "pass": true,
+  "why": "`aws_scheduler_schedule` uses `cron(0 2 * * ? *)` with `schedule_expression_timezone = \"America/New_York\"`."
+ },
+ "lifecycle": {
+  "pass": true,
+  "why": "Versioning is enabled, with a STANDARD_IA transition at 30 days and expiration at 365 days, and item 2 flags the delete-marker semantics."
+ },
+ "multi-region-flag": {
+  "pass": false,
+  "why": "Item 1 only says the region is us-east-2 instead of us-central1/US and never flags the loss of multi-region durability or availability for the GCS and BigQuery 'US' locations, and no replication is added."
+ },
+ "no-silent-changes": {
+  "pass": false,
+  "why": "The RDS instance sets `skip_final_snapshot = true` with no deletion protection, so a destroy discards data with no final snapshot, and this is never mentioned in the summary (it also leaves `allocated_storage = 20` and the unblocked Athena results bucket unremarked)."
+ }
+}

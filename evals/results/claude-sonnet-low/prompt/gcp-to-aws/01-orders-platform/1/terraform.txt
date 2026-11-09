@@ -1,0 +1,6 @@
+FAIL
+Terraform initialized in an empty directory!
+
+The directory has no Terraform configuration files. You may begin working
+with Terraform immediately by creating Terraform configuration files.
+Success! The configuration is valid.

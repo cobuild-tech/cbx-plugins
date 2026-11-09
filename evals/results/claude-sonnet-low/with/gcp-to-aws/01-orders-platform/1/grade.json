@@ -1,0 +1,50 @@
+{
+ "ordering-fifo": {
+  "pass": true,
+  "why": "aws_sns_topic.orders has fifo_topic = true, aws_sqs_queue.orders_worker has fifo_queue = true, and api.py publishes with MessageGroupId=str(o[\"customer_id\"])."
+ },
+ "dlq-5": {
+  "pass": true,
+  "why": "orders_worker has a redrive_policy pointing at the orders-dlq.fifo queue with maxReceiveCount = 5."
+ },
+ "visibility-timeout": {
+  "pass": true,
+  "why": "visibility_timeout_seconds = 3240 (6 x 540) is above the 540s Lambda timeout, and the 54-minute retry delay is flagged as Needs decision."
+ },
+ "run-timeout-900": {
+  "pass": true,
+  "why": "The API runs on ECS Fargate behind an ALB with idle_timeout = 900, not App Runner or API Gateway."
+ },
+ "presign-expiry": {
+  "pass": true,
+  "why": "api.py lowers the expiry to a configurable 900s, explaining that role-credential URLs die on rotation, and the summary flags it as Needs decision."
+ },
+ "rds-iam-auth": {
+  "pass": true,
+  "why": "aws_db_instance uses engine postgres 15 with iam_database_authentication_enabled = true, multi_az = true and backup_retention_period = 7, which enables PITR."
+ },
+ "worker-event-shape": {
+  "pass": true,
+  "why": "worker.py now reads json.loads(record[\"body\"]) from event[\"Records\"], which is correct because the SNS subscription sets raw_message_delivery = true."
+ },
+ "sql-dialect": {
+  "pass": true,
+  "why": "rollup.sql is rewritten for Redshift: a regex guard replaces SAFE_CAST, a real partition_date column replaces _PARTITIONDATE, ARRAY_AGG(STRUCT ... LIMIT 3) becomes a ROW_NUMBER<=3 + LISTAGG/JSON_PARSE SUPER, and QUALIFY is kept (Redshift supports it), with the assumptions flagged."
+ },
+ "scheduler-tz": {
+  "pass": true,
+  "why": "aws_scheduler_schedule uses cron(0 2 * * ? *) with schedule_expression_timezone = \"America/New_York\"."
+ },
+ "lifecycle": {
+  "pass": true,
+  "why": "The lifecycle configuration transitions to STANDARD_IA at 30 days and expires at 365 days, with aws_s3_bucket_versioning enabled."
+ },
+ "multi-region-flag": {
+  "pass": true,
+  "why": "The behavior table flags 'US multi-region bucket and dataset -> Single region, us-east-2' and suggests S3 replication if the old durability is needed."
+ },
+ "no-silent-changes": {
+  "pass": true,
+  "why": "Scaling min 1 / max 20 and versioning are kept, and the summary calls out the retry/visibility change, the concurrency approximation, the memory increase, the region, the lifecycle differences, the internet-facing ALB and the new defaults (instance size, Redshift usage limit, health check, ignored desired_count)."
+ }
+}

@@ -1,0 +1,50 @@
+{
+ "ordering-fifo": {
+  "pass": true,
+  "why": "aws_sns_topic.orders has fifo_topic = true, aws_sqs_queue.orders_worker has fifo_queue = true, and api.py publishes with MessageGroupId=str(o[\"customer_id\"])."
+ },
+ "dlq-5": {
+  "pass": true,
+  "why": "orders_worker's redrive_policy points to the orders-dlq.fifo queue with maxReceiveCount = 5."
+ },
+ "visibility-timeout": {
+  "pass": true,
+  "why": "visibility_timeout_seconds = 3240 (6 x the 540 s Lambda timeout), which exceeds 540 s."
+ },
+ "run-timeout-900": {
+  "pass": true,
+  "why": "The API runs on ECS Fargate behind an ALB with idle_timeout = 900 (\"Cloud Run request timeout\"), not App Runner or API Gateway."
+ },
+ "presign-expiry": {
+  "pass": true,
+  "why": "UPLOAD_URL_TTL defaults to 3600 with the comment that role credentials expire, and the summary table explains that role-signed URLs die with the session."
+ },
+ "rds-iam-auth": {
+  "pass": true,
+  "why": "aws_db_instance uses engine postgres 15 with iam_database_authentication_enabled = true, multi_az = true, and backup_retention_period = 7, which enables PITR."
+ },
+ "worker-event-shape": {
+  "pass": true,
+  "why": "worker.py reads event[\"Records\"][].body as the order JSON, which matches raw_message_delivery = true on the SNS->SQS subscription, and drops the base64 CloudEvent envelope."
+ },
+ "sql-dialect": {
+  "pass": true,
+  "why": "rollup.sql uses TRY_CAST, rewrites QUALIFY as a ROW_NUMBER subquery with rn <= 100, replaces _PARTITIONDATE with a partition_date column, and translates ARRAY_AGG(STRUCT ... LIMIT 3) to slice(array_agg(CAST(ROW(...)) ORDER BY qty DESC), 1, 3)."
+ },
+ "scheduler-tz": {
+  "pass": true,
+  "why": "aws_scheduler_schedule uses cron(0 2 * * ? *) with schedule_expression_timezone = \"America/New_York\"."
+ },
+ "lifecycle": {
+  "pass": true,
+  "why": "Versioning is enabled, with a STANDARD_IA transition at 30 days and expiration at 365 days (noncurrent versions included)."
+ },
+ "multi-region-flag": {
+  "pass": true,
+  "why": "The summary table flags 'Multi-region US bucket and dataset -> Single region us-east-2 | Needs decision | ... Add replication if you need the old durability.'"
+ },
+ "no-silent-changes": {
+  "pass": true,
+  "why": "Autoscaling keeps min 1 / max 20 and versioning is kept; the retry change (DLQ after 5 vs retry forever), concurrency 80 -> CPU target, 1 GiB -> 4 GB, DROP+CTAS non-atomicity, the open ALB, extra IAM grants, and new choices like the 200-499 health check are all called out in the behavior-changes table."
+ }
+}

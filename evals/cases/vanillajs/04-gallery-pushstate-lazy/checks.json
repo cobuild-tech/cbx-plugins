@@ -1,8 +1,29 @@
-{ "checks": [
- {"id":"pushstate-analytics","must":"Filter changes still call window.history.pushState at call time (so analytics.js's wrapper counts page views); a router or cached reference that bypasses the patched function fails unless flagged."},
- {"id":"popstate","must":"Back/forward restores the filter (popstate handled, listener removed on unmount) and the initial tag comes from ?tag=."},
- {"id":"lazy","must":"Images still lazy-load with an IntersectionObserver (300px rootMargin) or loading='lazy' with the difference flagged; observers are disconnected on unmount."},
- {"id":"active-class","must":"The active filter button gets the 'active' class."},
- {"id":"escape","must":"Titles rendered as text (no HTML injection) and alt text kept."},
- {"id":"no-silent-changes","must":"No unrequested behaviour changes without calling them out."}
-]}
+{
+ "kind": "targeted",
+ "checks": [
+  {
+   "id": "pushstate-analytics",
+   "must": "Filter changes still call window.history.pushState at call time (so analytics.js's wrapper counts page views); a router or cached reference that bypasses the patched function fails unless flagged."
+  },
+  {
+   "id": "popstate",
+   "must": "Back/forward restores the filter (popstate handled, listener removed on unmount) and the initial tag comes from ?tag=."
+  },
+  {
+   "id": "lazy",
+   "must": "Images still lazy-load with an IntersectionObserver (300px rootMargin) or loading='lazy' with the difference flagged; observers are disconnected on unmount."
+  },
+  {
+   "id": "active-class",
+   "must": "The active filter button gets the 'active' class."
+  },
+  {
+   "id": "escape",
+   "must": "Titles rendered as text (no HTML injection) and alt text kept."
+  },
+  {
+   "id": "no-silent-changes",
+   "must": "No unrequested behaviour changes without calling them out."
+  }
+ ]
+}

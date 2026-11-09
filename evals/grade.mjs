@@ -1,18 +1,24 @@
-// Usage: node evals/grade.mjs [--judge opus]   -> grades every results/*/*/*/*/* without grade.json, then writes RESULTS.md
-// The judge never sees the arm: identifying words are redacted and each run is graded in isolation.
+// Usage: node evals/grade.mjs [--judge opus]
+// Grades every results/<agent-model>/<arm>/<fw>/<case>/<rep>/ without grade.json, then writes RESULTS.md.
+// - The judge never sees the arm: plugin names and lines mentioning a skill are redacted, and each run is graded alone.
+// - Deterministic vetoes from the case's verify.mjs (auto.json) override the judge: a criterion the code clearly
+//   fails is a fail, whatever the judge said.
+// - Every arm is reported, including the ones where the plugin does worse. Nothing is filtered out.
 import fs from 'node:fs'; import path from 'node:path'; import { execFileSync } from 'node:child_process';
 const EV = path.dirname(new URL(import.meta.url).pathname);
+const RES = path.join(EV, 'results');
 const judge = process.argv.includes('--judge') ? process.argv[process.argv.indexOf('--judge') + 1] : 'opus';
-const walk = (d) => fs.readdirSync(d, { withFileTypes: true }).flatMap((e) => e.isDirectory() ? walk(path.join(d, e.name)) : [path.join(d, e.name)]);
-const redact = (s) => s.replace(/cobuildx[\w-]*/gi, '[x]').replace(/[\w-]*-to-(react|aws)(:[\w-]+)?/gi, '[x]').replace(/^.*\bskill\b.*$/gim, '[line removed]');
-const runs = walk(path.join(EV, 'results')).filter((f) => f.endsWith('final.md')).map(path.dirname);
+const walk = (d) => fs.existsSync(d) ? fs.readdirSync(d, { withFileTypes: true }).flatMap((e) => e.isDirectory() ? walk(path.join(d, e.name)) : [path.join(d, e.name)]) : [];
+const redact = (s) => s.replace(/cobuildx[\w-]*/gi, '[x]').replace(/[\w-]*-to-(react|aws)(:[\w-]+)?/gi, '[x]').replace(/^.*\bskills?\b.*$/gim, '[line removed]');
+const J = (f) => JSON.parse(fs.readFileSync(f, 'utf8'));
+const runs = walk(RES).filter((f) => f.endsWith('final.md')).map(path.dirname).filter((d) => !/\.error-\d+$/.test(d) && !J(path.join(d, 'meta.json')).error);
 
 for (const dir of runs) {
   const g = path.join(dir, 'grade.json'); if (fs.existsSync(g)) continue;
-  const [, , fw, cs] = path.relative(path.join(EV, 'results'), dir).split(path.sep);
+  const [, , fw, cs] = path.relative(RES, dir).split(path.sep);
   const caseDir = path.join(EV, 'cases', fw, cs);
   const repo = walk(path.join(caseDir, 'repo')).map((f) => `--- ${path.relative(path.join(caseDir, 'repo'), f)}\n${fs.readFileSync(f, 'utf8')}`).join('\n');
-  const checks = JSON.parse(fs.readFileSync(path.join(caseDir, 'checks.json'), 'utf8')).checks;
+  const checks = J(path.join(caseDir, 'checks.json')).checks;
   const prompt = `You are grading one AI-produced code migration against fixed criteria. Be strict and literal. A criterion that says "or explicitly flagged" passes if the final summary clearly warns about it.
 
 ## Original repository
@@ -22,7 +28,7 @@ ${repo}
 ${fs.readFileSync(path.join(caseDir, 'prompt.txt'), 'utf8')}
 
 ## The AI's changes (git diff)
-${redact(fs.readFileSync(path.join(dir, 'changes.diff'), 'utf8')).slice(0, 60000)}
+${redact(fs.readFileSync(path.join(dir, 'changes.diff'), 'utf8')).slice(0, 80000)}
 
 ## The AI's final message
 ${redact(fs.readFileSync(path.join(dir, 'final.md'), 'utf8'))}
@@ -32,48 +38,75 @@ ${checks.map((c) => `- ${c.id}: ${c.must}`).join('\n')}
 
 Reply with ONLY a JSON object: {"<id>": {"pass": true|false, "why": "<one sentence citing the diff or message>"}, ...} covering every criterion id.`;
   const out = execFileSync('claude', ['-p', '--model', judge, '--setting-sources', 'project', '--strict-mcp-config', '--tools', ''], { input: prompt, encoding: 'utf8', maxBuffer: 1 << 26 });
-  const json = JSON.parse(out.slice(out.indexOf('{'), out.lastIndexOf('}') + 1));
-  fs.writeFileSync(g, JSON.stringify(json, null, 1)); console.log('graded', path.relative(EV, dir));
+  const grade = JSON.parse(out.slice(out.indexOf('{'), out.lastIndexOf('}') + 1));
+  const autoF = path.join(dir, 'auto.json');
+  if (fs.existsSync(autoF)) for (const [id, v] of Object.entries(J(autoF))) if (v.pass === false) grade[id] = { ...v, judge: grade[id] };
+  fs.writeFileSync(g, JSON.stringify(grade, null, 1)); console.log('graded', path.relative(EV, dir));
 }
 
-// ---- report ----
-const allRows = runs.filter((d) => fs.existsSync(path.join(d, 'grade.json'))).map((d) => {
-  const [model, arm, fw, cs, rep] = path.relative(path.join(EV, 'results'), d).split(path.sep);
-  const gr = JSON.parse(fs.readFileSync(path.join(d, 'grade.json'), 'utf8')); const meta = JSON.parse(fs.readFileSync(path.join(d, 'meta.json'), 'utf8'));
-  const v = Object.values(gr); const tf = fs.existsSync(path.join(d, 'terraform.txt')) ? fs.readFileSync(path.join(d, 'terraform.txt'), 'utf8').split('\n')[0] : null; return { tf, model, arm, fw, cs, rep, passed: v.filter((x) => x.pass).length, total: v.length, meta, gr };
+// ---------------- report ----------------
+const rows = runs.filter((d) => fs.existsSync(path.join(d, 'grade.json'))).map((d) => {
+  const [setup, arm, fw, cs, rep] = path.relative(RES, d).split(path.sep);
+  const gr = J(path.join(d, 'grade.json')), meta = J(path.join(d, 'meta.json'));
+  const tf = fs.existsSync(path.join(d, 'terraform.txt')) ? fs.readFileSync(path.join(d, 'terraform.txt'), 'utf8').split('\n')[0] : null;
+  const caseMeta = J(path.join(EV, 'cases', fw, cs, 'checks.json'));
+  const v = Object.values(gr);
+  return { setup, arm, fw, cs, rep, gr, meta, tf, kind: caseMeta.kind || 'targeted', passed: v.filter((x) => x.pass).length, total: v.length };
 });
-const paired = new Set(allRows.filter((r) => r.arm === 'without').map((r) => r.fw));
-const rows = allRows.filter((r) => paired.has(r.fw));
-const pct = (rs) => { const p = rs.reduce((a, r) => a + r.passed, 0), t = rs.reduce((a, r) => a + r.total, 0); return t ? `${(100 * p / t).toFixed(0)}% (${p}/${t})` : '—'; };
-const ARMS = ['without','with'].filter((a) => rows.some((r) => r.arm === a));
-const models = [...new Set(rows.map((r) => r.model))], fws = [...new Set(rows.map((r) => r.fw))], cases = [...new Set(rows.map((r) => `${r.fw}/${r.cs}`))];
-let md = `# Results\n\nThe same model, repo, and prompt, with and without the plugin. ${cases.length} cases, each with pre-registered pass/fail criteria. Each cell sums the criteria passed. Method: [README.md](README.md). Generated by \`node evals/grade.mjs\`.\n\n## By plugin\n\n| Plugin | ${models.flatMap((m) => ARMS.map((a) => `${m} ${a}`)).join(' | ')} |\n|---|${models.flatMap(() => ARMS.map(() => '---|')).join('')}\n`;
-for (const f of [...fws, 'ALL']) md += `| ${f} | ${models.flatMap((m) => ARMS.map((a) => pct(rows.filter((r) => r.model === m && r.arm === a && (f === 'ALL' || r.fw === f))))).join(' | ')} |\n`;
-md += `\n## By case and criterion\n\nEach cell is passes over runs, in arm order: ${ARMS.join(' → ')}.\n`;
+const ARMS = ['without', 'prompt', 'with'].filter((a) => rows.some((r) => r.arm === a));
+const setups = [...new Set(rows.map((r) => r.setup))].sort();
+const fws = [...new Set(rows.map((r) => r.fw))].sort();
+const cell = (rs) => {
+  if (!rs.length) return '—';
+  const p = rs.reduce((a, r) => a + r.passed, 0), t = rs.reduce((a, r) => a + r.total, 0);
+  const per = rs.map((r) => r.passed / r.total), lo = Math.min(...per), hi = Math.max(...per);
+  return `${(100 * p / t).toFixed(0)}% (${p}/${t}; runs ${(100 * lo).toFixed(0)}–${(100 * hi).toFixed(0)}%, n=${rs.length})`;
+};
+let md = `# Results
+
+Same agent, model, repo, and prompt in three arms: **without** the plugin, **prompt** (no plugin, plus the one-line instruction in \`run.sh\`), and **with** the plugin. Criteria are pre-registered in each case's \`checks.json\`; deterministic vetoes in \`verify.mjs\` override the judge. Every run is included. Method: [README.md](README.md). Generated by \`node evals/grade.mjs\` (judge: ${judge}).
+
+`;
+for (const s of setups) {
+  md += `## ${s}\n\n| Plugin | Cases | ${ARMS.join(' | ')} | Skill triggered (with) |\n|---|---|${ARMS.map(() => '---|').join('')}---|\n`;
+  for (const f of fws) {
+    const rs = rows.filter((r) => r.setup === s && r.fw === f); if (!rs.length) continue;
+    const w = rs.filter((r) => r.arm === 'with');
+    md += `| ${f} | ${new Set(rs.map((r) => r.cs)).size} | ${ARMS.map((a) => cell(rs.filter((r) => r.arm === a))).join(' | ')} | ${w.filter((r) => r.meta.skillInvoked).length}/${w.length} |\n`;
+  }
+  for (const k of ['held-out', 'targeted']) {
+    const rs = rows.filter((r) => r.setup === s && r.kind === k); if (!rs.length) continue;
+    md += `| _all ${k} cases_ | ${new Set(rs.map((r) => r.fw + r.cs)).size} | ${ARMS.map((a) => cell(rs.filter((r) => r.arm === a))).join(' | ')} | |\n`;
+  }
+  md += '\n';
+}
+
+md += `## Regressions\n\nCriteria where the plugin arm passed fewer runs than the without or prompt arm.\n\n| Setup | Case | Criterion | ${ARMS.join(' | ')} |\n|---|---|---|${ARMS.map(() => '---|').join('')}\n`;
+let nReg = 0;
+const cases = [...new Set(rows.map((r) => `${r.fw}/${r.cs}`))].sort();
+for (const s of setups) for (const c of cases) {
+  const rc = rows.filter((r) => r.setup === s && `${r.fw}/${r.cs}` === c); if (!rc.length) continue;
+  for (const id of Object.keys(rc[0].gr)) {
+    const rate = (a) => { const x = rc.filter((r) => r.arm === a); return x.length ? x.filter((r) => r.gr[id]?.pass).length / x.length : null; };
+    const w = rate('with'); if (w === null) continue;
+    if (['without', 'prompt'].some((a) => rate(a) !== null && rate(a) > w)) {
+      nReg++; md += `| ${s} | ${c} | ${id} | ${ARMS.map((a) => { const x = rc.filter((r) => r.arm === a); return `${x.filter((r) => r.gr[id]?.pass).length}/${x.length}`; }).join(' | ')} |\n`;
+    }
+  }
+}
+if (!nReg) md += `| none | | | ${ARMS.map(() => '').join(' | ')} |\n`;
+
+md += `\n## By case and criterion\n\nPasses over runs, in arm order: ${ARMS.join(' → ')}.\n`;
 for (const c of cases) {
-  const rc = rows.filter((r) => `${r.fw}/${r.cs}` === c); const ids = Object.keys(rc[0].gr);
-  md += `\n### ${c}\n\n| Criterion | ${models.join(' | ')} |\n|---|${models.map(() => '---|').join('')}\n`;
-  for (const id of ids) md += `| ${id} | ${models.map((m) => ARMS.map((a) => { const s = rc.filter((r) => r.model === m && r.arm === a); return `${s.filter((r) => r.gr[id]?.pass).length}/${s.length}`; }).join(' → ')).join(' | ')} |\n`;
+  const rc = rows.filter((r) => `${r.fw}/${r.cs}` === c);
+  md += `\n### ${c} (${rc[0].kind})\n\n| Criterion | ${setups.join(' | ')} |\n|---|${setups.map(() => '---|').join('')}\n`;
+  for (const id of Object.keys(rc[0].gr)) md += `| ${id} | ${setups.map((s) => ARMS.map((a) => { const x = rc.filter((r) => r.setup === s && r.arm === a); return `${x.filter((r) => r.gr[id]?.pass).length}/${x.length}`; }).join(' → ')).join(' | ')} |\n`;
 }
 const tfRows = rows.filter((r) => r.tf);
-if (tfRows.length) { md += `\n## terraform validate\n\n| Model | Arm | Case | Run | Result |\n|---|---|---|---|---|\n`; for (const r of tfRows) md += `| ${r.model} | ${r.arm} | ${r.fw}/${r.cs} | ${r.rep} | ${r.tf} |\n`; }
-const withRuns = rows.filter((r) => r.arm !== 'without');
-md += `
-## Run details
-
-- Models: ${[...new Set(rows.map((r) => r.meta.model))].join(', ')}; Claude Code ${[...new Set(rows.map((r) => r.meta.cli))].join(', ')}; judge: ${judge}.
-`;
-fs.writeFileSync(path.join(EV, 'RESULTS.md'), md); console.log('wrote RESULTS.md');
-
-// ---- plugin-only reports: evals/RESULTS-<plugin>.md ----
-for (const fw of new Set(allRows.filter((r) => !paired.has(r.fw)).map((r) => r.fw))) {
-  const rs = allRows.filter((r) => r.fw === fw); const ver = (() => { try { return JSON.parse(fs.readFileSync(path.join(EV, '..', fw, '.claude-plugin', 'plugin.json'), 'utf8')).version; } catch { return '?'; } })();
-  let o = `# ${fw} results\n\nThe ${fw} plugin was loaded and given each case's repo and prompt. Each run was graded against pre-registered pass/fail criteria. Method: [README.md](README.md). Generated by \`node evals/grade.mjs\`.\n\n## Summary\n\n| Model | Score | Skill triggered |${rs.some((r) => r.tf) ? ' terraform validate |' : ''}\n|---|---|---|${rs.some((r) => r.tf) ? '---|' : ''}\n`;
-  for (const m of [...new Set(rs.map((r) => r.model))]) { const s = rs.filter((r) => r.model === m); o += `| ${m} | ${pct(s)} | ${s.filter((r) => r.meta.skillInvoked).length}/${s.length} |${s.some((r) => r.tf) ? ` ${s.filter((r) => r.tf === 'PASS').length}/${s.length} PASS |` : ''}\n`; }
-  for (const c of [...new Set(rs.map((r) => r.cs))]) {
-    const rc = rs.filter((r) => r.cs === c); o += `\n## ${c}\n\n| Criterion | Passed |\n|---|---|\n`;
-    for (const id of Object.keys(rc[0].gr)) o += `| ${id} | ${rc.filter((r) => r.gr[id]?.pass).length}/${rc.length} |\n`;
-  }
-  o += `\n## Run details\n\n- Plugin version: ${[...new Set(rs.map((r) => r.meta.pluginVersion || '?'))].join(', ')} (current: ${ver}). Models: ${[...new Set(rs.map((r) => r.meta.model))].join(', ')}; Claude Code ${[...new Set(rs.map((r) => r.meta.cli))].join(', ')}; judge: ${judge}.\n`;
-  fs.writeFileSync(path.join(EV, `RESULTS-${fw}.md`), o); console.log(`wrote RESULTS-${fw}.md`);
+if (tfRows.length) {
+  md += `\n## terraform validate\n\n| Setup | Case | ${ARMS.join(' | ')} |\n|---|---|${ARMS.map(() => '---|').join('')}\n`;
+  for (const s of setups) for (const c of [...new Set(tfRows.filter((r) => r.setup === s).map((r) => `${r.fw}/${r.cs}`))])
+    md += `| ${s} | ${c} | ${ARMS.map((a) => { const x = tfRows.filter((r) => r.setup === s && `${r.fw}/${r.cs}` === c && r.arm === a); return `${x.filter((r) => r.tf === 'PASS').length}/${x.length} PASS`; }).join(' | ')} |\n`;
 }
+md += `\n## Run details\n\n- Agents and models: ${[...new Set(rows.map((r) => `${r.meta.cli} / ${r.meta.model}`))].join('; ')}.\n- Plugin versions in the with arm: ${[...new Set(rows.filter((r) => r.arm === 'with').map((r) => `${r.fw} ${r.meta.pluginVersion || '?'}`))].join(', ')}.\n- Runs that errored: ${rows.filter((r) => r.meta.error).length}.\n`;
+fs.writeFileSync(path.join(EV, 'RESULTS.md'), md); console.log('wrote RESULTS.md');

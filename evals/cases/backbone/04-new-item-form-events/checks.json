@@ -1,8 +1,29 @@
-{ "checks": [
- {"id":"saved-event","must":"ItemsPage still gets a 'saved' event (or equivalent callback) with the model, so the toast and stats increment keep working."},
- {"id":"wait-true","must":"Keeps create(..., {wait:true}) semantics: the item is added to app.items only after the server responds, through the shared collection."},
- {"id":"navigate","must":"After success, navigates via Backbone.history.navigate('items/'+id, {trigger:true}) (Backbone router stays in charge)."},
- {"id":"server-errors","must":"Server errors from responseJSON.errors are shown joined by ', '."},
- {"id":"unmount","must":"React root unmounts when ItemsPage removes the form."},
- {"id":"no-silent-changes","must":"No unrequested behaviour changes (e.g. qty coercion, client validation) without calling them out."}
-]}
+{
+ "kind": "targeted",
+ "checks": [
+  {
+   "id": "saved-event",
+   "must": "ItemsPage still gets a 'saved' event (or equivalent callback) with the model, so the toast and stats increment keep working."
+  },
+  {
+   "id": "wait-true",
+   "must": "Keeps create(..., {wait:true}) semantics: the item is added to app.items only after the server responds, through the shared collection."
+  },
+  {
+   "id": "navigate",
+   "must": "After success, navigates via Backbone.history.navigate('items/'+id, {trigger:true}) (Backbone router stays in charge)."
+  },
+  {
+   "id": "server-errors",
+   "must": "Server errors from responseJSON.errors are shown joined by ', '."
+  },
+  {
+   "id": "unmount",
+   "must": "React root unmounts when ItemsPage removes the form."
+  },
+  {
+   "id": "no-silent-changes",
+   "must": "No unrequested behaviour changes (e.g. qty coercion, client validation) without calling them out."
+  }
+ ]
+}

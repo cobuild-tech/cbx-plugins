@@ -1,0 +1,50 @@
+{
+ "ordering-fifo": {
+  "pass": true,
+  "why": "SNS FIFO topic and SQS FIFO queue are used, and api.py publishes with MessageGroupId=str(o[\"customer_id\"])."
+ },
+ "dlq-5": {
+  "pass": true,
+  "why": "The orders_worker queue has a redrive_policy pointing at the orders-dlq.fifo queue with maxReceiveCount = 5."
+ },
+ "visibility-timeout": {
+  "pass": true,
+  "why": "visibility_timeout_seconds = 540 on the worker queue, equal to the Lambda timeout of 540."
+ },
+ "run-timeout-900": {
+  "pass": true,
+  "why": "The API runs on ECS Fargate behind an ALB with idle_timeout = 900."
+ },
+ "presign-expiry": {
+  "pass": true,
+  "why": "The final message flags that 7-day presigned URLs will expire with the task role's session credentials (hours), and that a real 7-day lifetime needs a long-lived IAM user key."
+ },
+ "rds-iam-auth": {
+  "pass": true,
+  "why": "aws_db_instance is Postgres 15 with iam_database_authentication_enabled = true, multi_az = true, and backup_retention_period = 7 (PITR)."
+ },
+ "worker-event-shape": {
+  "pass": true,
+  "why": "worker.py handles event[\"Records\"] and parses record[\"body\"] as JSON, and the SNS subscription uses raw_message_delivery = true so no unwrapping is needed."
+ },
+ "sql-dialect": {
+  "pass": true,
+  "why": "The SQL uses TRY_CAST, a ROW_NUMBER subquery in place of QUALIFY, partition_date in place of _PARTITIONDATE, SLICE(ARRAY_AGG(ROW(...) ORDER BY ...),1,3), and APPROX_DISTINCT."
+ },
+ "scheduler-tz": {
+  "pass": true,
+  "why": "aws_scheduler_schedule uses cron(0 2 * * ? *) with schedule_expression_timezone = \"America/New_York\"."
+ },
+ "lifecycle": {
+  "pass": true,
+  "why": "The lifecycle rule transitions to STANDARD_IA at 30 days and expires at 365 days, and versioning is enabled."
+ },
+ "multi-region-flag": {
+  "pass": false,
+  "why": "The bucket and Athena are placed in a single region (us-east-2) and the final message never flags the loss of US multi-region durability/availability, and no cross-region replication is added."
+ },
+ "no-silent-changes": {
+  "pass": false,
+  "why": "Several changes are not called out: the DB instance class (m6g.large), the dropped min-instance behaviour of Cloud Run's scaling and the retry semantics changed from Pub/Sub's RETRY policy, the DLQ/subscription ordering, added noncurrent version rules, the region change to us-east-2, the Athena rollup now writing Iceberg, and the scheduler now going through an extra Lambda that gives up after 0 retries."
+ }
+}
