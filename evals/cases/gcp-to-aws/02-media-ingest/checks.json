@@ -1,0 +1,53 @@
+{
+ "kind": "targeted",
+ "checks": [
+  {
+   "id": "s3-key-decode",
+   "must": "The ingest handler URL-decodes the S3 event object key (urllib.parse.unquote_plus or equivalent) before using it. S3 event notifications deliver keys URL-encoded with '+' for spaces, so names like 'Season 2/Episode 01 \u2013 Pilot.mov' break without it."
+  },
+  {
+   "id": "two-hour-hold",
+   "must": "The 2-hour delay before transcoding is kept with a mechanism that supports it: EventBridge Scheduler one-time schedule, Step Functions Wait, or similar. SQS DelaySeconds (max 900 s = 15 min) used for the 2-hour hold fails, unless it is explicitly re-queued in a loop that reaches 2 hours."
+  },
+  {
+   "id": "stale-generation",
+   "must": "Replacing a file during the hold still results in only the latest version being transcoded: the generation check is ported to S3 (versionId, ETag, or LastModified compared with the job), or the replaced job is cancelled. Dropping the check fails."
+  },
+  {
+   "id": "overwrite-trigger",
+   "must": "The AWS trigger still fires when an existing key is overwritten (s3:ObjectCreated:* / EventBridge Object Created), not only on first upload."
+  },
+  {
+   "id": "transcode-timeout",
+   "must": "The 30-minute transcode (timeout 1800 s, dispatch_deadline 1800 s) is not put on Lambda unchanged (15-minute max): it runs on ECS/Fargate, Batch, MediaConvert, or Step Functions, or the 15-minute limit is explicitly flagged."
+  },
+  {
+   "id": "rate-limit",
+   "must": "The Cloud Tasks rate limits are carried over: at most 3 concurrent transcodes (e.g. Lambda/SQS maximum_concurrency = 3, Step Functions/ECS concurrency limit), or the change is explicitly flagged."
+  },
+  {
+   "id": "retry-policy",
+   "must": "The retry behaviour is kept or flagged: transcode retried up to 4 attempts with backoff; ingest not retried (RETRY_POLICY_DO_NOT_RETRY), whereas S3->Lambda async invocation retries twice by default unless MaximumRetryAttempts = 0."
+  },
+  {
+   "id": "attribute-limit",
+   "must": "The 12 Pub/Sub message attributes are handled for the 10-attribute limit of SNS/SQS message attributes: moved into the message body/JSON, reduced, or the limit explicitly flagged. Publishing 12 MessageAttributes unchanged fails."
+  },
+  {
+   "id": "week-start",
+   "must": "The Athena SQL keeps Sunday-start weeks. Trino date_trunc('week', ...) starts on Monday, so it must be shifted (e.g. date_add('day', -(day_of_week(d) % 7), d)) or the difference explicitly flagged."
+  },
+  {
+   "id": "weekend-days",
+   "must": "The weekend count is correct in Athena: BigQuery DAYOFWEEK 1=Sunday,7=Saturday; Trino day_of_week is 1=Monday..7=Sunday, so weekend is (6, 7). Copying IN (1, 7) unchanged fails."
+  },
+  {
+   "id": "safe-divide",
+   "must": "SAFE_DIVIDE is translated without integer truncation or division-by-zero errors (e.g. CAST(... AS DOUBLE) / NULLIF(COUNT(*), 0) or try())."
+  },
+  {
+   "id": "no-silent-changes",
+   "must": "No unrequested behaviour changes without calling them out (e.g. message retention 7 days, memory 4 GiB, IAM scope)."
+  }
+ ]
+}

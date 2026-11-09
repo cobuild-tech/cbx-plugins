@@ -1,8 +1,29 @@
-{ "checks": [
- {"id":"globals","must":"export.js keeps working: the globals notes/save/render it uses (and importNotes' calls) are preserved via a bridge, or the breakage is explicitly flagged and fixed."},
- {"id":"storage-sync","must":"Cross-tab sync via the 'storage' event is preserved."},
- {"id":"storage-format","must":"localStorage key 'notes' and the {text, at} shape are unchanged, so existing saved notes still load."},
- {"id":"dblclick-delete","must":"Double-click to delete is preserved."},
- {"id":"trim-empty","must":"Trimmed input and ignoring empty notes is preserved."},
- {"id":"no-silent-changes","must":"No unrequested behaviour changes without calling them out."}
-]}
+{
+ "kind": "targeted",
+ "checks": [
+  {
+   "id": "globals",
+   "must": "export.js keeps working: the globals notes/save/render it uses (and importNotes' calls) are preserved via a bridge, or the breakage is explicitly flagged and fixed."
+  },
+  {
+   "id": "storage-sync",
+   "must": "Cross-tab sync via the 'storage' event is preserved."
+  },
+  {
+   "id": "storage-format",
+   "must": "localStorage key 'notes' and the {text, at} shape are unchanged, so existing saved notes still load."
+  },
+  {
+   "id": "dblclick-delete",
+   "must": "Double-click to delete is preserved."
+  },
+  {
+   "id": "trim-empty",
+   "must": "Trimmed input and ignoring empty notes is preserved."
+  },
+  {
+   "id": "no-silent-changes",
+   "must": "No unrequested behaviour changes without calling them out."
+  }
+ ]
+}

@@ -1,8 +1,29 @@
-{ "checks": [
- {"id":"translations","must":"Texts still come from the same ngx-translate keys/files (via TranslateService passed in or shared), not hard-coded strings."},
- {"id":"lang-change","must":"Text re-renders when the language changes at runtime (onLangChange subscription or equivalent), with the subscription cleaned up, or the gap is flagged."},
- {"id":"locale-format","must":"Date and currency use the app's LOCALE_ID (de-DE) formatting like Angular's date:'longDate' and currency pipes, not the browser default locale, or differences are flagged."},
- {"id":"input-updates","must":"New order values from the async pipe re-render React (wrapper passes @Input changes via ngOnChanges/re-render) and handle the initial null from async."},
- {"id":"teardown","must":"The React root is unmounted in ngOnDestroy."},
- {"id":"no-silent-changes","must":"No unrequested behaviour changes without calling them out."}
-]}
+{
+ "kind": "targeted",
+ "checks": [
+  {
+   "id": "translations",
+   "must": "Texts still come from the same ngx-translate keys/files (via TranslateService passed in or shared), not hard-coded strings."
+  },
+  {
+   "id": "lang-change",
+   "must": "Text re-renders when the language changes at runtime (onLangChange subscription or equivalent), with the subscription cleaned up, or the gap is flagged."
+  },
+  {
+   "id": "locale-format",
+   "must": "Date and currency use the app's LOCALE_ID (de-DE) formatting like Angular's date:'longDate' and currency pipes, not the browser default locale, or differences are flagged."
+  },
+  {
+   "id": "input-updates",
+   "must": "New order values from the async pipe re-render React (wrapper passes @Input changes via ngOnChanges/re-render) and handle the initial null from async."
+  },
+  {
+   "id": "teardown",
+   "must": "The React root is unmounted in ngOnDestroy."
+  },
+  {
+   "id": "no-silent-changes",
+   "must": "No unrequested behaviour changes without calling them out."
+  }
+ ]
+}

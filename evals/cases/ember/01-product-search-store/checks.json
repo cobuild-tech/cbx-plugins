@@ -1,8 +1,29 @@
-{ "checks": [
- {"id":"identity-map","must":"Search results still end up in the Ember Data store (e.g. React calls store.query via the Ember side), or the answer explicitly warns that compare-tray's peekAll('product') will stop seeing them."},
- {"id":"debounce-restart","must":"250 ms debounce with restartable (latest-wins) semantics is preserved."},
- {"id":"wrapper-css","must":"Handles or flags that mounting React adds a wrapper element, breaking the '.sidebar > .product-search' child selector."},
- {"id":"json-api","must":"If fetch replaces Ember Data, maps JSON:API attributes (price-cents → priceCents) correctly; if store is kept this is N/A pass."},
- {"id":"unmount","must":"React root is unmounted when the Ember component is destroyed (willDestroy / modifier teardown)."},
- {"id":"no-silent-changes","must":"No unrequested behaviour changes without calling them out."}
-]}
+{
+ "kind": "targeted",
+ "checks": [
+  {
+   "id": "identity-map",
+   "must": "Search results still end up in the Ember Data store (e.g. React calls store.query via the Ember side), or the answer explicitly warns that compare-tray's peekAll('product') will stop seeing them."
+  },
+  {
+   "id": "debounce-restart",
+   "must": "250 ms debounce with restartable (latest-wins) semantics is preserved."
+  },
+  {
+   "id": "wrapper-css",
+   "must": "Handles or flags that mounting React adds a wrapper element, breaking the '.sidebar > .product-search' child selector."
+  },
+  {
+   "id": "json-api",
+   "must": "If fetch replaces Ember Data, maps JSON:API attributes (price-cents \u2192 priceCents) correctly; if store is kept this is N/A pass."
+  },
+  {
+   "id": "unmount",
+   "must": "React root is unmounted when the Ember component is destroyed (willDestroy / modifier teardown)."
+  },
+  {
+   "id": "no-silent-changes",
+   "must": "No unrequested behaviour changes without calling them out."
+  }
+ ]
+}

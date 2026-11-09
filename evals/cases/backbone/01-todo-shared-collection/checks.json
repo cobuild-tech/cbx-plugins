@@ -1,8 +1,29 @@
-{ "checks": [
- {"id":"single-source","must":"React reads from and writes through the shared app.todos collection (subscribing to its events), rather than copying todos into React state + fetch, so SidebarView's count and 'clear done' stay in sync both ways."},
- {"id":"event-cleanup","must":"Backbone event listeners added for React are removed on unmount (off/stopListening)."},
- {"id":"patch-save","must":"Toggling still saves with patch:true via the model (PATCH request with only 'done')."},
- {"id":"order","must":"Rendering order follows the collection comparator 'order'."},
- {"id":"escape","must":"Titles remain escaped (React default) — no dangerouslySetInnerHTML with raw titles."},
- {"id":"no-silent-changes","must":"No unrequested behaviour changes (e.g. rollback on failed save, optimistic UI changes) without calling them out."}
-]}
+{
+ "kind": "targeted",
+ "checks": [
+  {
+   "id": "single-source",
+   "must": "React reads from and writes through the shared app.todos collection (subscribing to its events), rather than copying todos into React state + fetch, so SidebarView's count and 'clear done' stay in sync both ways."
+  },
+  {
+   "id": "event-cleanup",
+   "must": "Backbone event listeners added for React are removed on unmount (off/stopListening)."
+  },
+  {
+   "id": "patch-save",
+   "must": "Toggling still saves with patch:true via the model (PATCH request with only 'done')."
+  },
+  {
+   "id": "order",
+   "must": "Rendering order follows the collection comparator 'order'."
+  },
+  {
+   "id": "escape",
+   "must": "Titles remain escaped (React default) \u2014 no dangerouslySetInnerHTML with raw titles."
+  },
+  {
+   "id": "no-silent-changes",
+   "must": "No unrequested behaviour changes (e.g. rollback on failed save, optimistic UI changes) without calling them out."
+  }
+ ]
+}

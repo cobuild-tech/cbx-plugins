@@ -1,8 +1,29 @@
-{ "checks": [
- {"id":"no-double-handler","must":"The delegated $(document).on('click', '.cart .remove') handler is removed or scoped so it cannot also fire on React-rendered rows (otherwise each Remove sends two POSTs)."},
- {"id":"csrf-kept","must":"The remove request still sends the X-CSRF-Token header (keeps $.ajax/$.post, or adds the header explicitly to fetch). Dropping it silently fails this check."},
- {"id":"event-kept","must":"The 'cart:updated' jQuery document event with the total is still emitted so public/js/analytics.js keeps working, or the answer explicitly flags that analytics depends on it."},
- {"id":"change-timing","must":"The quantity total recalculation timing (jQuery 'change' = on blur vs React onChange = per keystroke) is either preserved or explicitly called out."},
- {"id":"checkout-disabled","must":"The #checkout button is still disabled when the total is 0."},
- {"id":"no-silent-changes","must":"No unrequested behavior changes are introduced without being called out (e.g. dropping the fade, adding rollback/error UI, changing request format)."}
-]}
+{
+ "kind": "targeted",
+ "checks": [
+  {
+   "id": "no-double-handler",
+   "must": "The delegated $(document).on('click', '.cart .remove') handler is removed or scoped so it cannot also fire on React-rendered rows (otherwise each Remove sends two POSTs)."
+  },
+  {
+   "id": "csrf-kept",
+   "must": "The remove request still sends the X-CSRF-Token header (keeps $.ajax/$.post, or adds the header explicitly to fetch). Dropping it silently fails this check."
+  },
+  {
+   "id": "event-kept",
+   "must": "The 'cart:updated' jQuery document event with the total is still emitted so public/js/analytics.js keeps working, or the answer explicitly flags that analytics depends on it."
+  },
+  {
+   "id": "change-timing",
+   "must": "The quantity total recalculation timing (jQuery 'change' = on blur vs React onChange = per keystroke) is either preserved or explicitly called out."
+  },
+  {
+   "id": "checkout-disabled",
+   "must": "The #checkout button is still disabled when the total is 0."
+  },
+  {
+   "id": "no-silent-changes",
+   "must": "No unrequested behavior changes are introduced without being called out (e.g. dropping the fade, adding rollback/error UI, changing request format)."
+  }
+ ]
+}

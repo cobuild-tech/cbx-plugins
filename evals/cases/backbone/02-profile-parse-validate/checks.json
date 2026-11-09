@@ -1,8 +1,29 @@
-{ "checks": [
- {"id":"wire-format","must":"Saves still send the JSON:API envelope from toJSON and read responses via parse (data.attributes), e.g. by keeping model.save; a plain fetch with a flat body fails unless explicitly flagged."},
- {"id":"validation","must":"Both validation rules and messages are preserved and an invalid save does not hit the network."},
- {"id":"no-rollback","must":"Keeps Backbone's non-wait save semantics (attributes set before server responds, no rollback on error), or explicitly calls out any change."},
- {"id":"header-sync","must":"The #header .name still updates when displayName changes (change:displayName listener kept or replicated)."},
- {"id":"saved-flash","must":"The 'saved' indicator after sync is preserved."},
- {"id":"cleanup","must":"Model listeners added for React are removed on unmount."}
-]}
+{
+ "kind": "targeted",
+ "checks": [
+  {
+   "id": "wire-format",
+   "must": "Saves still send the JSON:API envelope from toJSON and read responses via parse (data.attributes), e.g. by keeping model.save; a plain fetch with a flat body fails unless explicitly flagged."
+  },
+  {
+   "id": "validation",
+   "must": "Both validation rules and messages are preserved and an invalid save does not hit the network."
+  },
+  {
+   "id": "no-rollback",
+   "must": "Keeps Backbone's non-wait save semantics (attributes set before server responds, no rollback on error), or explicitly calls out any change."
+  },
+  {
+   "id": "header-sync",
+   "must": "The #header .name still updates when displayName changes (change:displayName listener kept or replicated)."
+  },
+  {
+   "id": "saved-flash",
+   "must": "The 'saved' indicator after sync is preserved."
+  },
+  {
+   "id": "cleanup",
+   "must": "Model listeners added for React are removed on unmount."
+  }
+ ]
+}
