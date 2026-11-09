@@ -2,7 +2,6 @@
 name: plan
 description: Inventory this GCP project and write a migration plan to AWS in .migration/ — target map, base setup, units and waves, data movement, validation, cutover, and cost. Changes nothing in either cloud.
 argument-hint: "[optional: path or area to plan, e.g. infra/ or the data platform]"
-allowed-tools: Read, Grep, Glob, Agent, Write
 ---
 
 Plan a GCP → AWS migration for: $ARGUMENTS

@@ -1,6 +1,6 @@
 {
   "name": "jquery-to-react",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Convert jQuery code to React. Paste a jQuery widget in any Claude app and get the React version, or plan and run a full incremental migration of your repo in Claude Code.",
   "author": {
     "name": "CobuildX",
