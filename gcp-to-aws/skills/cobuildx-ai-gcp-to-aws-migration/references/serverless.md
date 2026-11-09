@@ -116,8 +116,24 @@ def handler(event, context):
   or writes.
 - **Cloud Tasks → SQS + Lambda.** Rate limits become the event source
   mapping's maximum concurrency. Scheduled delivery up to 15 minutes uses
-  SQS `DelaySeconds`; longer delays use EventBridge Scheduler one-time
-  schedules.
+  SQS `DelaySeconds`; longer delays (Cloud Tasks allows `schedule_time` up
+  to 30 days ahead) use EventBridge Scheduler one-time schedules or a
+  Step Functions `Wait` state. A `dispatch_deadline` above 15 minutes
+  rules out Lambda as the handler. `retry_config` (`max_attempts`,
+  exponential backoff) has no SQS equivalent: SQS retries after the
+  visibility timeout, so use `maxReceiveCount` plus a Step Functions
+  `Retry` with `BackoffRate`, or say the backoff changed. Named tasks
+  (dedup by name) map to FIFO deduplication IDs only within 5 minutes.
+- **Storage triggers.** GCS `object.finalized` fires on new objects and on
+  overwrites; use `s3:ObjectCreated:*` (or EventBridge "Object Created").
+  S3 event keys are URL-encoded with `+` for spaces, so decode them with
+  `urllib.parse.unquote_plus` before calling S3. Events can arrive out of
+  order and more than once; GCS `generation` becomes the S3 `versionId`
+  (versioned bucket) or the `sequencer` field for ordering.
+- **Async Lambda retries.** S3, SNS, and EventBridge invoke Lambda
+  asynchronously, and Lambda retries a failed async call twice by default.
+  If the function had `RETRY_POLICY_DO_NOT_RETRY`, set
+  `maximum_retry_attempts = 0` in `aws_lambda_function_event_invoke_config`.
 - **Cloud Scheduler → EventBridge Scheduler.** Supports cron, rate,
   one-time schedules, and a time zone per schedule. Targets Lambda, ECS
   tasks, and Step Functions directly. Cloud Scheduler HTTP targets become

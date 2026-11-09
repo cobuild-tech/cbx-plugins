@@ -11,9 +11,9 @@ Migration plugins by CobuildX: five framework-to-React plugins and one cloud mig
 | [vanillajs-to-react](vanillajs-to-react) | Migrate vanilla JavaScript apps and pages to React — full rewrites or incremental strangler-fig migrations of any size, from script-tag pages to ES-module apps. |
 | [gcp-to-aws](gcp-to-aws) | Migrate Google Cloud (GCP) workloads to AWS — compute, GKE, serverless, big data, and storage — from single snippets to full phased migrations. |
 
-## Open source, independent of CobuildX services
+## License
 
-These plugins are free, MIT-licensed open source, and each complete on its own. They are not a trial, demo, or lead-in for any paid offering: they have no upsell, sign-up, license key, usage limit, or "contact us" step, and nothing in them collects contact details or calls CobuildX servers. CobuildX also offers migration consulting as a separate business, and these plugins do not reference or depend on it.
+These plugins are MIT-licensed open source. They need no account or sign-up, collect no data, and make no calls to CobuildX servers.
 
 ## Install in Claude Code
 
@@ -123,3 +123,15 @@ gcp-to-aws/                      same plugin shape; its references are its own
 ```
 
 Edit `shared/`, never the generated copies, then run `scripts/sync-shared.sh` and commit the result. CI fails if the copies drift or a reference is never routed.
+
+## Changelog
+
+**gcp-to-aws 1.2.0; angular, ember, backbone-to-react 2.3.0; vanillajs-to-react 1.3.0**
+
+- gcp-to-aws: new checklist items and references for delays over 15 minutes (Cloud Tasks `schedule_time`, `dispatch_deadline`, `retry_config`), S3 event keys arriving URL-encoded, overwrite triggers, async Lambda retries, the 10-attribute limit and size limits on SNS/SQS, SQS's 4-day default retention, and Sunday-start weeks and weekday numbering in BigQuery SQL.
+- angular-to-react: the AngularJS `currency` filter is not a drop-in for `Intl.NumberFormat` (uses `$locale`, returns `''` for null and non-numeric input); reproduce it and test it.
+- ember-to-react: the bridge's service or store clears its own timers and subscribers in `willDestroy`, not just the React root.
+- vanillajs-to-react: assign `window` bridges when the module loads, not in `useEffect`, and queue calls made before React mounts.
+- backbone-to-react: carry over every re-render and re-sort trigger the old view declares (`modelEvents`, `viewComparator`, `viewFilter`).
+- Evals: three arms (without / one-line prompt / with), Copilot CLI runner, deterministic vetoes, held-out cases, every run published. See [evals/README.md](evals/README.md).
+

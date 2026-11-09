@@ -54,6 +54,13 @@ BigQuery code used `DATE(ts, 'America/New_York')`; carry that zone into
 - **Time zones.** Load BigQuery `TIMESTAMP` into `TIMESTAMPTZ`, or into
   `TIMESTAMP` with an agreed UTC convention, and check date filters in the
   top reports. Off-by-one-day totals at month end are the usual symptom.
+- **Weeks and weekdays.** BigQuery `DATE_TRUNC(d, WEEK)` starts weeks on
+  Sunday; Trino and Redshift `date_trunc('week', d)` start on Monday.
+  Shift by the weekday (`date_add('day', -(day_of_week(d) % 7), d)` in
+  Trino) or the totals move by a day. BigQuery `EXTRACT(DAYOFWEEK)` is
+  1 = Sunday … 7 = Saturday; Trino `day_of_week` is 1 = Monday …
+  7 = Sunday, so a weekend filter `IN (1, 7)` becomes `IN (6, 7)`.
+  `COUNTIF(x)` → `count_if(x)` (Trino) or `SUM(CASE WHEN x THEN 1 ELSE 0 END)`.
 - **Integer division.** BigQuery `/` always returns `FLOAT64`. Redshift and
   Trino integer `/` integer truncates. Use `SAFE_DIVIDE` → `x::FLOAT / NULLIF(y, 0)`.
 - **NULL ordering and string comparison.** Check `ORDER BY` with NULLs and

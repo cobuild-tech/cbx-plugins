@@ -2,7 +2,7 @@
 name: cobuildx-ai-vanillajs-to-react-migration
 description: "Use when the user asks to convert or translate vanilla JavaScript code to React — a single page, script, DOM-rendering function, or event handler, pasted vanilla JS code with a request for React, or \"what would this look like in React\" — or to migrate, port, rewrite, or modernize a vanilla (plain) JavaScript app or page — script-tag pages, IIFE modules, or ES-module apps that work on the DOM directly — to React, as a full rewrite or an incremental/strangler-fig migration of any size, or to continue, resume, or check the status of a vanilla-JS-to-React migration already in progress (e.g. \"continue the migration\", \"what's left to migrate\", \"why isn't Search migrated yet\"). Also use for planning, scoping, or estimating a move off vanilla JS, and for requests to upgrade, modernize, or replace vanilla JS with React. Also use for requests to rebuild, rewrite, or turn a widget, form, or script that works on the DOM directly (querySelector, addEventListener, innerHTML) into React."
 metadata:
-  version: "1.2.0"
+  version: "1.3.0"
 ---
 
 # Vanilla JS → React Migration
@@ -136,7 +136,10 @@ When every unit is `done`, read `references/methodology/cutover.md`.
   whole repo, not just the files you are converting, for:
   - globals other scripts read or call; top-level `var` and function
     declarations in classic scripts are globals, and moving them into a
-    module removes them, so keep a small bridge on `window`;
+    module removes them, so keep a small bridge on `window`. Assign the
+    bridge when the module loads, not in a `useEffect`: other scripts
+    can call it before React mounts. Calls that arrive before React is
+    ready go into a queue that is flushed on mount;
   - the DOM as shared state: attributes and classes other scripts set or
     read (`data-*`, `classList`, attributes on `<html>` or `<body>`); read
     them from the DOM or observe them instead of copying them into state;

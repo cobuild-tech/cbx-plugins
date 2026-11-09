@@ -2,7 +2,7 @@
 name: cobuildx-ai-angular-to-react-migration
 description: "Use when the user asks to convert or translate Angular / AngularJS code to React — a single component, template, directive, service, pipe, module, or route, pasted Angular code with a request for React, or \"what would this look like in React\" — or to migrate, port, rewrite, or modernize an Angular (2+) or AngularJS (1.x) app to React — full rewrites or incremental/strangler-fig migrations of any size, including hybrid ngUpgrade apps — or to continue, resume, or check the status of an Angular-to-React migration already in progress (e.g. \"continue the migration\", \"what's left to migrate\", \"why isn't Orders migrated yet\"). Also use for planning, scoping, or estimating a move off Angular, and for requests to upgrade, modernize, or replace Angular with React. Also use for requests to rewrite, rebuild, or replace an Angular or AngularJS component, directive, controller, or form control with React."
 metadata:
-  version: "2.2.0"
+  version: "2.3.0"
 ---
 
 # Angular / AngularJS → React Migration
@@ -144,7 +144,13 @@ When every unit is `done`, read `references/methodology/cutover.md`.
   - the router while it still owns the URL: `$location`, ui-router
     `$state` params, or the Angular Router;
   - filters and pipes (`currency`, `date`, `number`, `orderBy`); match
-    their output exactly or list the differences;
+    their output exactly or list the differences. `Intl.NumberFormat` is
+    not a drop-in for the AngularJS `currency` filter: the filter uses the
+    loaded `$locale` symbol and pattern (not the browser locale), returns
+    `''` for `null`, `undefined`, and non-numeric input (Intl prints
+    `NaN` or `$0.00`), and rounds to `fractionSize`. Write a small
+    `formatCurrency` that reproduces those cases, add tests for them, and
+    name any remaining difference;
   - teardown: unsubscribe, deregister `$on` listeners, and unmount the
     React root when the scope or component is destroyed.
   Keep each one working, or list it under Behavior differences.
