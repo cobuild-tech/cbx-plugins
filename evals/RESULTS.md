@@ -6,8 +6,8 @@ Same agent, model, repo, and prompt in three arms: **without** the plugin, **pro
 
 | Plugin | Cases | without | prompt | with | Skill triggered (with) |
 |---|---|---|---|---|---|
-| gcp-to-aws | 3 | 93% (167/180; runs 83–100%, n=15) | 96% (172/180; runs 83–100%, n=15) | 89% (160/180; runs 0–100%, n=15) | 14/15 |
-| _all held-out cases_ | 1 | 97% (58/60; runs 83–100%, n=5) | 100% (60/60; runs 100–100%, n=5) | 68% (41/60; runs 0–100%, n=5) | |
+| gcp-to-aws | 3 | 93% (167/180; runs 83–100%, n=15) | 96% (172/180; runs 83–100%, n=15) | 99% (119/120; runs 92–100%, n=10) | 10/10 |
+| _all held-out cases_ | 1 | 97% (58/60; runs 83–100%, n=5) | 100% (60/60; runs 100–100%, n=5) | — | |
 | _all targeted cases_ | 2 | 91% (109/120; runs 83–100%, n=10) | 93% (112/120; runs 83–100%, n=10) | 99% (119/120; runs 92–100%, n=10) | |
 
 ## Regressions
@@ -16,18 +16,7 @@ Criteria where the plugin arm passed fewer runs than the without or prompt arm.
 
 | Setup | Case | Criterion | without | prompt | with |
 |---|---|---|---|---|---|
-| claude-sonnet-low | gcp-to-aws/03-billing-export | job-timeout | 5/5 | 5/5 | 4/5 |
-| claude-sonnet-low | gcp-to-aws/03-billing-export | sharding | 5/5 | 5/5 | 3/5 |
-| claude-sonnet-low | gcp-to-aws/03-billing-export | retry-attempt | 4/5 | 5/5 | 3/5 |
-| claude-sonnet-low | gcp-to-aws/03-billing-export | secret-latest | 5/5 | 5/5 | 4/5 |
-| claude-sonnet-low | gcp-to-aws/03-billing-export | redis-tls-auth | 5/5 | 5/5 | 3/5 |
-| claude-sonnet-low | gcp-to-aws/03-billing-export | private-network | 5/5 | 5/5 | 4/5 |
-| claude-sonnet-low | gcp-to-aws/03-billing-export | worm-retention | 5/5 | 5/5 | 4/5 |
-| claude-sonnet-low | gcp-to-aws/03-billing-export | create-only-write | 5/5 | 5/5 | 3/5 |
-| claude-sonnet-low | gcp-to-aws/03-billing-export | scheduler-tz | 5/5 | 5/5 | 4/5 |
-| claude-sonnet-low | gcp-to-aws/03-billing-export | time-travel | 5/5 | 5/5 | 4/5 |
-| claude-sonnet-low | gcp-to-aws/03-billing-export | shard-hash | 5/5 | 5/5 | 4/5 |
-| claude-sonnet-low | gcp-to-aws/03-billing-export | no-silent-changes | 4/5 | 5/5 | 1/5 |
+| none | | |  |  |  |
 
 ## By case and criterion
 
@@ -71,29 +60,29 @@ Passes over runs, in arm order: without → prompt → with.
 
 | Criterion | claude-sonnet-low |
 |---|---|
-| job-timeout | 5/5 → 5/5 → 4/5 |
-| sharding | 5/5 → 5/5 → 3/5 |
-| retry-attempt | 4/5 → 5/5 → 3/5 |
-| secret-latest | 5/5 → 5/5 → 4/5 |
-| redis-tls-auth | 5/5 → 5/5 → 3/5 |
-| private-network | 5/5 → 5/5 → 4/5 |
-| worm-retention | 5/5 → 5/5 → 4/5 |
-| create-only-write | 5/5 → 5/5 → 3/5 |
-| scheduler-tz | 5/5 → 5/5 → 4/5 |
-| time-travel | 5/5 → 5/5 → 4/5 |
-| shard-hash | 5/5 → 5/5 → 4/5 |
-| no-silent-changes | 4/5 → 5/5 → 1/5 |
+| job-timeout | 5/5 → 5/5 → 0/0 |
+| sharding | 5/5 → 5/5 → 0/0 |
+| retry-attempt | 4/5 → 5/5 → 0/0 |
+| secret-latest | 5/5 → 5/5 → 0/0 |
+| redis-tls-auth | 5/5 → 5/5 → 0/0 |
+| private-network | 5/5 → 5/5 → 0/0 |
+| worm-retention | 5/5 → 5/5 → 0/0 |
+| create-only-write | 5/5 → 5/5 → 0/0 |
+| scheduler-tz | 5/5 → 5/5 → 0/0 |
+| time-travel | 5/5 → 5/5 → 0/0 |
+| shard-hash | 5/5 → 5/5 → 0/0 |
+| no-silent-changes | 4/5 → 5/5 → 0/0 |
 
 ## terraform validate
 
 | Setup | Case | without | prompt | with |
 |---|---|---|---|---|
-| claude-sonnet-low | gcp-to-aws/01-orders-platform | 0/5 PASS | 0/5 PASS | 0/5 PASS |
-| claude-sonnet-low | gcp-to-aws/02-media-ingest | 0/5 PASS | 0/5 PASS | 0/5 PASS |
-| claude-sonnet-low | gcp-to-aws/03-billing-export | 0/5 PASS | 0/5 PASS | 0/4 PASS |
+| claude-sonnet-low | gcp-to-aws/01-orders-platform | 4/5 PASS | 2/5 PASS | 4/5 PASS |
+| claude-sonnet-low | gcp-to-aws/02-media-ingest | 5/5 PASS | 5/5 PASS | 5/5 PASS |
+| claude-sonnet-low | gcp-to-aws/03-billing-export | 4/5 PASS | 5/5 PASS | 0/0 PASS |
 
 ## Run details
 
 - Agents and models: claude-code 2.1.319 / claude-sonnet-5-5.
 - Plugin versions in the with arm: gcp-to-aws 1.2.0.
-- Runs that errored: 5.
+- Runs that errored: 0.
