@@ -1,10 +1,13 @@
-// Deterministic vetoes, run on the migrated repo after each run: node verify.mjs <workdir>
+// Deterministic vetoes, run on the migrated repo after each run: node verify.mjs <workdir> <original repo>
+// Files left identical to the original are ignored (agents often add a new file next to the old one).
 // Prints {"<id>": {"pass": false, "why": "..."}} only for criteria the code clearly fails.
 // A criterion not listed is left to the judge. Only failures are asserted, never passes.
 import fs from 'node:fs'; import path from 'node:path';
-const w = process.argv[2];
+const [w, orig] = process.argv.slice(2);
 const walk = (d) => fs.existsSync(d) ? fs.readdirSync(d, { withFileTypes: true }).flatMap((e) => e.name === '.git' ? [] : e.isDirectory() ? walk(path.join(d, e.name)) : [path.join(d, e.name)]) : [];
-const files = walk(w); const read = (f) => fs.readFileSync(f, 'utf8');
+const read = (f) => fs.readFileSync(f, 'utf8');
+const unchanged = (f) => { const o = orig && path.join(orig, path.relative(w, f)); return o && fs.existsSync(o) && read(o) === read(f); };
+const files = walk(w).filter((f) => !unchanged(f));
 const of = (re) => files.filter((f) => re.test(f)).map(read).join('\n');
 const py = of(/functions\/ingest\/.*\.py$/), tf = of(/\.tf$/), sql = of(/\.sql$/), allText = files.filter((f) => /\.(py|tf|sql|md|json|ya?ml)$/.test(f)).map(read).join('\n');
 const out = {};

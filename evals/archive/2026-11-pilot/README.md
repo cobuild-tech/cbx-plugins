@@ -19,3 +19,5 @@ Known regressions in this pilot (plugin arm worse than baseline):
 | vanillajs/05-chat-websocket-global | global-api | 1/1 → 0/1 |
 
 Criteria that failed in both arms: `angular/01 currency-format`, `angular/01 tests`, `ember/02 teardown`, `gcp-to-aws/01 multi-region-flag`, `gcp-to-aws/01 no-silent-changes`. Each of these has a matching fix in the skills (see the root README changelog).
+
+**terraform validate:** the six PASS results here (and the "3/3 PASS" in the submission) are not valid. On macOS, Docker mounted an empty folder, Terraform reported "no Terraform configuration files", and the script counted that as a pass. The generated Terraform was never validated. `tfvalidate.sh` now resolves the real path and fails when there are no `.tf` files.

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Usage: evals/run.sh [--agent claude|copilot] [--case 'jquery/*'] [--models 'sonnet'] [--arms 'without prompt with'] [--reps 5] [--jobs 4]
+# Usage: evals/run.sh [--agent claude|copilot] [--case 'jquery/*'] [--models 'sonnet'] [--arms 'without prompt with'] [--reps 5] [--jobs 4] [--effort low]
 #
 # Runs each case in a fresh git copy of its repo/, once per arm:
 #   without  no plugin
@@ -9,10 +9,10 @@
 # Results go to results/<agent>-<model>/<arm>/<case>/<rep>/.
 set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd); EV="$ROOT/evals"
-AGENT=claude; CASE='*/*'; MODELS='sonnet'; ARMS='without prompt with'; REPS=5; JOBS=4
+AGENT=claude; CASE='*/*'; MODELS='sonnet'; ARMS='without prompt with'; REPS=5; JOBS=4; EFFORT=''
 while [ $# -gt 0 ]; do case $1 in
   --agent) AGENT=$2; shift 2;; --case) CASE=$2; shift 2;; --models) MODELS=$2; shift 2;;
-  --arms) ARMS=$2; shift 2;; --reps) REPS=$2; shift 2;; --jobs) JOBS=$2; shift 2;;
+  --arms) ARMS=$2; shift 2;; --reps) REPS=$2; shift 2;; --jobs) JOBS=$2; shift 2;; --effort) EFFORT=$2; shift 2;;
   *) echo "unknown $1"; exit 1;; esac; done
 case $AGENT in claude|copilot) ;; *) echo "--agent must be claude or copilot"; exit 1;; esac
 command -v "$AGENT" >/dev/null || { echo "$AGENT CLI not found on PATH"; exit 1; }
@@ -21,9 +21,9 @@ BASELINE_LINE='Preserve the existing behaviour exactly, and end your summary wit
 
 one() { # case model arm rep
   local c=$1 m=$2 a=$3 r=$4 fw=${1%%/*}
-  local out="$EV/results/$AGENT-$m/$a/$c/$r"
+  local out="$EV/results/$AGENT-$m${EFFORT:+-$EFFORT}/$a/$c/$r"
   [ -f "$out/final.md" ] && { echo "skip $out"; return; }
-  mkdir -p "$out"; local w; w=$(mktemp -d)
+  mkdir -p "$out"; local w; w=$(cd "$(mktemp -d)" && pwd -P)   # real path: Docker on macOS cannot mount the /var symlink
   cp -R "$EV/cases/$c/repo/." "$w/"
   ( cd "$w" && git init -q && git add -A && git -c user.email=e@x -c user.name=eval commit -qm base )
   local prompt; prompt=$(cat "$EV/cases/$c/prompt.txt")
@@ -34,6 +34,7 @@ one() { # case model arm rep
     local args=(-p "$prompt" --model "$m" --setting-sources project --strict-mcp-config
                 --permission-mode acceptEdits --allowedTools "Read Edit Write Glob Grep Skill"
                 --disallowedTools "Bash WebFetch WebSearch Agent" --output-format stream-json --verbose)
+    [ -n "$EFFORT" ] && args+=(--effort "$EFFORT")
     [ "$a" = with ] && args+=(--plugin-dir "$pd")
     ( cd "$w" && claude "${args[@]}" > "$out/transcript.jsonl" 2> "$out/stderr.txt" ) || echo "FAIL $out"
   else
@@ -49,11 +50,11 @@ one() { # case model arm rep
 
   ( cd "$w" && git add -A && git diff --cached > "$out/changes.diff" )
   node "$EV/lib/meta.mjs" "$AGENT" "$out" "$a" "$pd"
-  [ -f "$EV/cases/$c/verify.mjs" ] && node "$EV/cases/$c/verify.mjs" "$w" > "$out/auto.json"
+  [ -f "$EV/cases/$c/verify.mjs" ] && node "$EV/cases/$c/verify.mjs" "$w" "$EV/cases/$c/repo" > "$out/auto.json"
   [ -x "$EV/tfvalidate.sh" ] && "$EV/tfvalidate.sh" "$w" "$out"
   rm -rf "$w"; echo "done $out"
 }
-export -f one; export EV ROOT AGENT BASELINE_LINE
+export -f one; export EV ROOT AGENT BASELINE_LINE EFFORT
 
 jobs=()
 for c in $(cd "$EV/cases" && ls -d $CASE); do for m in $MODELS; do for a in $ARMS; do
