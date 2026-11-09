@@ -1,0 +1,50 @@
+{
+ "s3-key-decode": {
+  "pass": true,
+  "why": "ingest `_handle` sets `name = urllib.parse.unquote_plus(obj[\"key\"])` with the comment 'keys arrive URL-encoded'."
+ },
+ "two-hour-hold": {
+  "pass": true,
+  "why": "ingest creates a one-time EventBridge Scheduler schedule with `ScheduleExpression=f\"at({run_at...})\"` where `run_at = now + HOLD` (2 h), and the summary says SQS can't delay that long."
+ },
+ "stale-generation": {
+  "pass": true,
+  "why": "transcode compares `head_object(...)[\"VersionId\"]` with `job[\"generation\"]` and returns 'stale' on a mismatch or a 404; versioning is enabled so versionId stands in for generation."
+ },
+ "overwrite-trigger": {
+  "pass": true,
+  "why": "`aws_s3_bucket_notification` uses `events = [\"s3:ObjectCreated:*\"]`, commented 'object.finalized: new objects and overwrites'."
+ },
+ "transcode-timeout": {
+  "pass": true,
+  "why": "transcode Lambda has `timeout = 900`, and the summary's item 1 flags the 900 s Lambda cap against the GCP 1800 s and recommends ECS Fargate for long jobs."
+ },
+ "rate-limit": {
+  "pass": true,
+  "why": "`reserved_concurrent_executions = 3` keeps the 3-concurrent limit, and the behavior table flags that the 5/s dispatch rate limit is dropped."
+ },
+ "retry-policy": {
+  "pass": true,
+  "why": "ingest's `event_invoke_config` sets `maximum_retry_attempts = 0` for DO_NOT_RETRY; transcode uses 2 retries (3 attempts), and the table flags the change from 4 attempts with 30–600 s backoff."
+ },
+ "attribute-limit": {
+  "pass": true,
+  "why": "The 12 attributes go into a JSON body on a Kinesis `put_record`, and the summary explicitly cites SNS/SQS's 10-attribute limit."
+ },
+ "week-start": {
+  "pass": true,
+  "why": "SQL uses `date_add('day', -(day_of_week(CAST(uploaded_at AS date)) % 7), ...)` to shift Trino's Monday-start weeks back to Sunday."
+ },
+ "weekend-days": {
+  "pass": true,
+  "why": "SQL changes the weekend filter to `count_if(day_of_week(uploaded_at) IN (6, 7))`, with a comment on the Trino numbering."
+ },
+ "safe-divide": {
+  "pass": true,
+  "why": "`SAFE_DIVIDE` becomes `CAST(SUM(transcode_seconds) AS double) / NULLIF(COUNT(*), 0)`, so there is no integer truncation and no division-by-zero error."
+ },
+ "no-silent-changes": {
+  "pass": true,
+  "why": "7-day retention (168 h) and 4096 MB memory are kept, and the behavior table calls out the region, IAM scope, versioning and lifecycle, duplicate handling, head_object metadata sourcing, the Kinesis switch and the source packaging."
+ }
+}

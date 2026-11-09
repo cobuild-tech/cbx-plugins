@@ -1,0 +1,22 @@
+FAIL
+
+Error: Terraform encountered problems during initialisation, including problems
+with the configuration, described below.
+
+The Terraform configuration must be valid before initialization so that
+Terraform can determine which modules and providers need to be installed.
+
+
+Error: Unsuitable value type
+
+  on variables.tf line 3, in variable "project":
+   3:   description = "Name prefix; the uploads bucket is ${var.project}-uploads (S3 names are global, so it must be unique)."
+
+Unsuitable value: value must be known
+
+Error: Variables not allowed
+
+  on variables.tf line 3, in variable "project":
+   3:   description = "Name prefix; the uploads bucket is ${var.project}-uploads (S3 names are global, so it must be unique)."
+
+Variables may not be used here.

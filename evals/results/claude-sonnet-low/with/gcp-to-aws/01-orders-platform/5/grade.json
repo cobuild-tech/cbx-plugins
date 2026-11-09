@@ -1,0 +1,50 @@
+{
+ "ordering-fifo": {
+  "pass": true,
+  "why": "aws/messaging.tf creates an SNS FIFO topic (orders.fifo, fifo_topic=true) feeding an SQS FIFO queue, and app/api.py publishes with MessageGroupId=str(o[\"customer_id\"])."
+ },
+ "dlq-5": {
+  "pass": true,
+  "why": "aws_sqs_queue.orders_worker has a redrive_policy to orders-dlq.fifo with maxReceiveCount = 5."
+ },
+ "visibility-timeout": {
+  "pass": true,
+  "why": "visibility_timeout_seconds = 3240, which exceeds the Lambda's 540s timeout (6x per AWS guidance)."
+ },
+ "run-timeout-900": {
+  "pass": true,
+  "why": "The API runs on ECS Fargate behind an ALB with idle_timeout = 900, and the summary table lists this as kept."
+ },
+ "presign-expiry": {
+  "pass": true,
+  "why": "app/api.py defaults UPLOAD_URL_TTL to 3600s with a comment that role-credential presigned URLs die when the credentials expire, and the summary marks this 'Needs decision'."
+ },
+ "rds-iam-auth": {
+  "pass": true,
+  "why": "aws_db_instance.db is postgres engine_version 15 with iam_database_authentication_enabled = true, multi_az = true, and backup_retention_period = 7 (enables PITR)."
+ },
+ "worker-event-shape": {
+  "pass": true,
+  "why": "app/worker.py now iterates event[\"Records\"] and parses record[\"body\"], which is correct because the SNS subscription sets raw_message_delivery = true."
+ },
+ "sql-dialect": {
+  "pass": true,
+  "why": "sql/rollup.sql is rewritten for Redshift: SAFE_CAST becomes a regex-guarded cast, _PARTITIONDATE becomes a partition_date column, ARRAY_AGG(STRUCT ... LIMIT 3) becomes ROW_NUMBER plus LISTAGG/JSON_PARSE, QUALIFY is kept (Redshift supports it), and CREATE OR REPLACE becomes DROP+CREATE."
+ },
+ "scheduler-tz": {
+  "pass": true,
+  "why": "aws_scheduler_schedule.nightly uses cron(0 2 * * ? *) with schedule_expression_timezone = \"America/New_York\"."
+ },
+ "lifecycle": {
+  "pass": true,
+  "why": "aws/storage.tf transitions to STANDARD_IA at 30 days, expires at 365 days, and enables versioning via aws_s3_bucket_versioning."
+ },
+ "multi-region-flag": {
+  "pass": true,
+  "why": "The summary table says GCS/BigQuery multi-region US became single-region S3 and Redshift in us-east-2, and suggests S3 replication if multi-region durability is needed."
+ },
+ "no-silent-changes": {
+  "pass": true,
+  "why": "Min 1 / max 20 scaling and versioning are preserved, and the behavior changes (CPU-based scaling instead of concurrency 80, 4 GiB memory, the 5-attempt DLQ vs the function retry, the visibility timeout, the dedup ID, noncurrent-version lifecycle, health check, and introduced defaults) are all called out in the behavior-changes table."
+ }
+}

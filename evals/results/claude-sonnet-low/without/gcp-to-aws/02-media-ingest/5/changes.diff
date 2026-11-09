@@ -1,0 +1,430 @@
+diff --git a/aws/main.tf b/aws/main.tf
+new file mode 100644
+index 0000000..520a15c
+--- /dev/null
++++ b/aws/main.tf
+@@ -0,0 +1,230 @@
++terraform {
++  required_providers {
++    aws = { source = "hashicorp/aws", version = "~> 5.0" }
++  }
++}
++
++provider "aws" {
++  region = "us-east-1"
++}
++
++variable "name_prefix" {
++  type        = string
++  description = "Prefix for globally unique bucket names (replaces the GCP project id)"
++}
++
++# Existing bucket holding the function zips (ingest.zip, transcode.zip), as on GCP.
++variable "fn_src_bucket" {
++  type    = string
++  default = null
++}
++
++locals {
++  fn_src_bucket = coalesce(var.fn_src_bucket, "${var.name_prefix}-fn-src")
++}
++
++data "aws_caller_identity" "current" {}
++
++resource "aws_s3_bucket" "incoming" {
++  bucket = "${var.name_prefix}-media-incoming"
++}
++
++# Versioning provides the GCS "generation" equivalent (S3 version id), which the
++# ingest/transcode pair uses to detect replaced files.
++resource "aws_s3_bucket_versioning" "incoming" {
++  bucket = aws_s3_bucket.incoming.id
++  versioning_configuration {
++    status = "Enabled"
++  }
++}
++
++resource "aws_s3_bucket_public_access_block" "incoming" {
++  bucket                  = aws_s3_bucket.incoming.id
++  block_public_acls       = true
++  block_public_policy     = true
++  ignore_public_acls      = true
++  restrict_public_buckets = true
++}
++
++# --- IAM (GCP service account "media-pipeline") ---
++
++data "aws_iam_policy_document" "lambda_assume" {
++  statement {
++    actions = ["sts:AssumeRole"]
++    principals {
++      type        = "Service"
++      identifiers = ["lambda.amazonaws.com"]
++    }
++  }
++}
++
++resource "aws_iam_role" "media" {
++  name               = "media-pipeline"
++  assume_role_policy = data.aws_iam_policy_document.lambda_assume.json
++}
++
++resource "aws_iam_role_policy_attachment" "media_logs" {
++  role       = aws_iam_role.media.name
++  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
++}
++
++data "aws_iam_policy_document" "media" {
++  statement {
++    actions   = ["s3:GetObject", "s3:GetObjectVersion", "s3:GetObjectAttributes"]
++    resources = ["${aws_s3_bucket.incoming.arn}/*"]
++  }
++  statement {
++    # ListBucket makes a missing key return 404 instead of 403.
++    actions   = ["s3:ListBucket"]
++    resources = [aws_s3_bucket.incoming.arn]
++  }
++  statement {
++    actions   = ["scheduler:CreateSchedule"]
++    resources = ["arn:aws:scheduler:*:${data.aws_caller_identity.current.account_id}:schedule/default/*"]
++  }
++  statement {
++    actions   = ["iam:PassRole"]
++    resources = [aws_iam_role.scheduler.arn]
++  }
++  statement {
++    actions   = ["sns:Publish"]
++    resources = [aws_sns_topic.media_events.arn]
++  }
++  statement {
++    actions = ["sqs:ReceiveMessage", "sqs:DeleteMessage", "sqs:GetQueueAttributes", "sqs:ChangeMessageVisibility"]
++    resources = [aws_sqs_queue.transcode.arn]
++  }
++}
++
++resource "aws_iam_role_policy" "media" {
++  role   = aws_iam_role.media.id
++  policy = data.aws_iam_policy_document.media.json
++}
++
++# Role EventBridge Scheduler uses to drop the delayed job onto the transcode queue.
++data "aws_iam_policy_document" "scheduler_assume" {
++  statement {
++    actions = ["sts:AssumeRole"]
++    principals {
++      type        = "Service"
++      identifiers = ["scheduler.amazonaws.com"]
++    }
++  }
++}
++
++resource "aws_iam_role" "scheduler" {
++  name               = "media-pipeline-scheduler"
++  assume_role_policy = data.aws_iam_policy_document.scheduler_assume.json
++}
++
++resource "aws_iam_role_policy" "scheduler" {
++  role = aws_iam_role.scheduler.id
++  policy = jsonencode({
++    Version = "2012-10-17"
++    Statement = [{
++      Effect   = "Allow"
++      Action   = "sqs:SendMessage"
++      Resource = aws_sqs_queue.transcode.arn
++    }]
++  })
++}
++
++# --- Events (Pub/Sub topic media-events) ---
++
++# SNS does not retain messages (Pub/Sub kept them 7 days); subscribe a queue if replay is needed.
++resource "aws_sns_topic" "media_events" {
++  name = "media-events"
++}
++
++# --- Delayed transcode queue (Cloud Tasks queue "transcode") ---
++
++resource "aws_sqs_queue" "transcode_dlq" {
++  name                      = "transcode-dlq"
++  message_retention_seconds = 1209600
++}
++
++resource "aws_sqs_queue" "transcode" {
++  name = "transcode"
++  # Lambda timeout is 900s; AWS recommends visibility >= 6x function timeout.
++  # A failed attempt is retried after the visibility timeout elapses.
++  visibility_timeout_seconds = 5400
++  redrive_policy = jsonencode({
++    deadLetterTargetArn = aws_sqs_queue.transcode_dlq.arn
++    maxReceiveCount     = 4 # max_attempts = 4
++  })
++}
++
++# --- Functions ---
++
++# Fires on every new object and on every overwrite of an existing key
++# (overwrites create a new version, which is what ingest keys on).
++resource "aws_lambda_function" "ingest" {
++  function_name = "media-ingest"
++  role          = aws_iam_role.media.arn
++  runtime       = "python3.12"
++  handler       = "main.on_upload"
++  s3_bucket     = local.fn_src_bucket
++  s3_key        = "ingest.zip"
++  timeout       = 60
++
++  environment {
++    variables = {
++      SCHEDULER_ROLE_ARN = aws_iam_role.scheduler.arn
++      TRANSCODE_QUEUE_ARN = aws_sqs_queue.transcode.arn
++      EVENTS_TOPIC_ARN   = aws_sns_topic.media_events.arn
++    }
++  }
++}
++
++# RETRY_POLICY_DO_NOT_RETRY
++resource "aws_lambda_function_event_invoke_config" "ingest" {
++  function_name          = aws_lambda_function.ingest.function_name
++  maximum_retry_attempts = 0
++}
++
++resource "aws_lambda_permission" "ingest_s3" {
++  statement_id   = "AllowS3Invoke"
++  action         = "lambda:InvokeFunction"
++  function_name  = aws_lambda_function.ingest.function_name
++  principal      = "s3.amazonaws.com"
++  source_arn     = aws_s3_bucket.incoming.arn
++  source_account = data.aws_caller_identity.current.account_id
++}
++
++resource "aws_s3_bucket_notification" "incoming" {
++  bucket = aws_s3_bucket.incoming.id
++  lambda_function {
++    lambda_function_arn = aws_lambda_function.ingest.arn
++    events              = ["s3:ObjectCreated:*"]
++  }
++  depends_on = [aws_lambda_permission.ingest_s3]
++}
++
++# NOTE: Lambda's maximum timeout is 900s (GCP function was 1800s).
++resource "aws_lambda_function" "transcode" {
++  function_name = "media-transcode"
++  role          = aws_iam_role.media.arn
++  runtime       = "python3.12"
++  handler       = "main.transcode"
++  s3_bucket     = local.fn_src_bucket
++  s3_key        = "transcode.zip"
++  timeout       = 900
++  memory_size   = 4096
++}
++
++# max_concurrent_dispatches = 3
++resource "aws_lambda_event_source_mapping" "transcode" {
++  event_source_arn = aws_sqs_queue.transcode.arn
++  function_name    = aws_lambda_function.transcode.arn
++  batch_size       = 1
++
++  scaling_config {
++    maximum_concurrency = 3
++  }
++}
++
++# --- Analytics (BigQuery dataset "media") ---
++
++resource "aws_glue_catalog_database" "media" {
++  name = "media"
++}
+diff --git a/functions/ingest/main.py b/functions/ingest/main.py
+index df4acf6..6c8b912 100644
+--- a/functions/ingest/main.py
++++ b/functions/ingest/main.py
+@@ -1,63 +1,81 @@
+ import datetime
++import hashlib
+ import json
+ import os
++from urllib.parse import unquote_plus
+ 
+-import functions_framework
+-from google.cloud import pubsub_v1, tasks_v2
+-from google.protobuf import timestamp_pb2
++import boto3
+ 
+-tasks = tasks_v2.CloudTasksClient()
+-publisher = pubsub_v1.PublisherClient()
++s3 = boto3.client("s3")
++scheduler = boto3.client("scheduler")
++sns = boto3.client("sns")
+ 
+ # Uploads are held for 2 hours so editors can replace a file before it is
+-# transcoded. A replacement re-triggers this function with a new generation.
++# transcoded. A replacement re-triggers this function with a new version id.
+ HOLD = datetime.timedelta(hours=2)
+ 
+ 
+-@functions_framework.cloud_event
+-def on_upload(event):
+-    obj = event.data
+-    name = obj["name"]                     # e.g. "Season 2/Episode 01 – Pilot.mov"
+-    generation = obj["generation"]
++def on_upload(event, context=None):
++    for record in event["Records"]:
++        _handle(record)
++
++
++def _handle(record):
++    bucket = record["s3"]["bucket"]["name"]
++    name = unquote_plus(record["s3"]["object"]["key"])  # e.g. "Season 2/Episode 01 – Pilot.mov"
++    generation = record["s3"]["object"].get("versionId", "")  # S3 version id = GCS generation
+     if not name.lower().endswith((".mov", ".mp4", ".mxf")):
+         return
+ 
+-    run_at = timestamp_pb2.Timestamp()
+-    run_at.FromDatetime(datetime.datetime.utcnow() + HOLD)
+-
+-    tasks.create_task(
+-        parent=os.environ["TASKS_QUEUE"],
+-        task={
+-            # Named per generation: a re-upload creates a new task, the old one
+-            # becomes stale and the transcoder skips it.
+-            "name": f"{os.environ['TASKS_QUEUE']}/tasks/{abs(hash((name, generation)))}",
+-            "schedule_time": run_at,
+-            "dispatch_deadline": {"seconds": 1800},
+-            "http_request": {
+-                "http_method": tasks_v2.HttpMethod.POST,
+-                "url": os.environ["TRANSCODE_URL"],
+-                "headers": {"Content-Type": "application/json"},
+-                "body": json.dumps(
+-                    {"bucket": obj["bucket"], "name": name, "generation": generation}
+-                ).encode(),
+-                "oidc_token": {"service_account_email": os.environ.get("SA_EMAIL", "")},
+-            },
++    run_at = datetime.datetime.now(datetime.timezone.utc) + HOLD
++
++    # Named per version: a re-upload creates a new schedule, the old one
++    # becomes stale and the transcoder skips it.
++    digest = hashlib.sha256(f"{name}\0{generation}".encode()).hexdigest()
++    scheduler.create_schedule(
++        Name=f"transcode-{digest}",
++        ScheduleExpression=f"at({run_at.strftime('%Y-%m-%dT%H:%M:%S')})",
++        ScheduleExpressionTimezone="UTC",
++        FlexibleTimeWindow={"Mode": "OFF"},
++        ActionAfterCompletion="DELETE",
++        Target={
++            "Arn": os.environ["TRANSCODE_QUEUE_ARN"],
++            "RoleArn": os.environ["SCHEDULER_ROLE_ARN"],
++            "Input": json.dumps({"bucket": bucket, "name": name, "generation": generation}),
+         },
+     )
+ 
+-    publisher.publish(
+-        os.environ["EVENTS_TOPIC"],
+-        b"",
+-        event="queued",
+-        bucket=obj["bucket"],
+-        name=name,
+-        generation=str(generation),
+-        content_type=obj.get("contentType", ""),
+-        size=str(obj.get("size", 0)),
+-        md5=obj.get("md5Hash", ""),
+-        crc32c=obj.get("crc32c", ""),
+-        uploader=obj.get("metadata", {}).get("uploader", ""),
+-        show=obj.get("metadata", {}).get("show", ""),
+-        season=obj.get("metadata", {}).get("season", ""),
+-        episode=obj.get("metadata", {}).get("episode", ""),
++    # S3 events carry no content type / user metadata / checksums; fetch them.
++    head = s3.head_object(
++        Bucket=bucket, Key=name, VersionId=generation, ChecksumMode="ENABLED"
++    ) if generation else s3.head_object(Bucket=bucket, Key=name, ChecksumMode="ENABLED")
++    meta = head.get("Metadata", {})
++    etag = head.get("ETag", "").strip('"')
++    md5 = etag if etag and "-" not in etag else ""  # ETag is the MD5 only for non-multipart uploads
++
++    # SNS allows at most 10 message attributes (Pub/Sub had 12), so the full
++    # payload goes in the body and a few filterable fields stay as attributes.
++    payload = {
++        "event": "queued",
++        "bucket": bucket,
++        "name": name,
++        "generation": str(generation),
++        "content_type": head.get("ContentType", ""),
++        "size": str(head.get("ContentLength", 0)),
++        "md5": md5,
++        "crc32c": head.get("ChecksumCRC32C", ""),
++        "uploader": meta.get("uploader", ""),
++        "show": meta.get("show", ""),
++        "season": meta.get("season", ""),
++        "episode": meta.get("episode", ""),
++    }
++    attrs = {
++        k: {"DataType": "String", "StringValue": v}
++        for k, v in payload.items()
++        if k in ("event", "bucket", "uploader", "show", "season", "episode") and v
++    }
++    sns.publish(
++        TopicArn=os.environ["EVENTS_TOPIC_ARN"],
++        Message=json.dumps(payload),
++        MessageAttributes=attrs,
+     )
+diff --git a/functions/transcode/main.py b/functions/transcode/main.py
+index a41489d..090a8c8 100644
+--- a/functions/transcode/main.py
++++ b/functions/transcode/main.py
+@@ -1,15 +1,26 @@
+-import functions_framework
+-from flask import Request
+-from google.cloud import storage
++import json
+ 
+-gcs = storage.Client()
++import boto3
++from botocore.exceptions import ClientError
+ 
++s3 = boto3.client("s3")
+ 
+-@functions_framework.http
+-def transcode(request: Request):
+-    job = request.get_json()
+-    blob = gcs.bucket(job["bucket"]).get_blob(job["name"])
+-    if blob is None or str(blob.generation) != str(job["generation"]):
+-        return ("stale", 200)               # file was replaced or deleted
++
++def transcode(event, context=None):
++    # Invoked by the SQS event source mapping (batch size 1). Raising an
++    # exception returns the message to the queue for retry.
++    for record in event["Records"]:
++        _process(json.loads(record["body"]))
++
++
++def _process(job):
++    try:
++        head = s3.head_object(Bucket=job["bucket"], Key=job["name"])
++    except ClientError as e:
++        if e.response["Error"]["Code"] in ("404", "NoSuchKey", "NotFound"):
++            return "stale"                  # file was deleted
++        raise
++    if str(head.get("VersionId")) != str(job["generation"]):
++        return "stale"                      # file was replaced
+     # ... run ffmpeg, write renditions ...
+-    return ("ok", 200)
++    return "ok"
+diff --git a/sql/weekly_report.athena.sql b/sql/weekly_report.athena.sql
+new file mode 100644
+index 0000000..2fa54bd
+--- /dev/null
++++ b/sql/weekly_report.athena.sql
+@@ -0,0 +1,14 @@
++-- Weekly editor report (Athena / Trino). Weeks run Sunday to Saturday, as the editors' schedule does.
++-- Trino's date_trunc('week') starts on Monday, so shift by a day to anchor on Sunday.
++-- Trino day_of_week is ISO (Mon=1 .. Sun=7), so weekend = 6, 7 (BigQuery's 1, 7).
++-- Assumes uploaded_at is a UTC timestamp and the Athena session time zone is UTC (the default).
++SELECT
++  date_add('day', -1, date_trunc('week', date_add('day', 1, DATE(uploaded_at)))) AS week_start,
++  uploader,
++  COUNT(*) AS uploads,
++  CAST(SUM(transcode_seconds) AS double) / COUNT(*) AS avg_transcode_s,
++  COUNT_IF(day_of_week(uploaded_at) IN (6, 7)) AS weekend_uploads
++FROM media.uploads
++WHERE uploaded_at >= date_add('day', -56, current_timestamp)
++GROUP BY 1, 2
++ORDER BY week_start DESC, uploads DESC;

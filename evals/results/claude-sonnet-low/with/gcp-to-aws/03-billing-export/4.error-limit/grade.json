@@ -1,0 +1,50 @@
+{
+ "job-timeout": {
+  "pass": true,
+  "why": "The Batch job definition sets `timeout { attempt_duration_seconds = 10800 }` on Fargate, so the 3-hour limit is kept."
+ },
+ "sharding": {
+  "pass": false,
+  "why": "Terraform defines a Batch array job (`ArrayProperties = { Size = 16 }`, max_vcpus capping concurrency at 4), but job/export.py was never ported and still reads CLOUD_RUN_TASK_INDEX/CLOUD_RUN_TASK_COUNT, so every task would get shard 0 of 1."
+ },
+ "retry-attempt": {
+  "pass": false,
+  "why": "`retry_strategy { attempts = 3 }` keeps the retries, but the code still reads CLOUD_RUN_TASK_ATTEMPT, which does not exist on Batch, and nothing flags this."
+ },
+ "secret-latest": {
+  "pass": true,
+  "why": "PARTNER_API_KEY is injected through container `secrets` with `valueFrom` set to the Secrets Manager ARN, which resolves AWSCURRENT at task start, and the value is set out of band rather than in Terraform."
+ },
+ "redis-tls-auth": {
+  "pass": false,
+  "why": "The ElastiCache group has transit encryption, an auth token, 2 nodes and Multi-AZ, and REDIS_PORT=6379 is passed, but export.py still hard-codes port=6378 and ignores REDIS_PORT, and this is not flagged."
+ },
+ "private-network": {
+  "pass": true,
+  "why": "The job runs in private_subnet_ids with assignPublicIp DISABLED, the Redis SG allows 6379 from the job SG, and the vpc_id description requires NAT egress to partner.example.com."
+ },
+ "worm-retention": {
+  "pass": true,
+  "why": "The bucket has `object_lock_enabled = true` with a default retention of `mode = \"COMPLIANCE\"`, `days = 2555`."
+ },
+ "create-only-write": {
+  "pass": false,
+  "why": "job/export.py was not ported and still uploads via GCS `if_generation_match=0`; there is no S3 If-None-Match conditional write and no flag about overwrite risk."
+ },
+ "scheduler-tz": {
+  "pass": true,
+  "why": "`aws_scheduler_schedule` uses `cron(0 3 1 * ? *)` with `schedule_expression_timezone = \"Europe/Berlin\"`."
+ },
+ "time-travel": {
+  "pass": true,
+  "why": "The SQL uses Athena v3 over Iceberg with `FOR TIMESTAMP AS OF with_timezone(...month end..., 'Europe/Berlin')`."
+ },
+ "shard-hash": {
+  "pass": true,
+  "why": "FARM_FINGERPRINT is replaced by `xxhash64` with a comment that shard membership differs, and `mod(mod(h, n) + n, n)` handles negative values."
+ },
+ "no-silent-changes": {
+  "pass": false,
+  "why": "There is no summary at all (the final message is only a rate-limit notice), and job/export.py was silently left unported; only inline Terraform comments note changes such as the eu-central-1 region."
+ }
+}

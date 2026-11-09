@@ -1,0 +1,50 @@
+{
+ "job-timeout": {
+  "pass": true,
+  "why": "The job runs on AWS Batch on Fargate with `timeout { attempt_duration_seconds = 10800 }`, so the 3-hour limit is kept."
+ },
+ "sharding": {
+  "pass": true,
+  "why": "The scheduler submits a Batch array job with `ArrayProperties = { Size = 16 }` and the job definition sets `TASK_COUNT=16`; the code reads `AWS_BATCH_JOB_ARRAY_INDEX`/`TASK_COUNT`, and parallelism 4 is approximated with `max_vcpus = 8` and flagged (item 10)."
+ },
+ "retry-attempt": {
+  "pass": true,
+  "why": "`retry_strategy { attempts = 3 }` keeps max_retries 2, and `ATTEMPT` comes from Batch's real `AWS_BATCH_JOB_ATTEMPT` env var, adjusted to 0-based and flagged (item 9)."
+ },
+ "secret-latest": {
+  "pass": true,
+  "why": "PARTNER_API_KEY is injected from the Secrets Manager ARN via container `secrets` `valueFrom`; this resolves the current version at task start, matching `latest`, and nothing is hard-coded."
+ },
+ "redis-tls-auth": {
+  "pass": true,
+  "why": "The ElastiCache replication group has `transit_encryption_enabled`, `auth_token`, `multi_az_enabled` and 2 nodes; the client moves to port 6379 with `ssl=True` and REDIS_AUTH is injected, flagged in item 8."
+ },
+ "private-network": {
+  "pass": true,
+  "why": "Tasks run in default-VPC subnets behind a security group that the Redis security group allows on 6379, and reach the partner API via `assignPublicIp = ENABLED`; the difference from the connector and PRIVATE_RANGES_ONLY setup is flagged in item 11."
+ },
+ "worm-retention": {
+  "pass": true,
+  "why": "The bucket sets `object_lock_enabled = true` with versioning and a COMPLIANCE default retention of 2555 days (7 years)."
+ },
+ "create-only-write": {
+  "pass": true,
+  "why": "`s3.put_object(..., IfNoneMatch=\"*\")` preserves the create-only semantics of `if_generation_match=0`."
+ },
+ "scheduler-tz": {
+  "pass": true,
+  "why": "`aws_scheduler_schedule` uses `cron(0 3 1 * ? *)` with `schedule_expression_timezone = \"Europe/Berlin\"`."
+ },
+ "time-travel": {
+  "pass": true,
+  "why": "Athena is chosen for its Iceberg support, and the MERGE uses `FOR TIMESTAMP AS OF` the Berlin month end; the Iceberg-table requirement and snapshot retention are flagged."
+ },
+ "shard-hash": {
+  "pass": true,
+  "why": "FARM_FINGERPRINT is replaced client-side by `pyfarmhash.fingerprint64`, converted to signed INT64 before `abs() % TASK_COUNT` so negatives are handled, and the summary flags that shard membership is unverified and may change (item 1) and notes the ABS(INT64_MIN) edge case (item 3)."
+ },
+ "no-silent-changes": {
+  "pass": true,
+  "why": "The summary calls out the region mapping to eu-west-1, Block Public Access, the same 2 vCPU/4 GB, Redis upsizing, Intelligent-Tiering, the default VPC with public IPs, scheduler retries and the added IAM roles, and CPU/memory are unchanged; it does not mention that Glue and `batch:SubmitJob` use `Resource = \"*\"`, but the original granted no explicit data permissions to compare against."
+ }
+}

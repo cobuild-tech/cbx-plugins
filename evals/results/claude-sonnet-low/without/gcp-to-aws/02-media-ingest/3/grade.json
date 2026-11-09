@@ -1,0 +1,50 @@
+{
+ "s3-key-decode": {
+  "pass": true,
+  "why": "The ingest handler calls `unquote_plus(record[\"s3\"][\"object\"][\"key\"])` before filtering on the extension, calling head_object, or building the payload."
+ },
+ "two-hour-hold": {
+  "pass": true,
+  "why": "The ingest handler creates an EventBridge Scheduler one-time schedule with `at(...)` set to now + HOLD (2h), and that schedule targets the SQS queue."
+ },
+ "stale-generation": {
+  "pass": true,
+  "why": "Ingest stores the S3 `VersionId` as `generation` on a versioned bucket, and transcode returns 'stale' on 404 or when `head[\"VersionId\"] != job[\"generation\"]`."
+ },
+ "overwrite-trigger": {
+  "pass": true,
+  "why": "`aws_s3_bucket_notification` uses `events = [\"s3:ObjectCreated:*\"]`, which fires on overwrites as well as new objects."
+ },
+ "transcode-timeout": {
+  "pass": true,
+  "why": "The Lambda timeout is set to 900 with a comment, and the summary explicitly flags the 900s cap against 1800s and suggests Fargate or AWS Batch."
+ },
+ "rate-limit": {
+  "pass": true,
+  "why": "The event source mapping sets `maximum_concurrency = 3`, and the summary flags dropping the 5/s dispatch rate."
+ },
+ "retry-policy": {
+  "pass": true,
+  "why": "Ingest has `maximum_retry_attempts = 0`, transcode gets 4 attempts via `maxReceiveCount = 4` with a DLQ, and the summary flags the lost 30s–600s backoff."
+ },
+ "attribute-limit": {
+  "pass": true,
+  "why": "The details move into a JSON `Message` body with only the `event` attribute kept, and the summary flags the 10-attribute limit."
+ },
+ "week-start": {
+  "pass": true,
+  "why": "`date_trunc('week', DATE(uploaded_at) + INTERVAL '1' DAY) - INTERVAL '1' DAY` correctly yields Sunday-start weeks."
+ },
+ "weekend-days": {
+  "pass": true,
+  "why": "The query uses `COUNT_IF(day_of_week(uploaded_at) IN (6, 7))` with an ISO numbering comment."
+ },
+ "safe-divide": {
+  "pass": true,
+  "why": "The query uses `CAST(SUM(transcode_seconds) AS double) / NULLIF(COUNT(*), 0)`."
+ },
+ "no-silent-changes": {
+  "pass": true,
+  "why": "The summary calls out the lost 7-day retention, ETag in place of md5/crc32c, the region default of us-east-2, the backoff change, the dropped rate limit and the new SNS body format; memory is kept at 4096 and IAM is scoped to specific resources."
+ }
+}

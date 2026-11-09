@@ -1,0 +1,50 @@
+{
+ "s3-key-decode": {
+  "pass": true,
+  "why": "Ingest uses `name = unquote_plus(rec[\"object\"][\"key\"])` before filtering and using the key."
+ },
+ "two-hour-hold": {
+  "pass": true,
+  "why": "A one-time EventBridge Scheduler `at(...)` schedule set to now + HOLD (2h) targets the SQS queue, with the scheduler role and PassRole defined."
+ },
+ "stale-generation": {
+  "pass": true,
+  "why": "Bucket versioning is enabled, the job carries `versionId` as generation, and transcode compares `head_object` VersionId with `job[\"generation\"]`, returning \"stale\" on mismatch or 404."
+ },
+ "overwrite-trigger": {
+  "pass": true,
+  "why": "The S3 bucket notification uses `events = [\"s3:ObjectCreated:*\"]`, which fires on overwrites too."
+ },
+ "transcode-timeout": {
+  "pass": true,
+  "why": "The Lambda timeout is 900 and the summary item 1 explicitly flags the drop from 1800s to the Lambda maximum and suggests Fargate for long jobs."
+ },
+ "rate-limit": {
+  "pass": true,
+  "why": "The SQS event source mapping sets `maximum_concurrency = 3`, and summary item 4 flags that the 5/s dispatch rate limit is gone."
+ },
+ "retry-policy": {
+  "pass": true,
+  "why": "Ingest has `aws_lambda_function_event_invoke_config` with `maximum_retry_attempts = 0`, transcode uses redrive `maxReceiveCount = 4`, and summary items 2–3 flag the lost exponential backoff and the new DLQ."
+ },
+ "attribute-limit": {
+  "pass": true,
+  "why": "All 12 fields are moved into a JSON `Message` body, with a comment and summary item 6 citing the SNS 10-attribute limit."
+ },
+ "week-start": {
+  "pass": true,
+  "why": "It uses `date_trunc('week', CAST(uploaded_at AS date) + INTERVAL '1' DAY) - INTERVAL '1' DAY`, which correctly shifts Monday-start weeks to Sunday-start."
+ },
+ "weekend-days": {
+  "pass": true,
+  "why": "It uses `COUNT_IF(day_of_week(uploaded_at) IN (6, 7))`, which is Saturday and Sunday in Trino numbering."
+ },
+ "safe-divide": {
+  "pass": true,
+  "why": "It uses `CAST(SUM(transcode_seconds) AS double) / COUNT(*)`, which avoids integer truncation, and COUNT(*) per group is always ≥1, so division by zero cannot occur."
+ },
+ "no-silent-changes": {
+  "pass": true,
+  "why": "The summary lists the lost 7-day retention, the DLQ, region, auth/IAM, env vars, the event format, versioning, timeout and retry changes, and memory 4 GiB is preserved as `memory_size = 4096`."
+ }
+}

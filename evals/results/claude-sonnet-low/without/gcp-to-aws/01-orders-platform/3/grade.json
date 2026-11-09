@@ -1,0 +1,50 @@
+{
+ "ordering-fifo": {
+  "pass": true,
+  "why": "The diff creates `aws_sns_topic` `orders.fifo` with `fifo_topic = true` and a FIFO SQS queue `orders-worker.fifo`, and `api.py` publishes with `MessageGroupId=str(o[\"customer_id\"])` plus a dedup ID."
+ },
+ "dlq-5": {
+  "pass": true,
+  "why": "`aws_sqs_queue.orders_worker` has a `redrive_policy` with `deadLetterTargetArn = aws_sqs_queue.orders_dlq.arn` and `maxReceiveCount = 5`."
+ },
+ "visibility-timeout": {
+  "pass": true,
+  "why": "`visibility_timeout_seconds = 540` equals the Lambda `timeout = 540`, and the summary calls out the change from 60s."
+ },
+ "run-timeout-900": {
+  "pass": true,
+  "why": "The API runs on ECS Fargate behind an ALB with `idle_timeout = 900`, and the summary says App Runner was avoided because of its timeout cap."
+ },
+ "presign-expiry": {
+  "pass": true,
+  "why": "A code comment and the summary both warn that presigned URLs signed with role credentials stop working when those credentials expire, well before the 7-day ExpiresIn."
+ },
+ "rds-iam-auth": {
+  "pass": true,
+  "why": "`aws_db_instance` uses postgres 15 with `iam_database_authentication_enabled = true`, `multi_az = true` and `backup_retention_period = 7`, which enables PITR."
+ },
+ "worker-event-shape": {
+  "pass": true,
+  "why": "`worker.py` now iterates `event[\"Records\"]` and runs `json.loads(record[\"body\"])`, which is correct because the SNS subscription sets `raw_message_delivery = true`."
+ },
+ "sql-dialect": {
+  "pass": true,
+  "why": "The SQL uses TRY_CAST, replaces QUALIFY with a ROW_NUMBER subquery, uses `slice(array_agg(CAST(ROW(...))...),1,3)` and `approx_distinct`, and swaps _PARTITIONDATE for a `dt` partition column, which the summary flags."
+ },
+ "scheduler-tz": {
+  "pass": true,
+  "why": "`aws_scheduler_schedule` uses `cron(0 2 * * ? *)` with `schedule_expression_timezone = \"America/New_York\"`."
+ },
+ "lifecycle": {
+  "pass": true,
+  "why": "Versioning is Enabled, objects transition to STANDARD_IA at 30 days and expire at 365 days."
+ },
+ "multi-region-flag": {
+  "pass": false,
+  "why": "The GCS 'US' multi-region bucket and BigQuery 'US' location are mapped to the single region us-east-2 with no cross-region replication, and the summary never mentions the durability or availability difference."
+ },
+ "no-silent-changes": {
+  "pass": false,
+  "why": "Two behavior changes go unflagged: the autoscaling target is `ALBRequestCountPerTarget` = 80, which counts requests per minute per target rather than concurrency 80 (the summary calls it 'about 80 requests per target'), and the scheduler now invokes a Lambda asynchronously, adding Lambda and EventBridge retries that Cloud Scheduler's original setup did not have."
+ }
+}

@@ -1,0 +1,735 @@
+diff --git a/app/api.py b/app/api.py
+index c8f6ea8..35f88c2 100644
+--- a/app/api.py
++++ b/app/api.py
+@@ -1,23 +1,35 @@
+-import datetime, json, os
+-from google.cloud import storage, pubsub_v1, bigquery
++import json, os, uuid
++import boto3
++from botocore.config import Config
+ from flask import Flask, request
++from rollup import run_rollup
+ app = Flask(__name__)
+-gcs = storage.Client(); pub = pubsub_v1.PublisherClient(publisher_options=pubsub_v1.types.PublisherOptions(enable_message_ordering=True))
+-TOPIC = pub.topic_path(os.environ["GOOGLE_CLOUD_PROJECT"], "orders")
++s3 = boto3.client("s3", config=Config(signature_version="s3v4"))
++sns = boto3.client("sns")
++TOPIC_ARN = os.environ["TOPIC_ARN"]
+ 
+ @app.post("/upload-url")
+ def upload_url():
+-    blob = gcs.bucket(os.environ["BUCKET"]).blob(request.json["name"])
+-    return {"url": blob.generate_signed_url(version="v4", expiration=datetime.timedelta(days=7), method="PUT")}
++    url = s3.generate_presigned_url(
++        "put_object",
++        Params={"Bucket": os.environ["BUCKET"], "Key": request.json["name"]},
++        ExpiresIn=int(os.environ.get("UPLOAD_URL_EXPIRY_SECONDS", "3600")),
++        HttpMethod="PUT",
++    )
++    return {"url": url}
+ 
+ @app.post("/orders")
+ def create_order():
+     o = request.json
+-    pub.publish(TOPIC, json.dumps(o).encode(), ordering_key=o["customer_id"]).result()
++    sns.publish(
++        TopicArn=TOPIC_ARN,
++        Message=json.dumps(o),
++        MessageGroupId=str(o["customer_id"]),          # was ordering_key
++        MessageDeduplicationId=str(uuid.uuid4()),      # Pub/Sub had no dedup
++    )
+     return {"ok": True}
+ 
+ @app.post("/jobs/rollup")
+ def rollup():
+-    sql = open("sql/rollup.sql").read()
+-    bigquery.Client().query(sql).result()
++    run_rollup()
+     return {"ok": True}
+diff --git a/app/rollup.py b/app/rollup.py
+new file mode 100644
+index 0000000..a2d5692
+--- /dev/null
++++ b/app/rollup.py
+@@ -0,0 +1,19 @@
++import os, time, boto3
++
++def run_rollup():
++    sql = open("sql/rollup.sql").read()
++    statements = [s.strip() for s in sql.split(";") if s.strip()]
++    rs = boto3.client("redshift-data")
++    # One batch call runs all statements in a single transaction (replaces CREATE OR REPLACE).
++    stmt_id = rs.batch_execute_statement(
++        WorkgroupName=os.environ["REDSHIFT_WORKGROUP"],
++        Database=os.environ["REDSHIFT_DATABASE"],
++        Sqls=statements,
++    )["Id"]
++    while True:  # equivalent of .result(): block until done, raise on failure
++        d = rs.describe_statement(Id=stmt_id)
++        if d["Status"] == "FINISHED":
++            return
++        if d["Status"] in ("FAILED", "ABORTED"):
++            raise RuntimeError(f"rollup {d['Status']}: {d.get('Error')}")
++        time.sleep(2)
+diff --git a/app/worker.py b/app/worker.py
+index 762334b..30c1a51 100644
+--- a/app/worker.py
++++ b/app/worker.py
+@@ -1,5 +1,15 @@
+-import base64, json, functions_framework
+-@functions_framework.cloud_event
+-def handle(event):
+-    order = json.loads(base64.b64decode(event.data["message"]["data"]))
+-    print("processing", order["id"])
++import json
++
++def handle(event, context):
++    # SQS FIFO event source, raw SNS delivery: record["body"] is the order JSON (no base64).
++    failed = []
++    for record in event["Records"]:
++        if failed:  # keep order within the group: retry everything after the first failure
++            failed.append({"itemIdentifier": record["messageId"]})
++            continue
++        try:
++            order = json.loads(record["body"])
++            print("processing", order["id"])
++        except Exception:
++            failed.append({"itemIdentifier": record["messageId"]})
++    return {"batchItemFailures": failed}
+diff --git a/aws/main.tf b/aws/main.tf
+new file mode 100644
+index 0000000..04ce591
+--- /dev/null
++++ b/aws/main.tf
+@@ -0,0 +1,518 @@
++terraform {
++  required_providers {
++    aws     = { source = "hashicorp/aws", version = ">= 5.60" }
++    archive = { source = "hashicorp/archive" }
++  }
++}
++
++provider "aws" { region = var.region }
++
++data "aws_caller_identity" "me" {}
++data "aws_vpc" "this" { id = var.vpc_id }
++
++locals {
++  account_id    = data.aws_caller_identity.me.account_id
++  allowed_cidrs = var.allowed_cidrs != null ? var.allowed_cidrs : [data.aws_vpc.this.cidr_block]
++  api_image     = "${local.account_id}.dkr.ecr.${var.region}.amazonaws.com/app/api:${var.image_tag}"
++}
++
++# ---------------------------------------------------------------- S3 (uploads)
++
++resource "aws_s3_bucket" "uploads" {
++  bucket = "${var.project}-uploads"
++}
++
++resource "aws_s3_bucket_ownership_controls" "uploads" { # uniform_bucket_level_access
++  bucket = aws_s3_bucket.uploads.id
++  rule { object_ownership = "BucketOwnerEnforced" }
++}
++
++resource "aws_s3_bucket_public_access_block" "uploads" {
++  bucket                  = aws_s3_bucket.uploads.id
++  block_public_acls       = true
++  block_public_policy     = true
++  ignore_public_acls      = true
++  restrict_public_buckets = true
++}
++
++resource "aws_s3_bucket_versioning" "uploads" {
++  bucket = aws_s3_bucket.uploads.id
++  versioning_configuration { status = "Enabled" }
++}
++
++resource "aws_s3_bucket_lifecycle_configuration" "uploads" {
++  bucket     = aws_s3_bucket.uploads.id
++  depends_on = [aws_s3_bucket_versioning.uploads]
++
++  rule {
++    id     = "nearline-after-30-delete-after-365"
++    status = "Enabled"
++    filter {}
++    transition {
++      days          = 30
++      storage_class = "STANDARD_IA" # was NEARLINE
++    }
++    expiration { days = 365 }
++    # GCS age rules also hit noncurrent versions (age counted from creation).
++    # S3 counts noncurrent_days from when the version became noncurrent: approximation.
++    noncurrent_version_transition {
++      noncurrent_days = 30
++      storage_class   = "STANDARD_IA"
++    }
++    noncurrent_version_expiration { noncurrent_days = 365 }
++  }
++}
++
++# ------------------------------------------------- SNS FIFO -> SQS FIFO (orders)
++
++resource "aws_sns_topic" "orders" {
++  name                        = "orders.fifo"
++  fifo_topic                  = true
++  content_based_deduplication = false
++}
++
++resource "aws_sqs_queue" "orders_dlq" {
++  name                       = "orders-dlq.fifo"
++  fifo_queue                 = true
++  message_retention_seconds  = 1209600
++}
++
++resource "aws_sqs_queue" "orders_worker" {
++  name                       = "orders-worker.fifo"
++  fifo_queue                 = true
++  visibility_timeout_seconds = 3240   # 6 x worker timeout (540s)
++  message_retention_seconds  = 604800 # Pub/Sub default 7 days
++  redrive_policy = jsonencode({
++    deadLetterTargetArn = aws_sqs_queue.orders_dlq.arn
++    maxReceiveCount     = 5
++  })
++}
++
++resource "aws_sqs_queue_policy" "orders_worker" {
++  queue_url = aws_sqs_queue.orders_worker.id
++  policy = jsonencode({
++    Version = "2012-10-17"
++    Statement = [{
++      Effect    = "Allow"
++      Principal = { Service = "sns.amazonaws.com" }
++      Action    = "sqs:SendMessage"
++      Resource  = aws_sqs_queue.orders_worker.arn
++      Condition = { ArnEquals = { "aws:SourceArn" = aws_sns_topic.orders.arn } }
++    }]
++  })
++}
++
++resource "aws_sns_topic_subscription" "orders_worker" {
++  topic_arn            = aws_sns_topic.orders.arn
++  protocol             = "sqs"
++  endpoint             = aws_sqs_queue.orders_worker.arn
++  raw_message_delivery = true
++}
++
++# ------------------------------------------------------------ Lambda (worker)
++
++data "archive_file" "worker" {
++  type        = "zip"
++  source_file = "${path.module}/../app/worker.py"
++  output_path = "${path.module}/.build/worker.zip"
++}
++
++resource "aws_iam_role" "worker" {
++  name = "orders-worker"
++  assume_role_policy = jsonencode({
++    Version = "2012-10-17"
++    Statement = [{ Effect = "Allow", Principal = { Service = "lambda.amazonaws.com" }, Action = "sts:AssumeRole" }]
++  })
++}
++
++resource "aws_iam_role_policy_attachment" "worker_logs" {
++  role       = aws_iam_role.worker.name
++  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
++}
++
++resource "aws_iam_role_policy" "worker_sqs" {
++  role = aws_iam_role.worker.id
++  policy = jsonencode({
++    Version = "2012-10-17"
++    Statement = [{
++      Effect   = "Allow"
++      Action   = ["sqs:ReceiveMessage", "sqs:DeleteMessage", "sqs:GetQueueAttributes"]
++      Resource = aws_sqs_queue.orders_worker.arn
++    }]
++  })
++}
++
++resource "aws_cloudwatch_log_group" "worker" {
++  name              = "/aws/lambda/orders-worker"
++  retention_in_days = 30
++}
++
++resource "aws_lambda_function" "worker" {
++  function_name    = "orders-worker"
++  runtime          = "python3.12"
++  handler          = "worker.handle"
++  role             = aws_iam_role.worker.arn
++  timeout          = 540
++  memory_size      = 512
++  filename         = data.archive_file.worker.output_path
++  source_code_hash = data.archive_file.worker.output_base64sha256
++  depends_on       = [aws_cloudwatch_log_group.worker]
++}
++
++resource "aws_lambda_event_source_mapping" "worker" {
++  event_source_arn        = aws_sqs_queue.orders_worker.arn
++  function_name           = aws_lambda_function.worker.arn
++  batch_size              = 1
++  function_response_types = ["ReportBatchItemFailures"]
++}
++
++# ------------------------------------------------------- RDS Postgres (app-db)
++
++resource "aws_security_group" "db" {
++  name   = "app-db"
++  vpc_id = var.vpc_id
++}
++
++resource "aws_security_group" "api" {
++  name   = "api"
++  vpc_id = var.vpc_id
++  egress {
++    from_port   = 0
++    to_port     = 0
++    protocol    = "-1"
++    cidr_blocks = ["0.0.0.0/0"]
++  }
++}
++
++resource "aws_vpc_security_group_ingress_rule" "db_from_api" {
++  security_group_id            = aws_security_group.db.id
++  referenced_security_group_id = aws_security_group.api.id
++  from_port                    = 5432
++  to_port                      = 5432
++  ip_protocol                  = "tcp"
++}
++
++resource "aws_db_subnet_group" "db" {
++  name       = "app-db"
++  subnet_ids = var.private_subnet_ids
++}
++
++resource "aws_db_instance" "db" {
++  identifier                          = "app-db"
++  engine                              = "postgres"
++  engine_version                      = "15"
++  instance_class                      = "db.m6g.large" # 2 vCPU / 8 GiB vs db-custom-2-7680
++  allocated_storage                   = 20
++  multi_az                            = true # availability_type = REGIONAL
++  iam_database_authentication_enabled = true # cloudsql.iam_authentication
++  backup_retention_period             = 7    # automated backups + PITR
++  username                            = "postgres"
++  manage_master_user_password         = true
++  db_subnet_group_name                = aws_db_subnet_group.db.name
++  vpc_security_group_ids              = [aws_security_group.db.id]
++  publicly_accessible                 = false
++  final_snapshot_identifier           = "app-db-final"
++}
++
++# ------------------------------------------------- Redshift Serverless (analytics)
++
++resource "aws_security_group" "redshift" {
++  name   = "analytics-redshift"
++  vpc_id = var.vpc_id
++}
++
++resource "aws_vpc_security_group_ingress_rule" "redshift_from_api" {
++  security_group_id            = aws_security_group.redshift.id
++  referenced_security_group_id = aws_security_group.api.id
++  from_port                    = 5439
++  to_port                      = 5439
++  ip_protocol                  = "tcp"
++}
++
++resource "aws_redshiftserverless_namespace" "analytics" {
++  namespace_name      = "analytics"
++  db_name             = "app"
++  manage_admin_password = true
++}
++
++resource "aws_redshiftserverless_workgroup" "analytics" {
++  workgroup_name      = "analytics"
++  namespace_name      = aws_redshiftserverless_namespace.analytics.namespace_name
++  base_capacity       = var.redshift_base_capacity
++  subnet_ids          = var.private_subnet_ids
++  security_group_ids  = [aws_security_group.redshift.id]
++  publicly_accessible = false
++}
++
++resource "aws_redshiftserverless_usage_limit" "analytics" {
++  resource_arn  = aws_redshiftserverless_workgroup.analytics.arn
++  usage_type    = "serverless-compute"
++  amount        = var.redshift_usage_limit_rpu_hours
++  period        = "monthly"
++  breach_action = "log"
++}
++
++# ---------------------------------------------------- API (ECS Fargate + ALB)
++
++resource "aws_ecr_repository" "api" { name = "app/api" }
++
++resource "aws_cloudwatch_log_group" "api" {
++  name              = "/ecs/api"
++  retention_in_days = 30
++}
++
++data "aws_iam_policy_document" "ecs_assume" {
++  statement {
++    actions = ["sts:AssumeRole"]
++    principals {
++      type        = "Service"
++      identifiers = ["ecs-tasks.amazonaws.com"]
++    }
++  }
++}
++
++resource "aws_iam_role" "api_exec" {
++  name               = "api-exec"
++  assume_role_policy = data.aws_iam_policy_document.ecs_assume.json
++}
++
++resource "aws_iam_role_policy_attachment" "api_exec" {
++  role       = aws_iam_role.api_exec.name
++  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
++}
++
++resource "aws_iam_role" "api" { # was service account api-sa
++  name               = "api"
++  assume_role_policy = data.aws_iam_policy_document.ecs_assume.json
++}
++
++resource "aws_iam_role_policy" "api" {
++  role = aws_iam_role.api.id
++  policy = jsonencode({
++    Version = "2012-10-17"
++    Statement = [
++      { # narrowed from storage.objectAdmin to what the code calls (presign PUT)
++        Effect   = "Allow"
++        Action   = ["s3:PutObject"]
++        Resource = "${aws_s3_bucket.uploads.arn}/*"
++      },
++      {
++        Effect   = "Allow"
++        Action   = ["sns:Publish"]
++        Resource = aws_sns_topic.orders.arn
++      },
++      {
++        Effect   = "Allow"
++        Action   = ["redshift-data:BatchExecuteStatement", "redshift-data:DescribeStatement"]
++        Resource = "*"
++      },
++      {
++        Effect   = "Allow"
++        Action   = ["redshift-serverless:GetCredentials"]
++        Resource = aws_redshiftserverless_workgroup.analytics.arn
++      }
++    ]
++  })
++}
++
++resource "aws_ecs_cluster" "main" { name = "app" }
++
++resource "aws_ecs_task_definition" "api" {
++  family                   = "api"
++  requires_compatibilities = ["FARGATE"]
++  network_mode             = "awsvpc"
++  cpu                      = 2048
++  memory                   = 4096 # Fargate minimum for 2 vCPU (Cloud Run had 1Gi)
++  execution_role_arn       = aws_iam_role.api_exec.arn
++  task_role_arn            = aws_iam_role.api.arn
++  container_definitions = jsonencode([{
++    name         = "api"
++    image        = local.api_image
++    essential    = true
++    portMappings = [{ containerPort = 8080 }]
++    environment = [
++      { name = "BUCKET", value = aws_s3_bucket.uploads.bucket },
++      { name = "TOPIC_ARN", value = aws_sns_topic.orders.arn },
++      { name = "AWS_REGION", value = var.region },
++      { name = "DB_HOST", value = aws_db_instance.db.address },
++      { name = "REDSHIFT_WORKGROUP", value = aws_redshiftserverless_workgroup.analytics.workgroup_name },
++      { name = "REDSHIFT_DATABASE", value = "app" },
++      { name = "UPLOAD_URL_EXPIRY_SECONDS", value = tostring(var.upload_url_expiry_seconds) },
++    ]
++    logConfiguration = {
++      logDriver = "awslogs"
++      options = {
++        awslogs-group         = aws_cloudwatch_log_group.api.name
++        awslogs-region        = var.region
++        awslogs-stream-prefix = "api"
++      }
++    }
++  }])
++}
++
++resource "aws_security_group" "alb" {
++  name   = "api-alb"
++  vpc_id = var.vpc_id
++  dynamic "ingress" {
++    for_each = toset(var.acm_certificate_arn == null ? [80] : [80, 443])
++    content {
++      from_port   = ingress.value
++      to_port     = ingress.value
++      protocol    = "tcp"
++      cidr_blocks = local.allowed_cidrs
++    }
++  }
++  egress {
++    from_port   = 0
++    to_port     = 0
++    protocol    = "-1"
++    cidr_blocks = ["0.0.0.0/0"]
++  }
++}
++
++resource "aws_vpc_security_group_ingress_rule" "api_from_alb" {
++  security_group_id            = aws_security_group.api.id
++  referenced_security_group_id = aws_security_group.alb.id
++  from_port                    = 8080
++  to_port                      = 8080
++  ip_protocol                  = "tcp"
++}
++
++resource "aws_lb" "api" {
++  name               = "api"
++  internal           = var.alb_internal
++  load_balancer_type = "application"
++  subnets            = var.alb_subnet_ids
++  security_groups    = [aws_security_group.alb.id]
++  idle_timeout       = 900 # Cloud Run request timeout
++}
++
++resource "aws_lb_target_group" "api" {
++  name        = "api"
++  port        = 8080
++  protocol    = "HTTP"
++  target_type = "ip"
++  vpc_id      = var.vpc_id
++  health_check {
++    path    = "/"
++    matcher = "200-499" # app has no / route; any HTTP answer = alive
++  }
++}
++
++resource "aws_lb_listener" "http" {
++  load_balancer_arn = aws_lb.api.arn
++  port              = 80
++  protocol          = "HTTP"
++  default_action {
++    type             = var.acm_certificate_arn == null ? "forward" : "redirect"
++    target_group_arn = var.acm_certificate_arn == null ? aws_lb_target_group.api.arn : null
++    dynamic "redirect" {
++      for_each = var.acm_certificate_arn == null ? [] : [1]
++      content {
++        port        = "443"
++        protocol    = "HTTPS"
++        status_code = "HTTP_301"
++      }
++    }
++  }
++}
++
++resource "aws_lb_listener" "https" {
++  count             = var.acm_certificate_arn == null ? 0 : 1
++  load_balancer_arn = aws_lb.api.arn
++  port              = 443
++  protocol          = "HTTPS"
++  certificate_arn   = var.acm_certificate_arn
++  default_action {
++    type             = "forward"
++    target_group_arn = aws_lb_target_group.api.arn
++  }
++}
++
++resource "aws_ecs_service" "api" {
++  name            = "api"
++  cluster         = aws_ecs_cluster.main.id
++  task_definition = aws_ecs_task_definition.api.arn
++  desired_count   = 1
++  launch_type     = "FARGATE"
++  network_configuration {
++    subnets         = var.private_subnet_ids
++    security_groups = [aws_security_group.api.id]
++  }
++  load_balancer {
++    target_group_arn = aws_lb_target_group.api.arn
++    container_name   = "api"
++    container_port   = 8080
++  }
++  lifecycle { ignore_changes = [desired_count] }
++  depends_on = [aws_lb_listener.http]
++}
++
++resource "aws_appautoscaling_target" "api" {
++  service_namespace  = "ecs"
++  resource_id        = "service/${aws_ecs_cluster.main.name}/${aws_ecs_service.api.name}"
++  scalable_dimension = "ecs:service:DesiredCount"
++  min_capacity       = 1
++  max_capacity       = 20
++}
++
++resource "aws_appautoscaling_policy" "api" {
++  name               = "api-cpu"
++  service_namespace  = aws_appautoscaling_target.api.service_namespace
++  resource_id        = aws_appautoscaling_target.api.resource_id
++  scalable_dimension = aws_appautoscaling_target.api.scalable_dimension
++  policy_type        = "TargetTrackingScaling"
++  target_tracking_scaling_policy_configuration {
++    target_value = 60
++    predefined_metric_specification { predefined_metric_type = "ECSServiceAverageCPUUtilization" }
++  }
++}
++
++# ------------------------------------------------ Nightly rollup (EventBridge Scheduler)
++# Runs the rollup as an ECS task (same image) instead of an HTTP POST: EventBridge API
++# destinations time out at 5 s and the rollup may run far longer.
++
++resource "aws_iam_role" "scheduler" {
++  name = "nightly-rollup-scheduler"
++  assume_role_policy = jsonencode({
++    Version = "2012-10-17"
++    Statement = [{ Effect = "Allow", Principal = { Service = "scheduler.amazonaws.com" }, Action = "sts:AssumeRole" }]
++  })
++}
++
++resource "aws_iam_role_policy" "scheduler" {
++  role = aws_iam_role.scheduler.id
++  policy = jsonencode({
++    Version = "2012-10-17"
++    Statement = [
++      { Effect = "Allow", Action = "ecs:RunTask", Resource = "${replace(aws_ecs_task_definition.api.arn, "/:[0-9]+$/", "")}:*" },
++      { Effect = "Allow", Action = "iam:PassRole", Resource = [aws_iam_role.api.arn, aws_iam_role.api_exec.arn] },
++    ]
++  })
++}
++
++resource "aws_scheduler_schedule" "nightly" {
++  name                         = "nightly-rollup"
++  schedule_expression          = "cron(0 2 * * ? *)"
++  schedule_expression_timezone = "America/New_York"
++  flexible_time_window { mode = "OFF" }
++
++  target {
++    arn      = aws_ecs_cluster.main.arn
++    role_arn = aws_iam_role.scheduler.arn
++    ecs_parameters {
++      task_definition_arn = aws_ecs_task_definition.api.arn
++      launch_type         = "FARGATE"
++      network_configuration {
++        subnets         = var.private_subnet_ids
++        security_groups = [aws_security_group.api.id]
++      }
++    }
++    input = jsonencode({
++      containerOverrides = [{
++        name    = "api"
++        command = ["python", "-c", "from rollup import run_rollup; run_rollup()"]
++      }]
++    })
++  }
++}
+diff --git a/aws/variables.tf b/aws/variables.tf
+new file mode 100644
+index 0000000..5e35b10
+--- /dev/null
++++ b/aws/variables.tf
+@@ -0,0 +1,64 @@
++variable "project" {
++  type        = string
++  description = "Name prefix; the uploads bucket is ${var.project}-uploads (S3 names are global, so it must be unique)."
++}
++
++variable "region" {
++  type        = string
++  default     = "us-east-2" # nearest AWS region to us-central1
++  description = "AWS region of record."
++}
++
++variable "vpc_id" {
++  type        = string
++  description = "Existing VPC (the GCP project used the default network implicitly)."
++}
++
++variable "private_subnet_ids" {
++  type        = list(string)
++  description = "Private subnets (>= 2 AZs, >= 3 recommended for Redshift Serverless) with NAT or VPC endpoints for ECR, S3, SNS, logs, Redshift Data."
++}
++
++variable "alb_subnet_ids" {
++  type        = list(string)
++  description = "Subnets for the ALB (private subnets if alb_internal, else public)."
++}
++
++variable "alb_internal" {
++  type        = bool
++  default     = true
++  description = "Cloud Run had no allUsers invoker binding, so the API was not publicly callable. Internal ALB keeps it non-public."
++}
++
++variable "allowed_cidrs" {
++  type        = list(string)
++  default     = null
++  description = "CIDRs allowed to reach the ALB. Defaults to the VPC CIDR."
++}
++
++variable "acm_certificate_arn" {
++  type        = string
++  default     = null
++  description = "If set, the ALB serves HTTPS on 443 and redirects 80 to it. Cloud Run was HTTPS-only."
++}
++
++variable "image_tag" {
++  type    = string
++  default = "latest"
++}
++
++variable "redshift_base_capacity" {
++  type    = number
++  default = 8
++}
++
++variable "redshift_usage_limit_rpu_hours" {
++  type    = number
++  default = 500
++}
++
++variable "upload_url_expiry_seconds" {
++  type        = number
++  default     = 3600
++  description = "GCP signed URLs lasted 7 days; URLs signed with role credentials stop working when the credentials expire."
++}
+diff --git a/sql/rollup.sql b/sql/rollup.sql
+index b79db8d..07b7a34 100644
+--- a/sql/rollup.sql
++++ b/sql/rollup.sql
+@@ -1,10 +1,29 @@
+-CREATE OR REPLACE TABLE analytics.daily AS
+-SELECT DATE(TIMESTAMP_TRUNC(created_at, DAY)) AS day,
++-- Redshift. Assumes analytics.orders: created_at TIMESTAMP (UTC), amount VARCHAR,
++-- items SUPER (array of {sku, qty}), session_id, ingest_date DATE (load date, UTC).
++DROP TABLE IF EXISTS analytics.daily;
++CREATE TABLE analytics.daily AS
++WITH exploded AS (
++  SELECT TRUNC(o.created_at) AS day,
++         o.customer_id,
++         CASE WHEN o.amount ~ '^[+-]?[0-9]+([.][0-9]+)?$'
++              THEN o.amount::DECIMAL(38,9) END AS amount_num,
++         i.sku::VARCHAR AS sku,
++         i.qty::BIGINT AS qty,
++         o.session_id
++  FROM analytics.orders AS o, o.items AS i
++  WHERE o.ingest_date >= CURRENT_DATE - 1
++),
++ranked AS (
++  SELECT *, ROW_NUMBER() OVER (PARTITION BY day, customer_id ORDER BY qty DESC) AS item_rank
++  FROM exploded
++)
++SELECT day,
+        customer_id,
+-       SUM(SAFE_CAST(amount AS NUMERIC)) AS amount,
+-       ARRAY_AGG(STRUCT(sku, qty) ORDER BY qty DESC LIMIT 3) AS top_items,
+-       APPROX_COUNT_DISTINCT(session_id) AS sessions
+-FROM `analytics.orders`, UNNEST(items)
+-WHERE _PARTITIONDATE >= DATE_SUB(CURRENT_DATE(), INTERVAL 1 DAY)
++       SUM(amount_num) AS amount,
++       JSON_PARSE('[' || COALESCE(
++         LISTAGG(CASE WHEN item_rank <= 3 THEN JSON_SERIALIZE(OBJECT('sku', sku, 'qty', qty)) END, ',')
++           WITHIN GROUP (ORDER BY qty DESC), '') || ']') AS top_items,
++       APPROXIMATE COUNT(DISTINCT session_id) AS sessions
++FROM ranked
+ GROUP BY 1, 2
+-QUALIFY ROW_NUMBER() OVER (PARTITION BY customer_id ORDER BY amount DESC) <= 100;
++QUALIFY ROW_NUMBER() OVER (PARTITION BY customer_id ORDER BY SUM(amount_num) DESC) <= 100;

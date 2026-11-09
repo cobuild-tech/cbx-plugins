@@ -1,0 +1,50 @@
+{
+ "s3-key-decode": {
+  "pass": true,
+  "why": "The ingest handler uses `name = unquote_plus(rec[\"object\"][\"key\"])` before filtering and scheduling."
+ },
+ "two-hour-hold": {
+  "pass": true,
+  "why": "The ingest handler creates an EventBridge Scheduler one-time schedule `at(now + HOLD)` with HOLD = 2 hours."
+ },
+ "stale-generation": {
+  "pass": true,
+  "why": "The S3 versionId is passed as `generation`, and transcode compares `head.get(\"VersionId\")` with `job[\"generation\"]`, returning stale on mismatch or 404; versioning is enabled on the bucket."
+ },
+ "overwrite-trigger": {
+  "pass": true,
+  "why": "`aws_s3_bucket_notification` uses `events = [\"s3:ObjectCreated:*\"]`, which fires on overwrites too."
+ },
+ "transcode-timeout": {
+  "pass": true,
+  "why": "Lambda timeout is set to 900, and summary item 1 explicitly flags the 15-minute limit and suggests Fargate or Batch."
+ },
+ "rate-limit": {
+  "pass": true,
+  "why": "Summary item 5 explicitly says the 5/s and 3-concurrent limits are not enforced and explains why reserved concurrency was not set."
+ },
+ "retry-policy": {
+  "pass": true,
+  "why": "Ingest gets `maximum_retry_attempts = 0`, and summary item 4 explicitly flags that the Cloud Tasks backoff has no equivalent, describing the new 3 schedule plus 2 Lambda retries."
+ },
+ "attribute-limit": {
+  "pass": true,
+  "why": "The 12 attributes are moved into a JSON SNS message body, and this is flagged in summary item 9."
+ },
+ "week-start": {
+  "pass": true,
+  "why": "`date_trunc('week', CAST(uploaded_at AS date) + INTERVAL '1' DAY) - INTERVAL '1' DAY` correctly produces Sunday-start weeks."
+ },
+ "weekend-days": {
+  "pass": true,
+  "why": "Uses `COUNT_IF(day_of_week(uploaded_at) IN (6, 7))`, with a comment on Trino's Monday=1 numbering."
+ },
+ "safe-divide": {
+  "pass": true,
+  "why": "`CAST(SUM(transcode_seconds) AS double) / COUNT(*)` avoids integer truncation, and COUNT(*) per group is always at least 1, as noted in summary item 15."
+ },
+ "no-silent-changes": {
+  "pass": true,
+  "why": "7-day retention (SQS) and 4096 MB memory are preserved, and versioning, region, retries, auth, event format and timeout changes are all called out; the only unflagged item is the broad `scheduler:CreateSchedule` on `*`, a necessary new grant rather than a behaviour change."
+ }
+}

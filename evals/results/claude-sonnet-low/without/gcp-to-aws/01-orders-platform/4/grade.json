@@ -1,0 +1,50 @@
+{
+ "ordering-fifo": {
+  "pass": true,
+  "why": "The diff creates `aws_sns_topic.orders` with `fifo_topic = true`, a FIFO SQS queue (`orders-worker.fifo`), and `sns.publish(..., MessageGroupId=str(o[\"customer_id\"]))` in api.py."
+ },
+ "dlq-5": {
+  "pass": true,
+  "why": "`aws_sqs_queue.orders_worker` has `redrive_policy` with `deadLetterTargetArn = aws_sqs_queue.orders_dlq.arn` and `maxReceiveCount = 5`."
+ },
+ "visibility-timeout": {
+  "pass": true,
+  "why": "`visibility_timeout_seconds = 540` equals the Lambda `timeout = 540`, and the summary flags the change from the 60s ack deadline."
+ },
+ "run-timeout-900": {
+  "pass": true,
+  "why": "The API runs on ECS Fargate behind an ALB with `idle_timeout = 900`, commented 'Cloud Run request timeout was 900s'."
+ },
+ "presign-expiry": {
+  "pass": true,
+  "why": "The code comment and the summary both state that the 7-day presigned URL will actually expire when the task role's temporary credentials do, which is hours."
+ },
+ "rds-iam-auth": {
+  "pass": true,
+  "why": "`aws_db_instance.db` sets `engine_version = \"15\"`, `iam_database_authentication_enabled = true`, `multi_az = true` and `backup_retention_period = 7`, which enables PITR."
+ },
+ "worker-event-shape": {
+  "pass": true,
+  "why": "worker.py reads `event[\"Records\"]` and `json.loads(record[\"body\"])`, and the SNS subscription uses `raw_message_delivery = true`, so no SNS envelope needs unwrapping."
+ },
+ "sql-dialect": {
+  "pass": true,
+  "why": "rollup.sql uses TRY_CAST, replaces QUALIFY with a nested ROW_NUMBER subquery and `rn <= 100`, replaces _PARTITIONDATE with a `dt` partition column, and translates ARRAY_AGG(STRUCT ... LIMIT 3) to `slice(array_agg(CAST(ROW(...)) ORDER BY qty DESC), 1, 3)`."
+ },
+ "scheduler-tz": {
+  "pass": true,
+  "why": "`aws_scheduler_schedule.nightly` uses `cron(0 2 * * ? *)` with `schedule_expression_timezone = \"America/New_York\"`."
+ },
+ "lifecycle": {
+  "pass": true,
+  "why": "The lifecycle configuration transitions to STANDARD_IA at 30 days and expires at 365 days, and `aws_s3_bucket_versioning` is Enabled."
+ },
+ "multi-region-flag": {
+  "pass": false,
+  "why": "The GCS 'US' multi-region bucket and BigQuery 'US' dataset are mapped to a single region (default us-east-2) with no replication, and the summary never mentions the multi-region durability/availability difference."
+ },
+ "no-silent-changes": {
+  "pass": false,
+  "why": "The SNS/SQS FIFO resources set `content_based_deduplication = true`, so identical order payloads published within 5 minutes are silently dropped, and the Cloud Run per-instance concurrency of 80 is replaced by `ALBRequestCountPerTarget` target 80, which is a per-minute request rate; the summary calls neither change out."
+ }
+}

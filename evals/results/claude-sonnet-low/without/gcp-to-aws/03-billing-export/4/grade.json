@@ -1,0 +1,50 @@
+{
+ "job-timeout": {
+  "pass": true,
+  "why": "The Batch job definition sets `timeout { attempt_duration_seconds = 10800 }` on Fargate, so the 3-hour limit is kept on a service that allows it."
+ },
+ "sharding": {
+  "pass": true,
+  "why": "An array job of size 16 has max_vcpus = 4*2 = 8 capping concurrency at 4, and the code reads AWS_BATCH_JOB_ARRAY_INDEX plus a TASK_COUNT env var set to 16 instead of the CLOUD_RUN_* variables."
+ },
+ "retry-attempt": {
+  "pass": true,
+  "why": "`retry_strategy { attempts = 3 }` maps max_retries=2, and ATTEMPT comes from Batch's real AWS_BATCH_JOB_ATTEMPT, converted to 0-based."
+ },
+ "secret-latest": {
+  "pass": true,
+  "why": "PARTNER_API_KEY is injected through container `secrets` with valueFrom set to the Secrets Manager ARN and no version pinned, so AWSCURRENT is resolved at task start, matching 'latest'."
+ },
+ "redis-tls-auth": {
+  "pass": true,
+  "why": "The replication group sets transit_encryption_enabled, auth_token, num_cache_clusters=2 with multi_az and automatic failover, and the client uses ssl=True on REDIS_PORT 6379 instead of 6378."
+ },
+ "private-network": {
+  "pass": true,
+  "why": "Batch Fargate tasks run in default-VPC subnets with a job security group that the Redis security group allows on 6379, and assignPublicIp=ENABLED gives direct internet egress to the partner API."
+ },
+ "worm-retention": {
+  "pass": true,
+  "why": "The bucket has object_lock_enabled = true, versioning, and default_retention mode COMPLIANCE for 2555 days, and the summary notes it is irreversible."
+ },
+ "create-only-write": {
+  "pass": true,
+  "why": "s3.put_object uses IfNoneMatch=\"*\", with a comment that it replaces if_generation_match=0."
+ },
+ "scheduler-tz": {
+  "pass": true,
+  "why": "aws_scheduler_schedule uses cron(0 3 1 * ? *) with schedule_expression_timezone = \"Europe/Berlin\"."
+ },
+ "time-travel": {
+  "pass": true,
+  "why": "Athena is chosen because Redshift lacks time travel, the MERGE uses Iceberg `FOR TIMESTAMP AS OF` at the Berlin month boundary, and the Iceberg and snapshot-retention requirements are flagged."
+ },
+ "shard-hash": {
+  "pass": true,
+  "why": "xxhash64 replaces FARM_FINGERPRINT, the summary flags that shard membership changes, and `abs(x % n)` avoids abs overflow on negative values."
+ },
+ "no-silent-changes": {
+  "pass": true,
+  "why": "The europe-west1 to eu-west-1 mapping is commented and stated, Block Public Access and Intelligent-Tiering are called out, CPU and memory are unchanged (2 vCPU / 4096), and the REDIS_AUTH wiring and UTC timestamp assumption are flagged."
+ }
+}

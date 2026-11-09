@@ -1,0 +1,50 @@
+{
+ "job-timeout": {
+  "pass": true,
+  "why": "The job runs on AWS Batch on Fargate with `timeout { attempt_duration_seconds = 10800 }`, which keeps the 3-hour limit on a service that supports it."
+ },
+ "sharding": {
+  "pass": true,
+  "why": "The scheduler submits an array job with `ArrayProperties = { Size = 16 }`, and `max_vcpus = 8` with 2 vCPU per task caps concurrency at 4 (flagged in the summary); the code reads `AWS_BATCH_JOB_ARRAY_INDEX` and `TASK_COUNT` instead of the CLOUD_RUN_* variables."
+ },
+ "retry-attempt": {
+  "pass": true,
+  "why": "`retry_strategy { attempts = 3 }` keeps 2 retries, and ATTEMPT now comes from the real Batch variable `AWS_BATCH_JOB_ATTEMPT`, shifted to keep the 0-based meaning."
+ },
+ "secret-latest": {
+  "pass": true,
+  "why": "PARTNER_API_KEY is injected through the container `secrets` `valueFrom` set to the Secrets Manager ARN, which resolves the current version at task start, and the value is set out of band rather than in Terraform."
+ },
+ "redis-tls-auth": {
+  "pass": true,
+  "why": "The ElastiCache replication group has `transit_encryption_enabled = true`, an `auth_token`, 2 nodes with `multi_az_enabled` and automatic failover, and the client uses port 6379 with `ssl=True` and `REDIS_AUTH` (the missing auth wiring is flagged)."
+ },
+ "private-network": {
+  "pass": true,
+  "why": "Batch tasks run in `private_subnet_ids` with `assignPublicIp = DISABLED`, a security-group rule allows the job SG to reach Redis on 6379, and the summary states the private subnets need a NAT route for the partner API."
+ },
+ "worm-retention": {
+  "pass": true,
+  "why": "The bucket sets `object_lock_enabled = true` with versioning and a default retention of COMPLIANCE for 2555 days (7 years), and the irreversibility is flagged."
+ },
+ "create-only-write": {
+  "pass": true,
+  "why": "The upload uses `s3.put_object(..., IfNoneMatch=\"*\")`, explicitly matching GCS `if_generation_match=0`."
+ },
+ "scheduler-tz": {
+  "pass": true,
+  "why": "`aws_scheduler_schedule` uses `cron(0 3 1 * ? *)` with `schedule_expression_timezone = \"Europe/Berlin\"`."
+ },
+ "time-travel": {
+  "pass": true,
+  "why": "The SQL uses Athena Iceberg `FOR TIMESTAMP AS OF with_timezone(...)`, and the summary explains choosing Athena because Redshift has no time travel."
+ },
+ "shard-hash": {
+  "pass": true,
+  "why": "`FARM_FINGERPRINT` is replaced with `mod(crc32(to_utf8(account_id)), {shards})`, where crc32 is non-negative so the negative-MOD case is avoided, and the summary warns that shard membership changes."
+ },
+ "no-silent-changes": {
+  "pass": true,
+  "why": "The summary calls out the eu-west-1 region mapping, Block Public Access, Intelligent-Tiering for Autoclass, IAM roles replacing the service account, the added Redis auth secret, the UTC timestamp assumption and the shard change; CPU/memory stay at 2 vCPU / 4096 MB, and the node-size difference is noted in a Terraform comment."
+ }
+}

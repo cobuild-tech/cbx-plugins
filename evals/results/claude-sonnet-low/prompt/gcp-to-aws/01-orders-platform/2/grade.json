@@ -1,0 +1,50 @@
+{
+ "ordering-fifo": {
+  "pass": true,
+  "why": "The diff creates `aws_sns_topic.orders` with `fifo_topic = true` and an `orders-worker.fifo` SQS FIFO queue, and api.py publishes with `MessageGroupId=str(o[\"customer_id\"])`."
+ },
+ "dlq-5": {
+  "pass": true,
+  "why": "`aws_sqs_queue.orders_worker` has a `redrive_policy` pointing to `orders_dlq` with `maxReceiveCount = 5`."
+ },
+ "visibility-timeout": {
+  "pass": true,
+  "why": "`visibility_timeout_seconds = 540` matches the Lambda `timeout = 540`, with a comment explaining why."
+ },
+ "run-timeout-900": {
+  "pass": true,
+  "why": "The API is on App Runner, but the summary flags this explicitly in items 5 and 6: 'App Runner's request timeout is fixed at 120s. GCP allowed 900s' and 'The request timeout can't be set to 900s'."
+ },
+ "presign-expiry": {
+  "pass": true,
+  "why": "Summary item 1 says the URL 'won't last 7 days' because it 'is capped by the lifetime of the App Runner role's temporary credentials'."
+ },
+ "rds-iam-auth": {
+  "pass": true,
+  "why": "`aws_db_instance` uses `engine_version = \"15\"`, `iam_database_authentication_enabled = true`, `multi_az = true` and `backup_retention_period = 7`, which enables PITR."
+ },
+ "worker-event-shape": {
+  "pass": true,
+  "why": "worker.py now iterates `event[\"Records\"]` and parses `rec[\"body\"]`, which is correct because the SNS subscription sets `raw_message_delivery = true`."
+ },
+ "sql-dialect": {
+  "pass": true,
+  "why": "rollup.sql uses `TRY_CAST`, replaces `QUALIFY` with a `ROW_NUMBER` subquery filtered on `rn <= 100`, swaps `_PARTITIONDATE` for `dt`, and rewrites `ARRAY_AGG(STRUCT ... LIMIT 3)` as `SLICE(ARRAY_AGG(CAST(ROW(...))), 1, 3)`."
+ },
+ "scheduler-tz": {
+  "pass": true,
+  "why": "`aws_scheduler_schedule.nightly` uses `cron(0 2 * * ? *)` with `schedule_expression_timezone = \"America/New_York\"`."
+ },
+ "lifecycle": {
+  "pass": true,
+  "why": "The lifecycle config has a 30-day `STANDARD_IA` transition and a 365-day `expiration`, and `aws_s3_bucket_versioning` is set to `Enabled`."
+ },
+ "multi-region-flag": {
+  "pass": false,
+  "why": "Summary item 14 only says `location = \"US\"` 'has no equivalent' and moves to us-east-1; it never flags the durability or availability difference and adds no cross-region replication."
+ },
+ "no-silent-changes": {
+  "pass": true,
+  "why": "Scaling is kept at min 1 / max 20 / concurrency 80 and versioning is kept, while the changed retry and batching semantics, ack deadline, memory, noncurrent expiry, dedup window, IAM breadth and RDS settings are all called out in summary items 6–15."
+ }
+}

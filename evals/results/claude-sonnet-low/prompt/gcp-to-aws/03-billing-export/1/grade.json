@@ -1,0 +1,50 @@
+{
+ "job-timeout": {
+  "pass": true,
+  "why": "The AWS Batch job definition sets `timeout { attempt_duration_seconds = 10800 }`, and the message notes the timeout applies per attempt, as Cloud Run's does."
+ },
+ "sharding": {
+  "pass": true,
+  "why": "The scheduler submits a Batch array job with `ArrayProperties = { Size = 16 }`, the code reads `AWS_BATCH_JOB_ARRAY_INDEX` and `TASK_COUNT=16`, and the parallelism of 4 is approximated with `max_vcpus = 8` and flagged as a capacity limit (difference 7)."
+ },
+ "retry-attempt": {
+  "pass": true,
+  "why": "`retry_strategy { attempts = 3 }` keeps 1 try plus 2 retries, and ATTEMPT now comes from `AWS_BATCH_JOB_ATTEMPT - 1`, with the 1-based/0-based shift explained (difference 8)."
+ },
+ "secret-latest": {
+  "pass": true,
+  "why": "PARTNER_API_KEY is injected from the Secrets Manager ARN through the container `secrets` block and the execution role, so the current version is resolved at task start, like 'latest'; it is not hard-coded."
+ },
+ "redis-tls-auth": {
+  "pass": true,
+  "why": "The replication group has `transit_encryption_enabled = true`, an `auth_token` injected as REDIS_AUTH, `num_cache_clusters = 2` with Multi-AZ failover, and the client keeps `ssl=True`; the port is explicitly set to 6378 on both the cluster and the security group, so it matches the client."
+ },
+ "private-network": {
+  "pass": true,
+  "why": "Tasks run in default-VPC subnets with a job security group allowed into the Redis security group on 6378, and `assignPublicIp = ENABLED` gives public egress to the partner API; this is flagged as approximating PRIVATE_RANGES_ONLY (difference 12)."
+ },
+ "worm-retention": {
+  "pass": true,
+  "why": "The bucket has `object_lock_enabled = true`, versioning, and a default retention in `COMPLIANCE` mode for 2555 days (7 years)."
+ },
+ "create-only-write": {
+  "pass": true,
+  "why": "`s3.put_object(..., IfNoneMatch=\"*\")` replaces `if_generation_match=0`."
+ },
+ "scheduler-tz": {
+  "pass": true,
+  "why": "`aws_scheduler_schedule` uses `cron(0 3 1 * ? *)` with `schedule_expression_timezone = \"Europe/Berlin\"`."
+ },
+ "time-travel": {
+  "pass": true,
+  "why": "The SQL uses Athena Iceberg `FOR TIMESTAMP AS OF` at month end in Berlin time, chooses Athena because Redshift lacks time travel, and flags the snapshot-retention requirement (difference 6)."
+ },
+ "shard-hash": {
+  "pass": true,
+  "why": "Sharding moved to Python using pyfarmhash `fingerprint64` (the same function as FARM_FINGERPRINT), converted to signed, then `abs`, then `% TASK_COUNT`, with a note to verify against real data and that NULL and INT64_MIN behave differently."
+ },
+ "no-silent-changes": {
+  "pass": true,
+  "why": "The message calls out the region mapping to eu-west-1, Block Public Access, the 2 vCPU/4 GiB sizing, the broader IAM scope (difference 13), Redis sizing, the new auth token, scheduler retries and the bucket naming."
+ }
+}

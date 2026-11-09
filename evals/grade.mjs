@@ -11,7 +11,7 @@ const judge = process.argv.includes('--judge') ? process.argv[process.argv.index
 const walk = (d) => fs.existsSync(d) ? fs.readdirSync(d, { withFileTypes: true }).flatMap((e) => e.isDirectory() ? walk(path.join(d, e.name)) : [path.join(d, e.name)]) : [];
 const redact = (s) => s.replace(/cobuildx[\w-]*/gi, '[x]').replace(/[\w-]*-to-(react|aws)(:[\w-]+)?/gi, '[x]').replace(/^.*\bskills?\b.*$/gim, '[line removed]');
 const J = (f) => JSON.parse(fs.readFileSync(f, 'utf8'));
-const runs = walk(RES).filter((f) => f.endsWith('final.md')).map(path.dirname);
+const runs = walk(RES).filter((f) => f.endsWith('final.md')).map(path.dirname).filter((d) => !/\.error-\d+$/.test(d) && !J(path.join(d, 'meta.json')).error);
 
 for (const dir of runs) {
   const g = path.join(dir, 'grade.json'); if (fs.existsSync(g)) continue;

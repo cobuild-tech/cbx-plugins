@@ -1,0 +1,50 @@
+{
+ "job-timeout": {
+  "pass": true,
+  "why": "aws_batch_job_definition runs on Fargate and sets timeout { attempt_duration_seconds = 10800 }, so the 3-hour limit is kept."
+ },
+ "sharding": {
+  "pass": true,
+  "why": "The scheduler submits an array job with ArrayProperties.Size = 16. The 8-vCPU compute environment with 2-vCPU tasks caps concurrency at 4. The code reads AWS_BATCH_JOB_ARRAY_INDEX and TASK_COUNT instead of the CLOUD_RUN_* variables."
+ },
+ "retry-attempt": {
+  "pass": true,
+  "why": "retry_strategy { attempts = 3 } maps max_retries = 2. ATTEMPT comes from AWS_BATCH_JOB_ATTEMPT minus 1, and the summary flags the 1-based numbering (item 9)."
+ },
+ "secret-latest": {
+  "pass": true,
+  "why": "PARTNER_API_KEY is injected through the container secrets block from the Secrets Manager ARN. That resolves the current version at task start, matching 'latest'. Nothing is hard-coded."
+ },
+ "redis-tls-auth": {
+  "pass": true,
+  "why": "The ElastiCache replication group sets transit_encryption_enabled, auth_token from a generated secret, 2 nodes with multi_az and automatic failover. port = 6378 is set explicitly to match the client's ssl=True/port 6378, and REDIS_AUTH is now injected (flagged as item 3)."
+ },
+ "private-network": {
+  "pass": true,
+  "why": "Fargate tasks run in var.subnet_ids with a job security group, and an SG rule allows that group to reach Redis on 6378. assignPublicIp = ENABLED gives direct internet egress to the partner API, flagged in item 11 as the PRIVATE_RANGES_ONLY equivalent."
+ },
+ "worm-retention": {
+  "pass": true,
+  "why": "The bucket sets object_lock_enabled = true with aws_s3_bucket_object_lock_configuration default_retention mode COMPLIANCE, days = 2555 (7 years)."
+ },
+ "create-only-write": {
+  "pass": true,
+  "why": "s3.put_object uses IfNoneMatch=\"*\" to replace if_generation_match=0, noted in summary item 15."
+ },
+ "scheduler-tz": {
+  "pass": true,
+  "why": "aws_scheduler_schedule uses cron(0 3 1 * ? *) with schedule_expression_timezone = \"Europe/Berlin\"."
+ },
+ "time-travel": {
+  "pass": true,
+  "why": "The SQL uses Iceberg FOR TIMESTAMP AS OF on Athena. The summary explains Redshift lacks time travel, flags the snapshot-retention limits (item 7), and flags uncertainty about the expression form."
+ },
+ "shard-hash": {
+  "pass": true,
+  "why": "FARM_FINGERPRINT is replaced with mod(abs(from_big_endian_64(xxhash64(to_utf8(account_id)))), ?), which handles negative values with abs. Behaviour difference 1 states that shard membership changes."
+ },
+ "no-silent-changes": {
+  "pass": true,
+  "why": "The summary calls out the region change (eu-west-1 vs europe-west1 Belgium), Block Public Access, matching 2 vCPU/4 GiB, explicit IAM scope, Redis sizing, Intelligent-Tiering, versioning, the MERGE lock and the networking change."
+ }
+}

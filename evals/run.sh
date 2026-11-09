@@ -23,7 +23,7 @@ one() { # case model arm rep
   local c=$1 m=$2 a=$3 r=$4 fw=${1%%/*}
   local out="$EV/results/$AGENT-$m${EFFORT:+-$EFFORT}/$a/$c/$r"
   [ -f "$out/final.md" ] && { echo "skip $out"; return; }
-  mkdir -p "$out"; local w; w=$(cd "$(mktemp -d)" && pwd -P)   # real path: Docker on macOS cannot mount the /var symlink
+  mkdir -p "$out" "$HOME/.cbx-eval-work"; local w; w=$(mktemp -d "$HOME/.cbx-eval-work/XXXXXX")   # under $HOME: Docker Desktop cannot mount macOS temp folders; outside this repo so no project config leaks in
   cp -R "$EV/cases/$c/repo/." "$w/"
   ( cd "$w" && git init -q && git add -A && git -c user.email=e@x -c user.name=eval commit -qm base )
   local prompt; prompt=$(cat "$EV/cases/$c/prompt.txt")
@@ -52,7 +52,9 @@ one() { # case model arm rep
   node "$EV/lib/meta.mjs" "$AGENT" "$out" "$a" "$pd"
   [ -f "$EV/cases/$c/verify.mjs" ] && node "$EV/cases/$c/verify.mjs" "$w" "$EV/cases/$c/repo" > "$out/auto.json"
   [ -x "$EV/tfvalidate.sh" ] && "$EV/tfvalidate.sh" "$w" "$out"
-  rm -rf "$w"; echo "done $out"
+  rm -rf "$w"
+  if node -e 'process.exit(require(process.argv[1]).error?0:1)' "$out/meta.json"; then
+    mv "$out" "$out.error-$(date +%s)"; echo "ERROR $out (moved aside; rerun to retry)"; else echo "done $out"; fi
 }
 export -f one; export EV ROOT AGENT BASELINE_LINE EFFORT
 

@@ -1,0 +1,50 @@
+{
+ "s3-key-decode": {
+  "pass": true,
+  "why": "The ingest handler uses `name = unquote_plus(record[\"s3\"][\"object\"][\"key\"])` before the extension check, the schedule payload and head_object."
+ },
+ "two-hour-hold": {
+  "pass": true,
+  "why": "The hold uses an EventBridge Scheduler one-time `at(...)` schedule at now+HOLD that targets the SQS queue, which supports a 2-hour delay; separately, the name `transcode-<64-hex sha256>` is 74 characters, over Scheduler's 64-character limit, so create_schedule would likely be rejected at runtime."
+ },
+ "stale-generation": {
+  "pass": true,
+  "why": "transcode/main.py runs head_object and returns \"stale\" when `head.get(\"VersionId\") != job[\"generation\"]` or the key is 404, with bucket versioning enabled in aws/main.tf."
+ },
+ "overwrite-trigger": {
+  "pass": true,
+  "why": "aws_s3_bucket_notification uses `events = [\"s3:ObjectCreated:*\"]`, which fires on overwrites too."
+ },
+ "transcode-timeout": {
+  "pass": true,
+  "why": "Terraform sets timeout = 900 with a NOTE, and the summary says Lambda caps at 900s versus GCP's 1800s and suggests ECS or Batch if jobs run longer."
+ },
+ "rate-limit": {
+  "pass": true,
+  "why": "aws_lambda_event_source_mapping has `scaling_config { maximum_concurrency = 3 }` with batch_size 1."
+ },
+ "retry-policy": {
+  "pass": true,
+  "why": "The ingest Lambda has `maximum_retry_attempts = 0`, transcode has a DLQ with `maxReceiveCount = 4`, and the loss of 30s-600s doubling backoff is explicitly flagged."
+ },
+ "attribute-limit": {
+  "pass": true,
+  "why": "The full payload goes in the SNS Message JSON, only six attributes are kept, and the summary flags SNS's 10-attribute limit."
+ },
+ "week-start": {
+  "pass": true,
+  "why": "`date_add('day', -1, date_trunc('week', date_add('day', 1, DATE(uploaded_at))))` correctly anchors weeks on Sunday, and the summary explains the shift."
+ },
+ "weekend-days": {
+  "pass": true,
+  "why": "Uses `day_of_week(uploaded_at) IN (6, 7)` with a comment on Trino's ISO numbering."
+ },
+ "safe-divide": {
+  "pass": true,
+  "why": "`CAST(SUM(transcode_seconds) AS double) / COUNT(*)` avoids integer truncation, and COUNT(*) is never zero within a GROUP BY group, so no division-by-zero error can occur."
+ },
+ "no-silent-changes": {
+  "pass": false,
+  "why": "The Cloud Tasks `max_dispatches_per_second = 5` limit is dropped with no replacement, and the summary does not mention it; it says only that the queue keeps \"4 attempts and 3 concurrent runs\". Retention, region, timeout and attributes are flagged."
+ }
+}
